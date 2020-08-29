@@ -1,0 +1,174 @@
+.TH BITWARDEN-MENU 1 "5 September 2020"
+.SH NAME
+Bitwarden-menu \- Fully featured Dmenu/Rofi frontend for managing Bitwarden
+vaults.
+.SH SYNOPSIS
+\fBBitwarden-menu\fR
+
+.SH DESCRIPTION
+
+\fB1.\fR Auto\-type username and/or password on selection. No clipboard
+copy/paste involved.
+
+\fB2.\fR [PLANNED] Use a custom Keepass 2.x style auto\-type sequence if you
+have one defined (except for character repetition and the \(aqspecial
+commands\(aq). Set it per entry or set a default in the config file for all
+entries. Disable autotype for an entry, if desired.
+
+\fB3.\fR Select any single field and have it typed into the active window. Notes
+fields can be viewed line\-by\-line from within dmenu and the selected line will
+be typed when selected.
+
+\fB4.\fR Open the URL in the default web browser from the View/Type menu.
+
+\fB5.\fR Alternate keyboard languages and layouts supported via xdotool or
+ydotool (for Wayland).
+
+\fB6.\fR Edit entry title, username, URL and password (manually typed or
+auto\-generate).
+
+\fB7.\fR Edit notes using terminal or gui editor (set in config.ini, or uses
+$EDITOR).
+
+\fB8.\fR Add and Delete entries.
+
+\fB9.\fR Rename, move, delete and add folders and collections.
+
+\fB10.\fR Prompts for and saves initial server URL and login email.
+
+\fB11.\fR Define multiple vault URLs in the config file.
+
+\fB12.\fR Hide selected folders from the default and \(aqView/Type Individual
+entries\(aq views.
+
+\fB13.\fR Configure session timeout.
+
+\fB14. \fR Configure the characters and groups of characters used during
+password generation in the config file (see config.ini.example for
+instructions). Multiple character sets can be selected on the fly when using
+Rofi.
+
+\fB15.\fR Optional Pinentry support for secure passphrase entry.
+
+.SH LICENSE
+Copyright © 2020 Scott Hansen <firecat4153@gmail.com>.  Bitwarden-menu is
+released under the terms of the GPLv3 license.
+
+
+.SH REQUIREMENTS
+\fB1.\fR Python 3.4+. *Note* Python 3.6+ uses the \fIsecrets\fP module for password
+generation to improve security.
+
+\fB2.\fR \fI\%Pynput\fP\&. Install via pip or your distribution\(aqs package
+manager, if available.
+
+\fB3.\fR Dmenu. Support is included for \fI\%Rofi\fP, but most Rofi
+configuration/theming should be done via Xresources.
+
+\fB4.\fR (optional) Pinentry. Make sure to set which flavor of pinentry command
+to use in the config file.
+
+\fB5.\fR (optional) xdotool or ydotool (for Wayland). If you have a lot of
+Unicode characters or use a non\-U.S.  English keyboard layout, xdotool/ydotool
+is necessary to handle typing those characters.
+
+.SH INSTALLATION
+\fB1.\fR \fIpip install \-\-user bitwarden-menu\fP\&. Add ~/.local/bin to $PATH
+
+OR
+
+\fB2.\fR In a virtualenv with pip. Link to the executable in <path/to/virtualenv/bin/bwm>
+
+.EX
+.RS
+\fImkvirtualenv bwm\fR
+\fIpip install bitwarden-menu\fR
+.RE
+.EE
+
+OR
+
+\fB3.\fR From git. Just clone, install requirements and run
+
+OR
+
+\fB4.\fR Available in \fI\%Archlinux AUR\fP\&.
+
+.SH CONFIGURATION
+\fB1.\fR If you start bwm for the first time without a config file, it will
+prompt you for server name and login email and save them in the config file.
+
+\fB2.\fR Copy config.ini.example to ~/.config/bwm/config.ini, or use it as a
+reference for additional options.
+
+.RS
+To use a command (e.g. gpg) to lookup db password, set \fIpassword_cmd_<n>\fR.
+
+Adjust \fIsession_timeout_min\fP if desired. Default is 6 hours (360 min).
+
+Set the dmenu_command to \fIrofi\fP if you are using that instead
+
+[PLANNED] Adjust the \fIautotype_default\fR, if desired. Allowed codes are the
+\fI\%Keepass 2.x codes\fP except for repetitions and most command codes.
+\fI{DELAY x}\fP (in milliseconds) is supported. Individual autotype sequences
+can be edited or disabled using bwm.
+
+Set \fItype_library = xdotool\fP or \fItype_library = ydotool\fP (Wayland) if
+you need support for non\-U.S.  English keyboard layouts and/or characters.
+
+When using xdotool, call \fIsetxkbmap\fP to set your keyboard type somewhere in
+your window manager or desktop environment initialization. For example:
+
+.RS
+\fIexec setxkbmap de\fP in ~/.config/i3/config.
+.RE
+
+New sets of characters can be set in config.ini in the \fI[password_chars]\fP
+section. A new preset for each custom set will be listed in addition to the
+default presets. If you redefine one of the default sets (upper, lower, digits,
+punctuation), it will replace the default values.
+
+New preset groups of character sets can be defined in config.ini in the
+\fI[password_char_presets]\fP section. You can set any combination of default
+and custom character sets. A minimum of one character from each distinct set
+will be used when generating a new password. If any custom presets are defined,
+the default presets will not be displayed unless they are uncommented.
+
+.RE
+
+\fB3.\fR If using Rofi, you can try some of the command line options in
+config.ini or set them using the \fIdmenu_command\fP setting, but I haven\(aqt
+tested most of them so I\(aqd suggest configuring via .Xresources where
+possible.
+
+\fB4.\fR If using dmenu for passphrase entry (pinentry not set), dmenu options
+in the [dmenu_passphrase] section of config.ini will override those in [dmenu]
+so you can, for example, set the normal foreground and background colors to be
+the same to obscure the passphrase.
+.sp
+\fBWARNING:\fP
+.INDENT 3.5
+If you choose to store your vault password into config.ini, make
+sure to \fIchmod 600 config.ini\fP\&. This is not secure and I only added it as a
+convenience for testing.
+.UNINDENT
+
+.SH USAGE
+\fB1.\fR Run script or bind to keystroke combination
+
+\fB2.\fR Enter server URL (default vault.bitwarden.com) and login email if not
+entered into config.ini already.
+
+\fB3.\fR Start typing to match entries.
+
+\fB4.\fR Hit Enter immediately after dmenu opens ("\fIView/Type individual
+entries\fP") to switch modes to view and/or type the individual fields for the
+entry. If selected, the URL will open in the default browser instead of being
+typed.
+
+\fB5.\fR To view a password without typing it, use the \fI"Edit Entries"\fP
+option, then select the entry, select \fI"Password"\fP then select \fI"Manually
+enter password"\fP. Type "ESC" to exit without making changes.
+
+.SH TESTS
+\fB1.\fR To run tests: \fIpython tests/tests.py\fP

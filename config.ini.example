@@ -1,0 +1,74 @@
+[dmenu]
+# dmenu_command = /usr/bin/dmenu
+# # Note that dmenu_command can contain arguments as well like `rofi -width 30`
+# # Rofi and dmenu are set to case insensitive by default `-i`
+# l = number of lines to display (default 24 max)
+# fn = Inconsolata-12
+# fn = -*-terminus-medium-*-*-*-16-*-*-*-*-*-*-*
+# nb = normal background (name, #RGB, or #RRGGBB)
+# nf = normal foreground
+# sb = selected background
+# sf = selected foreground
+# b =  (just set to empty value and menu will appear at the bottom
+# m = number of monitor to display on
+# pinentry = Pinentry command
+
+# # override normal foreground and background colors (dmenu) or use the
+# # -password option (rofi) to obscure passphrase entry
+# [dmenu_passphrase]
+# nf = #222222
+# nb = #222222
+# rofi_obscure = True
+
+[vault]
+# server_1 = <url - default vault.bitwarden.com>
+# email_1 = <login email>
+# password_1 = vault password  **INSECURE**
+# password_cmd_1 = <command to generate vault password>
+# server2 = <url>
+# email_2 = <login email>
+# etc....
+# session_timeout_min = <minutes to keep vault unlocked>
+
+## Set 'gui_editor' for: emacs, gvim, leafpad
+## Set 'editor' for terminal editors: vim, emacs -nw, nano
+## Set 'terminal' if using a terminal editor
+# editor = <path/to/terminal editor> 'vim' by default
+# terminal = <xterm, urxvt> <options if necessary>. 'xterm' by default
+# gui_editor = <path/to/editor> <options>  e.g. gui_editor = gvim -f
+# type_library = pynput (default), xdotool (for alternate keyboard layout support) or ydotool (for Wayland)
+# hide_folders = Recycle Bin  <Note formatting for adding multiple folders>
+#                Group 2
+#                Group 3
+
+## Set the default autotype sequence (https://keepass.info/help/base/autotype.html#autoseq)
+# autotype_default = {USERNAME}{TAB}{PASSWORD}{ENTER}
+
+[password_chars]
+## Set custom groups of characters for password generation. Any name is fine and
+## these can be used to create new groups of presets in password_char_presets. If
+## you reuse 'upper', 'lower', 'digits', or 'punctuation', those will
+## replace the default values.
+## Defaults:
+# lower = abcdefghijklmnopqrstuvwxyz
+# upper = ABCDEFGHIJKLMNOPQRSTUVWXYZ
+# digits = 0123456789
+## NOTE: remember that % needs to be escaped with another % sign
+# punctuation = !"#$%%&'()*+,-./:;<=>?@[\]^_`{|}~
+## EXAMPLES:
+# punc min = !?#*@-+$%%
+# upper = ABCDEFZ
+
+[password_char_presets]
+## Set character preset groups for password generation. For multiple sets use a space in between
+## If you set any custom presets here, the default sets will not be displayed unless uncommented below:
+## Valid values are: upper lower digits punctuation
+## Also valid are any custom sets defined in [password_chars]
+## Defaults:
+# Letters+Digits+Punctuation = upper lower digits punctuation
+# Letters+Digits = upper lower digits
+# Letters = upper lower
+# Digits = digits
+## Custom Examples:
+# Minimal Punc = upper lower digits "punc min"
+# Router Site = upper digits

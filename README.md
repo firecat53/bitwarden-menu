@@ -35,7 +35,7 @@ LLC.
 
 ## License
 
-- GPLv3
+- MIT
 
 ## Requirements
 

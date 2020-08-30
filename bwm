@@ -296,21 +296,20 @@ def get_password_chars():
 def get_vault():
     """Read vault from config or ask for user input.
 
-    Returns: (database name, keyfile, passphrase)
-             Returns (None, None, None) on error selecting database
+    Returns: (server name, email, passphrase)
+             Returns (None, None, None) on error selecting server
 
     """
-    args = CONF.items('database')
+    args = CONF.items('vault')
     args_dict = dict(args)
-    dbases = [i for i in args_dict if i.startswith('database')]
-    dbs = []
-    for dbase in dbases:
-        dbn = expanduser(args_dict[dbase])
-        idx = dbase.rsplit('_', 1)[-1]
+    servers = [i for i in args_dict if i.startswith('vault')]
+    srvs = []
+    for srv in servers:
+        idx = srv.rsplit('_', 1)[-1]
         try:
-            keyfile = expanduser(args_dict['keyfile_{}'.format(idx)])
+            email = args_dict['email_{}'.format(idx)])
         except KeyError:
-            keyfile = ''
+            email = ''
         try:
             passw = args_dict['password_{}'.format(idx)]
         except KeyError:
@@ -325,46 +324,46 @@ def get_vault():
                 passw = res[0].decode().rstrip('\n') if res[0] else passw
         except KeyError:
             pass
-        if dbn:
-            dbs.append((dbn, keyfile, passw))
-    if not dbs:
-        res = get_initial_db()
+        if srv:
+            srv.append((srv, keyfile, passw))
+    if not srvs:
+        res = get_initial_vault()
         if res is True:
-            dbs = [get_vault()]
+            srvs = [get_vault()]
         else:
             return (None, None, None)
-    if len(dbs) > 1:
-        inp_bytes = "\n".join(i[0] for i in dbs).encode(ENC)
-        sel = dmenu_select(len(dbs), "Select Database", inp=inp_bytes)
-        dbs = [i for i in dbs if i[0] == sel]
-        if not sel or not dbs:
+    if len(srvs) > 1:
+        inp_bytes = "\n".join(i[0] for i in srvs).encode(ENC)
+        sel = dmenu_select(len(srvs), "Select Vault", inp=inp_bytes)
+        srvs = [i for i in srvs if i[0] == sel]
+        if not sel or not srvs:
             return (None, None, None)
-    if not dbs[0][-1]:
-        db_l = list(dbs[0])
-        db_l[-1] = get_passphrase()
-        dbs[0] = db_l
-    return dbs[0]
+    if not srvs[0][-1]:
+        srv_l = list(srvs[0])
+        srv_l[-1] = get_passphrase()
+        srvs[0] = srv_l
+    return srvs[0]
 
 
-def get_initial_db():
-    """Ask for initial database name and keyfile if not entered in config file
+def get_initial_vault():
+    """Ask for initial server URL and email if not entered in config file
 
     """
-    db_name = dmenu_select(0, "Enter server URL.")
-    if not db_name:
+    url = dmenu_select(0, "Enter server URL.")
+    if not url:
         dmenu_err("No URL entered. Try again.")
         return False
-    keyfile_name = dmenu_select(0, "Enter login email address.")
+    email = dmenu_select(0, "Enter login email address.")
     with open(CONF_FILE, 'w') as conf_file:
-        CONF.set('database', 'database_1', db_name)
-        if keyfile_name:
-            CONF.set('database', 'keyfile_1', keyfile_name)
+        CONF.set('vault', 'server_1', url)
+        if email:
+            CONF.set('vault', 'email_1', email)
         CONF.write(conf_file)
     return True
 
 
 def get_entries(dbo):
-    """Open Bitwarden database and return TODO
+    """Open Bitwarden vault and return TODO
 
         Args: dbo: tuple (db path, keyfile path, password)
         Returns: Vault object
@@ -395,7 +394,7 @@ def get_entries(dbo):
 
 
 def get_passphrase():
-    """Get a database password from dmenu or pinentry
+    """Get a vault password from dmenu or pinentry
 
     Returns: string
 
@@ -408,7 +407,7 @@ def get_passphrase():
         out = Popen(pinentry,
                     stdout=PIPE,
                     stdin=PIPE).communicate(
-                        input=b'setdesc Enter database password\ngetpin\n')[0]
+                        input=b'setdesc Enter vault password\ngetpin\n')[0]
         if out:
             res = out.decode(ENC).split("\n")[2]
             if res.startswith("D "):
@@ -498,8 +497,8 @@ def type_entry(entry):
     tokens = tokenize_autotype(sequence)
 
     library = 'pyuserinput'
-    if CONF.has_option('database', 'type_library'):
-        library = CONF.get('database', 'type_library')
+    if CONF.has_option('vault', 'type_library'):
+        library = CONF.get('vault', 'type_library')
     if library == 'xdotool':
         type_entry_xdotool(entry, tokens)
     elif library == 'ydotool':
@@ -861,8 +860,8 @@ def type_text(data):
 
     """
     library = 'pyuserinput'
-    if CONF.has_option('database', 'type_library'):
-        library = CONF.get('database', 'type_library')
+    if CONF.has_option('vault', 'type_library'):
+        library = CONF.get('vault', 'type_library')
     if library == 'xdotool':
         call(['xdotool', 'type', data])
     elif library == 'ydotool':
@@ -876,27 +875,27 @@ def type_text(data):
                       "Try setting `type_library = xdotool` in config.ini")
 
 
-def view_all_entries(options, kp_entries):
+def view_all_entries(options, vault_entries):
     """Generate numbered list of all vault entries and open with dmenu.
 
     Returns: dmenu selection
 
     """
-    num_align = len(str(len(kp_entries)))
+    num_align = len(str(len(vault_entries)))
     kp_entry_pattern = str("{:>{na}} - {} - {} - {}")  # Path,username,url
     # Have to number each entry to capture duplicates correctly
-    kp_entries_b = str("\n").join([kp_entry_pattern.format(j,
+    vault_entries_b = str("\n").join([kp_entry_pattern.format(j,
                                                            i.path,
                                                            i.username,
                                                            i.url,
                                                            na=num_align)
-                                   for j, i in enumerate(kp_entries)]).encode(ENC)
+                                   for j, i in enumerate(vault_entries)]).encode(ENC)
     if options:
         options_b = ("\n".join(options) + "\n").encode(ENC)
-        entries_b = options_b + kp_entries_b
+        entries_b = options_b + vault_entries_b
     else:
-        entries_b = kp_entries_b
-    return dmenu_select(min(DMENU_LEN, len(options) + len(kp_entries)), inp=entries_b)
+        entries_b = vault_entries_b
+    return dmenu_select(min(DMENU_LEN, len(options) + len(vault_entries)), inp=entries_b)
 
 
 def select_group(bwvo, prompt="Groups"):
@@ -1075,8 +1074,8 @@ def view_entry(kp_entry):
               '**********' if kp_entry.password else "Password: None",
               kp_entry.url or "URL: None",
               "Notes: <Enter to view>" if kp_entry.notes else "Notes: None"]
-    kp_entries_b = "\n".join(fields).encode(ENC)
-    sel = dmenu_select(len(fields), inp=kp_entries_b)
+    vault_entries_b = "\n".join(fields).encode(ENC)
+    sel = dmenu_select(len(fields), inp=vault_entries_b)
     if sel == "Notes: <Enter to view>":
         sel = view_notes(kp_entry.notes)
     elif sel == "Notes: None":
@@ -1187,16 +1186,16 @@ def edit_notes(note):
     Returns: note - string
 
     """
-    if CONF.has_option("database", "gui_editor"):
-        editor = CONF.get("database", "gui_editor")
+    if CONF.has_option("vault", "gui_editor"):
+        editor = CONF.get("vault", "gui_editor")
         editor = shlex.split(editor)
     else:
-        if CONF.has_option("database", "editor"):
-            editor = CONF.get("database", "editor")
+        if CONF.has_option("vault", "editor"):
+            editor = CONF.get("vault", "editor")
         else:
             editor = os.environ.get('EDITOR', 'vim')
-        if CONF.has_option("database", "terminal"):
-            terminal = CONF.get("database", "terminal")
+        if CONF.has_option("vault", "terminal"):
+            terminal = CONF.get("vault", "terminal")
         else:
             terminal = "xterm"
         terminal = shlex.split(terminal)
@@ -1247,8 +1246,8 @@ class DmenuRunner(Process):
     def __init__(self, server):
         Process.__init__(self)
         self.server = server
-        self.database = get_vault()
-        self.bwvo = get_entries(self.database)
+        self.vault = get_vault()
+        self.bwvo = get_entries(self.vault)
         if not self.bwvo:
             self.server.kill_flag.set()
             sys.exit()
@@ -1303,10 +1302,10 @@ class DmenuRunner(Process):
                    'Edit entries',
                    'Add entry',
                    'Manage groups',
-                   'Reload database',
+                   'Sync vault',
                    'Kill bwm daemon']
-        if CONF.has_option("database", "hide_groups"):
-            hid_groups = CONF.get("database", "hide_groups").split("\n")
+        if CONF.has_option("vault", "hide_groups"):
+            hid_groups = CONF.get("vault", "hide_groups").split("\n")
             # Validate ignored group names in config.ini
             hid_groups = [i for i in hid_groups if i in
                           [j.name for j in self.bwvo.groups]]
@@ -1339,19 +1338,19 @@ class DmenuRunner(Process):
             while edit is True:
                 edit = edit_entry(self.bwvo, entry)
             self.bwvo.save()
-            self.bwvo = get_entries(self.database)
+            self.bwvo = get_entries(self.vault)
         elif sel == options[2]:  # Add entry
             entry = add_entry(self.bwvo)
             if entry:
                 self.bwvo.save()
-                self.bwvo = get_entries(self.database)
+                self.bwvo = get_entries(self.vault)
         elif sel == options[3]:  # Manage groups
             group = manage_groups(self.bwvo)
             if group:
                 self.bwvo.save()
-                self.bwvo = get_entries(self.database)
-        elif sel == options[4]:  # Reload database
-            self.bwvo = get_entries(self.database)
+                self.bwvo = get_entries(self.vault)
+        elif sel == options[4]:  # Sync vault
+            self.bwvo = get_entries(self.vault)
             if not self.bwvo:
                 return
             self.dmenu_run()

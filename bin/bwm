@@ -4,7 +4,6 @@
 
 """
 import sys
-from bwm import process_config
 from bwm.bwm import client, run
 
 if __name__ == '__main__':
@@ -15,7 +14,6 @@ if __name__ == '__main__':
         MANAGER = client()
         MANAGER.set_event()  # pylint: disable=no-member
     except ConnectionRefusedError:
-        process_config()
         run()
 
 # vim: set et ts=4 sw=4 :

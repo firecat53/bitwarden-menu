@@ -10,7 +10,7 @@ import sys
 from os.path import exists, expanduser
 from subprocess import call
 
-from bwm.bwm import dmenu_err
+from bwm.menu import dmenu_err
 
 AUTH_FILE = expanduser("~/.cache/.bwm-auth")
 CONF_FILE = expanduser("~/.config/bwm/config.ini")

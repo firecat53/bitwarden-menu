@@ -9,7 +9,7 @@ from pykeyboard import PyKeyboard
 from pymouse.x11 import X11Error
 
 from bwm import CONF, SEQUENCE
-from bwm.bwm import dmenu_err
+from bwm.menu import dmenu_err
 
 def tokenize_autotype(autotype):
     """Process the autotype sequence

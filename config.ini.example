@@ -25,7 +25,7 @@
 # email_1 = <login email>
 # password_1 = vault password  **INSECURE**
 # password_cmd_1 = <command to generate vault password>
-# server2 = <url>
+# server_2 = <url>
 # email_2 = <login email>
 # etc....
 # session_timeout_min = <minutes to keep vault unlocked>

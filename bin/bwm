@@ -8,6 +8,7 @@ from contextlib import closing
 import errno
 import itertools
 import locale
+import logging
 from multiprocessing import Event, Process
 from multiprocessing.managers import BaseManager
 import os
@@ -23,9 +24,12 @@ from threading import Timer
 import time
 import re
 import webbrowser
+
 import construct
 from pykeyboard import PyKeyboard
 from pymouse.x11 import X11Error
+
+import bwm
 
 try:
     # secrets only available python 3.6+
@@ -37,6 +41,9 @@ except ImportError:
         """
         return random.SystemRandom().choice(seq)
 
+
+logging.basicConfig(filename=expanduser("~/.cache/bwm.log"), level=logging.DEBUG)
+LOGGER = logging.getLogger("bwm")
 
 AUTH_FILE = expanduser("~/.cache/.bwm-auth")
 CONF_FILE = expanduser("~/.config/bwm/config.ini")
@@ -294,20 +301,20 @@ def get_password_chars():
 
 
 def get_vault():
-    """Read vault from config or ask for user input.
+    """Read vault login parameters from config or ask for user input.
 
-    Returns: (server name, email, passphrase)
-             Returns (None, None, None) on error selecting server
+    Returns: Session - bytes
+                       None on error opening/reading vault
 
     """
     args = CONF.items('vault')
     args_dict = dict(args)
-    servers = [i for i in args_dict if i.startswith('vault')]
-    srvs = []
+    servers = [i for i in args_dict if i.startswith('server')]
+    vaults = []
     for srv in servers:
         idx = srv.rsplit('_', 1)[-1]
         try:
-            email = args_dict['email_{}'.format(idx)])
+            email = args_dict['email_{}'.format(idx)]
         except KeyError:
             email = ''
         try:
@@ -325,24 +332,34 @@ def get_vault():
         except KeyError:
             pass
         if srv:
-            srv.append((srv, keyfile, passw))
-    if not srvs:
+            vaults.append((srv, email, passw))
+    if not vaults:
         res = get_initial_vault()
-        if res is True:
-            srvs = [get_vault()]
+        if res:
+            vaults.append(res)
         else:
-            return (None, None, None)
-    if len(srvs) > 1:
-        inp_bytes = "\n".join(i[0] for i in srvs).encode(ENC)
-        sel = dmenu_select(len(srvs), "Select Vault", inp=inp_bytes)
-        srvs = [i for i in srvs if i[0] == sel]
-        if not sel or not srvs:
-            return (None, None, None)
-    if not srvs[0][-1]:
-        srv_l = list(srvs[0])
-        srv_l[-1] = get_passphrase()
-        srvs[0] = srv_l
-    return srvs[0]
+            return None
+    if len(vaults) > 1:
+        inp_bytes = "\n".join(i[0] for i in vaults).encode(ENC)
+        sel = dmenu_select(len(vaults), "Select Vault", inp=inp_bytes)
+        vaults = [i for i in vaults if i[0] == sel]
+        if not sel or not vaults:
+            return None
+    url, email, passw = vaults[0]
+    status = bwm.status()
+    if status is False:
+        return None
+    if not passw:
+        passw = get_passphrase()
+    if status['serverUrl'] != url:
+        res = bwm.set_server(url)
+        if res is False:
+            return None
+    if status['userEmail'] != email or status['status'] == 'unauthenticated':
+        session = bwm.login(email, passw)
+    elif status['status'].endswith('locked'):
+        session = bwm.unlock(passw)
+    return session if session is not False else None
 
 
 def get_initial_vault():
@@ -359,38 +376,7 @@ def get_initial_vault():
         if email:
             CONF.set('vault', 'email_1', email)
         CONF.write(conf_file)
-    return True
-
-
-def get_entries(dbo):
-    """Open Bitwarden vault and return TODO
-
-        Args: dbo: tuple (db path, keyfile path, password)
-        Returns: Vault object
-
-    """
-    dbf, keyfile, password = dbo
-    if dbf is None:
-        return None
-    try:
-        bwvo = PyKeePass(dbf, password, keyfile=keyfile)
-    except (FileNotFoundError, construct.core.ChecksumError) as err:
-        if str(err.args[0]).startswith("wrong checksum"):
-            dmenu_err("Invalid Password or keyfile")
-            return None
-        try:
-            if err.errno == errno.ENOENT:
-                if not os.path.isfile(dbf):
-                    dmenu_err("Database does not exist. Edit ~/.config/bwm/config.ini")
-                elif not os.path.isfile(keyfile):
-                    dmenu_err("Keyfile does not exist. Edit ~/.config/bwm/config.ini")
-        except AttributeError:
-            pass
-        return None
-    except Exception as err:
-        dmenu_err("Error: {}".format(err))
-        return None
-    return bwvo
+    return (url, email, '')
 
 
 def get_passphrase():
@@ -885,11 +871,11 @@ def view_all_entries(options, vault_entries):
     kp_entry_pattern = str("{:>{na}} - {} - {} - {}")  # Path,username,url
     # Have to number each entry to capture duplicates correctly
     vault_entries_b = str("\n").join([kp_entry_pattern.format(j,
-                                                           i.path,
-                                                           i.username,
-                                                           i.url,
-                                                           na=num_align)
-                                   for j, i in enumerate(vault_entries)]).encode(ENC)
+                                                              i.path,
+                                                              i.username,
+                                                              i.url,
+                                                              na=num_align)
+                                      for j, i in enumerate(vault_entries)]).encode(ENC)
     if options:
         options_b = ("\n".join(options) + "\n").encode(ENC)
         entries_b = options_b + vault_entries_b
@@ -898,35 +884,35 @@ def view_all_entries(options, vault_entries):
     return dmenu_select(min(DMENU_LEN, len(options) + len(vault_entries)), inp=entries_b)
 
 
-def select_group(bwvo, prompt="Groups"):
-    """Select which group for an entry
+def select_folder(bwvo, prompt="Folders"):
+    """Select which folder for an entry
 
     Args: bwvo - vault object
-          options - list of menu options for groups
+          options - list of menu options for folders
 
     Returns: False for no entry
-             group - string
+             folder - string
 
     """
-    groups = bwvo.groups
-    num_align = len(str(len(groups)))
+    folders = bwvo.folders
+    num_align = len(str(len(folders)))
     pattern = str("{:>{na}} - {}")
     input_b = str("\n").join([pattern.format(j, i.path, na=num_align)
-                              for j, i in enumerate(groups)]).encode(ENC)
-    sel = dmenu_select(min(DMENU_LEN, len(groups)), prompt, inp=input_b)
+                              for j, i in enumerate(folders)]).encode(ENC)
+    sel = dmenu_select(min(DMENU_LEN, len(folders)), prompt, inp=input_b)
     if not sel:
         return False
     try:
-        return groups[int(sel.split('-', 1)[0])]
+        return folders[int(sel.split('-', 1)[0])]
     except (ValueError, TypeError):
         return False
 
 
-def manage_groups(bwvo):
-    """Rename, create, move or delete groups
+def manage_folders(bwvo):
+    """Rename, create, move or delete folders
 
     Args: bwvo - vault object
-    Returns: Group object or False
+    Returns: Folder object or False
 
     """
     edit = True
@@ -934,97 +920,93 @@ def manage_groups(bwvo):
                'Move',
                'Rename',
                'Delete']
-    group = False
+    folder = False
     while edit is True:
         input_b = b"\n".join(i.encode(ENC) for i in options) + b"\n\n" + \
-            b"\n".join(i.path.encode(ENC) for i in bwvo.groups)
-        sel = dmenu_select(len(options) + len(bwvo.groups) + 1, "Groups", inp=input_b)
+            b"\n".join(i.path.encode(ENC) for i in bwvo.folders)
+        sel = dmenu_select(len(options) + len(bwvo.folders) + 1, "Folders", inp=input_b)
         if not sel:
             edit = False
         elif sel == 'Create':
-            group = create_group(bwvo)
+            folder = create_folder(bwvo)
         elif sel == 'Move':
-            group = move_group(bwvo)
+            folder = move_folder(bwvo)
         elif sel == 'Rename':
-            group = rename_group(bwvo)
+            folder = rename_folder(bwvo)
         elif sel == 'Delete':
-            group = delete_group(bwvo)
+            folder = delete_folder(bwvo)
         else:
             edit = False
-    return group
+    return folder
 
 
-def create_group(bwvo):
-    """Create new group
+def create_folder(bwvo):
+    """Create new folder
 
     Args: bwvo - vault object
-    Returns: Group object or False
+    Returns: Folder object or False
 
     """
-    parentgroup = select_group(bwvo, prompt="Select parent group")
-    if not parentgroup:
+    parentfolder = select_folder(bwvo, prompt="Select parent folder")
+    if not parentfolder:
         return False
-    name = dmenu_select(1, "Group name")
+    name = dmenu_select(1, "Folder name")
     if not name:
         return False
-    group = bwvo.add_group(parentgroup, name)
-    bwvo.save()
-    return group
+    folder = bwvo.add_folder(parentfolder, name)
+    return folder
 
 
-def delete_group(bwvo):
-    """Delete a group
+def delete_folder(bwvo):
+    """Delete a folder
 
     Args: bwvo - vault object
-    Returns: Group object or False
+    Returns: Folder object or False
 
     """
-    group = select_group(bwvo, prompt="Delete Group:")
-    if not group:
+    folder = select_folder(bwvo, prompt="Delete Folder:")
+    if not folder:
         return False
     input_b = b"NO\nYes - confirm delete\n"
     delete = dmenu_select(2, "Confirm delete", inp=input_b)
     if delete != "Yes - confirm delete":
         return True
-    bwvo.delete_group(group)
-    bwvo.save()
-    return group
+    bwvo.delete_folder(folder)
+    return folder
 
 
-def move_group(bwvo):
-    """Move group
-
-    Args: bwvo - vault object
-    Returns: Group object or False
-
-    """
-    group = select_group(bwvo, prompt="Select group to move")
-    if not group:
-        return False
-    destgroup = select_group(bwvo, prompt="Select destination group")
-    if not destgroup:
-        return False
-    group = bwvo.move_group(group, destgroup)
-    bwvo.save()
-    return group
-
-
-def rename_group(bwvo):
-    """Rename group
+def move_folder(bwvo):
+    """Move folder
 
     Args: bwvo - vault object
-    Returns: Group object or False
+    Returns: Folder object or False
 
     """
-    group = select_group(bwvo, prompt="Select group to rename")
-    if not group:
+    folder = select_folder(bwvo, prompt="Select folder to move")
+    if not folder:
         return False
-    name = dmenu_select(1, "New group name", inp=group.name.encode(ENC))
+    destfolder = select_folder(bwvo, prompt="Select destination folder")
+    if not destfolder:
+        return False
+    folder = bwvo.folder(folder, destfolder)
+    return folder
+
+
+def rename_folder(bwvo):
+    """Rename folder
+
+    Args: bwvo - vault object
+    Returns: Folder object or False
+
+    """
+    folder = select_folder(bwvo, prompt="Select folder to rename")
+    if not folder:
+        return False
+    name = dmenu_select(1, "New folder name", inp=folder.name.encode(ENC))
     if not name:
         return False
-    group.name = name
-    bwvo.save()
-    return group
+    folder.name = name
+    return folder
 
 
 def add_entry(bwvo):
@@ -1035,10 +1017,10 @@ def add_entry(bwvo):
              vault Entry object on success
 
     """
-    group = select_group(bwvo)
-    if group is False:
+    folder = select_folder(bwvo)
+    if folder is False:
         return False
-    entry = bwvo.add_entry(destination_group=group, title="", username="", password="")
+    entry = bwvo.add_entry(destination_folder=folder, title="", username="", password="")
     edit = True
     while edit is True:
         edit = edit_entry(bwvo, entry)
@@ -1059,7 +1041,6 @@ def delete_entry(bwvo, kp_entry):
     if delete != "Yes - confirm delete":
         return True
     bwvo.delete_entry(kp_entry)
-    bwvo.save()
     return False
 
 
@@ -1122,10 +1103,10 @@ def edit_entry(bwvo, kp_entry):  # pylint: disable=too-many-return-statements, t
     if field == 'delete_entry':
         return delete_entry(bwvo, kp_entry)
     if field == 'path':
-        group = select_group(bwvo)
-        if not group:
+        folder = select_folder(bwvo)
+        if not folder:
             return True
-        bwvo.move_entry(kp_entry, group)
+        bwvo.move_entry(kp_entry, folder)
         return True
     pw_choice = ""
     if field == 'password':
@@ -1246,9 +1227,11 @@ class DmenuRunner(Process):
     def __init__(self, server):
         Process.__init__(self)
         self.server = server
-        self.vault = get_vault()
-        self.bwvo = get_entries(self.vault)
-        if not self.bwvo:
+        self.session = get_vault()
+        self.entries = bwm.get_entries(self.session)
+        self.folders = bwm.get_folders(self.session)
+        self.collections = bwm.get_folders(self.session)
+        if self.entries is False:
             self.server.kill_flag.set()
             sys.exit()
 
@@ -1265,7 +1248,7 @@ class DmenuRunner(Process):
             self.server.start_flag.wait()
             if self.server.kill_flag.is_set():
                 break
-            if not self.bwvo:
+            if self.entries is False:
                 pass
             else:
                 self.dmenu_run()
@@ -1287,7 +1270,7 @@ class DmenuRunner(Process):
     def dmenu_run(self):  # pylint: disable=too-many-branches,too-many-return-statements
         """Run dmenu with the given list of vault Entry objects
 
-        If 'hide_groups' is defined in config.ini, hide those from main and
+        If 'hide_folders' is defined in config.ini, hide those from main and
         view/type all views.
 
         Args: self.bwvo - vault object
@@ -1301,67 +1284,69 @@ class DmenuRunner(Process):
         options = ['View/Type Individual entries',
                    'Edit entries',
                    'Add entry',
-                   'Manage groups',
+                   'Manage folders',
+                   'Manage collections',
                    'Sync vault',
-                   'Kill bwm daemon']
-        if CONF.has_option("vault", "hide_groups"):
-            hid_groups = CONF.get("vault", "hide_groups").split("\n")
-            # Validate ignored group names in config.ini
-            hid_groups = [i for i in hid_groups if i in
-                          [j.name for j in self.bwvo.groups]]
+                   'Lock vault']
+        if CONF.has_option("vault", "hide_folders"):
+            hid_fold = CONF.get("vault", "hide_folders").split("\n")
+            # Validate ignored folder names in config.ini
+            hid_fold = [i for i in hid_fold if i in
+                        [j['name'] for j in self.folders.values()]]
         else:
-            hid_groups = []
-        sel = view_all_entries(options, [i for i in self.bwvo.entries if not
+            hid_fold = []
+        sel = view_all_entries(options, [i for i in self.entries if not
                                          any(j in i.path.rstrip(i.title) for
-                                             j in hid_groups)])
+                                             j in hid_fold)])
         if not sel:
             return
         if sel == options[0]:  # ViewType Individual entries
             options = []
-            sel = view_all_entries(options, [i for i in self.bwvo.entries if not
+            sel = view_all_entries(options, [i for i in self.entries.entries if not
                                              any(j in i.path.rstrip(i.title) for
-                                                 j in hid_groups)])
+                                                 j in hid_fold)])
             try:
-                entry = self.bwvo.entries[int(sel.split('-', 1)[0])]
+                entry = self.entries.entries[int(sel.split('-', 1)[0])]
             except (ValueError, TypeError):
                 return
             text = view_entry(entry)
             type_text(text)
         elif sel == options[1]:  # Edit entries
             options = []
-            sel = view_all_entries(options, self.bwvo.entries)
+            sel = view_all_entries(options, self.entries.entries)
             try:
-                entry = self.bwvo.entries[int(sel.split('-', 1)[0])]
+                entry = self.entries.entries[int(sel.split('-', 1)[0])]
             except (ValueError, TypeError):
                 return
             edit = True
             while edit is True:
-                edit = edit_entry(self.bwvo, entry)
-            self.bwvo.save()
-            self.bwvo = get_entries(self.vault)
+                edit = edit_entry(self.entries, entry)
+            self.entries = bwm.get_entries(self.session)
         elif sel == options[2]:  # Add entry
-            entry = add_entry(self.bwvo)
+            entry = add_entry(self.entries)
             if entry:
-                self.bwvo.save()
-                self.bwvo = get_entries(self.vault)
-        elif sel == options[3]:  # Manage groups
-            group = manage_groups(self.bwvo)
-            if group:
-                self.bwvo.save()
-                self.bwvo = get_entries(self.vault)
-        elif sel == options[4]:  # Sync vault
-            self.bwvo = get_entries(self.vault)
-            if not self.bwvo:
+                self.entries = bwm.get_entries(self.session)
+        elif sel == options[3]:  # Manage folders
+            folder = manage_folders(self.entries)
+            if folder:
+                self.entries = bwm.get_entries(self.session)
+        elif sel == options[4]:  # Manage collections
+            collection = manage_folders(self.entries)
+            if collection:
+                self.entries = bwm.get_entries(self.session)
+        elif sel == options[5]:  # Sync vault
+            self.entries = bwm.get_entries(self.session)
+            if not self.entries:
                 return
             self.dmenu_run()
-        elif sel == options[5]:  # Kill bwm daemon
+        elif sel == options[6]:  # Kill bwm daemon
             try:
                 self.server.kill_flag.set()
             except (EOFError, IOError):
                 return
         else:
             try:
-                entry = self.bwvo.entries[int(sel.split('-', 1)[0])]
+                entry = self.entries.entries[int(sel.split('-', 1)[0])]
             except (ValueError, TypeError):
                 return
             type_entry(entry)

@@ -170,10 +170,10 @@ def get_vault():
             pass
         if srv:
             vaults.append((srv, email, passw))
-    if not vaults:
+    if not vaults or (not vaults[0][0] or not vaults[0][1]):
         res = get_initial_vault()
         if res:
-            vaults.append(res)
+            vaults.insert(0, res)
         else:
             return None
     if len(vaults) > 1:
@@ -615,12 +615,12 @@ class DmenuRunner(Process):
         Process.__init__(self)
         self.server = server
         self.session = get_vault()
-        self.entries = bwcli.get_entries(self.session)
-        self.folders = bwcli.get_folders(self.session)
-        self.collections = bwcli.get_folders(self.session)
-        if self.entries is False:
+        if self.session is False:
             self.server.kill_flag.set()
             sys.exit()
+        self.entries = bwcli.get_entries(self.session)
+        self.folders = bwcli.get_folders(self.session)
+        self.collections = bwcli.get_collections(self.session)
 
     def _set_timer(self):
         """Set inactivity timer

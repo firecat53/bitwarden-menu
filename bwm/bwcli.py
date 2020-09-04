@@ -23,7 +23,7 @@ def status(session=b''):
     if not res.stdout:
         logging.debug(res)
         return False
-    return dict(json.loads(res.stdout))
+    return dict(json.loads(res.stdout.split(b'\n')[-1]))
 
 def set_server(url="https://vault.bitwarden.com"):
     """Set vault URL
@@ -31,7 +31,7 @@ def set_server(url="https://vault.bitwarden.com"):
         Returns: True if successful or False on error
 
     """
-    res = run(["bw", "config", "server", url], capture=True, check=False)
+    res = run(["bw", "config", "server", url], capture_output=True, check=False)
     if not res.stdout:
         logging.debug(res)
         return False
@@ -43,7 +43,7 @@ def login(email, password):
         Returns: session (bytes) or False on error
 
     """
-    res = run(["bw", "login", "--raw", email, password], capture=True, check=False)
+    res = run(["bw", "login", "--raw", email, password], capture_output=True, check=False)
     if not res.stdout:
         logging.debug(res)
         return False
@@ -55,7 +55,7 @@ def unlock(password):
         Returns: session (bytes) or False on error
 
     """
-    res = run(["bw", "unlock", "--raw", password], capture=True, check=False)
+    res = run(["bw", "unlock", "--raw", password], capture_output=True, check=False)
     if not res.stdout:
         logging.debug(res)
         return False
@@ -67,7 +67,7 @@ def lock():
         Return: True on success, False with any errors
 
     """
-    res = run(["bw", "lock"], capture=True, check=False)
+    res = run(["bw", "lock"], capture_output=True, check=False)
     if not res.stderr:
         logging.debug(res)
         return False
@@ -79,7 +79,7 @@ def logout():
         Return: True on success, False with any errors
 
     """
-    res = run(["bw", "logout"], capture=True, check=False)
+    res = run(["bw", "logout"], capture_output=True, check=False)
     if not res.stderr:
         logging.debug(res)
         return False
@@ -91,7 +91,7 @@ def get_entries(session=b''):
         Return: List of objects
 
     """
-    res = run(["bw", "--session", session, "list", "items"], capture=True, check=False)
+    res = run(["bw", "--session", session, "list", "items"], capture_output=True, check=False)
     if not res.stderr:
         logging.debug(res)
         return False
@@ -103,7 +103,7 @@ def sync(session=b''):
         Return: True on success, False with any errors
 
     """
-    res = run(["bw", "--session", session, "lock"], capture=True, check=False)
+    res = run(["bw", "--session", session, "lock"], capture_output=True, check=False)
     if not res.stderr:
         logging.debug(res)
         return False
@@ -115,7 +115,7 @@ def get_folders(session):
         Return: List of folder dicts {id: dict('object':folder,'id':id,'name':<name>)}
 
     """
-    res = run(["bw", "--session", session, "list", "folders"], capture=True, check=False)
+    res = run(["bw", "--session", session, "list", "folders"], capture_output=True, check=False)
     if not res.stderr:
         logging.debug(res)
         return False
@@ -129,7 +129,7 @@ def get_collections(session):
                  id>,'externalId':<ext id>,'name':<name>)}
 
     """
-    res = run(["bw", "--session", session, "list", "collections"], capture=True, check=False)
+    res = run(["bw", "--session", session, "list", "collections"], capture_output=True, check=False)
     if not res.stderr:
         logging.debug(res)
         return False

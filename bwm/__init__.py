@@ -37,7 +37,7 @@ if not exists(CONF_FILE):
         CONF.set('dmenu_passphrase', 'nb', '#222222')
         CONF.set('dmenu_passphrase', 'rofi_obscure', 'True')
         CONF.add_section('vault')
-        CONF.set('vault', 'server_1', '')
+        CONF.set('vault', 'server_1', 'https://vault.bitwarden.com')
         CONF.set('vault', 'email_1', '')
         CONF.set('vault', 'session_timeout_min ', str(SESSION_TIMEOUT_DEFAULT_MIN))
         CONF.set('vault', 'autotype_default', SEQUENCE)

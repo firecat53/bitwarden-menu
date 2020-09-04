@@ -4,7 +4,7 @@
 
 """
 import sys
-from bwm.bwm import client, run
+from bwm.bwm import client, run  # pylint: disable=no-name-in-module
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:

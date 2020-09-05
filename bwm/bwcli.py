@@ -40,26 +40,26 @@ def set_server(url="https://vault.bitwarden.com"):
 def login(email, password):
     """Initial login to Bitwarden Vault.
 
-        Returns: session (bytes) or False on error
+        Returns: session (bytes) or False on error, Error message
 
     """
     res = run(["bw", "login", "--raw", email, password], capture_output=True, check=False)
     if not res.stdout:
         logging.debug(res)
-        return False
-    return res.stdout
+        return (False, res.stderr)
+    return res.stdout, None
 
 def unlock(password):
     """Unlock vault
 
-        Returns: session (bytes) or False on error
+        Returns: session (bytes) or False on error, Error message
 
     """
     res = run(["bw", "unlock", "--raw", password], capture_output=True, check=False)
     if not res.stdout:
         logging.debug(res)
-        return False
-    return res.stdout
+        return (False, res.stderr)
+    return res.stdout, None
 
 def lock():
     """Lock vault
@@ -86,16 +86,37 @@ def logout():
     return True
 
 def get_entries(session=b''):
-    """Get all entries from vault
+    """Get all entries, folders and collections from vault
 
-        Return: List of objects
+    For now: since the URL is buried in:
+        'login'->'uris'->[{match: xxx, uri: http...}, {match2: xxx, uri2: httpxxx}]
+    copy the first uri to 'login'->'uri' for ease of access later.
+
+        Return: items (list of dictionaries), folders, collections
+                False on error
 
     """
     res = run(["bw", "--session", session, "list", "items"], capture_output=True, check=False)
-    if not res.stderr:
+    if not res.stdout:
         logging.debug(res)
         return False
-    return json.loads(res.stdout)
+    items = json.loads(res.stdout)
+    folders = get_folders(session)
+    collections = get_collections(session)
+    for item in items:
+        path = folders.get(item.get('folderId')).get('name')
+        if path == 'No Folder':
+            path = ''
+        path = "/".join([path, item.get('name')]).lstrip('/')
+        item['path'] = path
+        try:
+            for uri in item['login']['uris']:
+                item['login']['uri'] = uri['uri']
+                break
+        except KeyError:
+            item['login']['uri'] = ""
+        item['collections'] = [collections[i]['name'] for i in item['collectionIds']]
+    return items, folders, collections
 
 def sync(session=b''):
     """Sync web vault changes to local vault
@@ -104,7 +125,7 @@ def sync(session=b''):
 
     """
     res = run(["bw", "--session", session, "lock"], capture_output=True, check=False)
-    if not res.stderr:
+    if not res.stdout:
         logging.debug(res)
         return False
     return True
@@ -116,7 +137,7 @@ def get_folders(session):
 
     """
     res = run(["bw", "--session", session, "list", "folders"], capture_output=True, check=False)
-    if not res.stderr:
+    if not res.stdout:
         logging.debug(res)
         return False
     return {i['id']:i for i in json.loads(res.stdout)}
@@ -130,7 +151,7 @@ def get_collections(session):
 
     """
     res = run(["bw", "--session", session, "list", "collections"], capture_output=True, check=False)
-    if not res.stderr:
+    if not res.stdout:
         logging.debug(res)
         return False
     return {i['id']:i for i in json.loads(res.stdout)}

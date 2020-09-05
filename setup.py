@@ -14,7 +14,7 @@ setup(name="bitwarden-menu",
       data_files=[('share/doc/bwm', ['README.md', 'LICENSE',
                                           'config.ini.example']),
                   ('share/man/man1', ['bwm.1'])],
-      install_requires=["PyUserInput"],
+      install_requires=["pynput"],
       license="MIT",
       classifiers=[
           'Development Status :: 4 - Beta',

@@ -169,7 +169,7 @@ def get_vault():
         except KeyError:
             pass
         if srv:
-            vaults.append((srv, email, passw))
+            vaults.append((args_dict[srv], email, passw))
     if not vaults or (not vaults[0][0] or not vaults[0][1]):
         res = get_initial_vault()
         if res:
@@ -188,15 +188,20 @@ def get_vault():
         return None
     if not passw:
         passw = get_passphrase()
+        if not passw:
+            return None
     if status['serverUrl'] != url:
         res = bwcli.set_server(url)
         if res is False:
             return None
     if status['userEmail'] != email or status['status'] == 'unauthenticated':
-        session = bwcli.login(email, passw)
+        session, err = bwcli.login(email, passw)
     elif status['status'].endswith('locked'):
-        session = bwcli.unlock(passw)
-    return session if session is not False else None
+        session, err = bwcli.unlock(passw)
+    if session is False:
+        dmenu_err(err)
+        return None
+    return session
 
 
 def get_initial_vault():
@@ -240,7 +245,7 @@ def get_passphrase():
     return password
 
 
-def view_all_entries(options, folders, vault_entries):
+def view_all_entries(options, vault_entries):
     """Generate numbered list of all vault entries and open with dmenu.
 
     Returns: dmenu selection
@@ -249,26 +254,129 @@ def view_all_entries(options, folders, vault_entries):
     num_align = len(str(len(vault_entries)))
     bw_entry_pattern = str("{:>{na}} - {} - {} - {}")  # Path,username,url
     # Have to number each entry to capture duplicates correctly
-    entries = []
-    for j, i in enumerate(vault_entries):
-        path = folders.get(i.get('folderId')).get('name')
-        if path == 'No Folder':
-            path = ''
-        path = "/".join([path, i.get('name')]).lstrip('/')
-        user = i.get('login').get('username') or ""
-        try:
-            url = i.get('login').get('uris')[0].get('uri')
-        except TypeError:
-            url = ""
-        entries.append([j, path, user, url])
     vault_entries_b = str("\n").join(bw_entry_pattern.format(
-        **i, na=num_align) for i in entries).encode(bwm.ENC)
+        j,
+        i['path'],
+        i['login']['username'],
+        i['login']['uri'],
+        na=num_align) for j, i in enumerate(vault_entries)).encode(bwm.ENC)
     if options:
         options_b = ("\n".join(options) + "\n").encode(bwm.ENC)
         entries_b = options_b + vault_entries_b
     else:
         entries_b = vault_entries_b
     return dmenu_select(min(bwm.DMENU_LEN, len(options) + len(vault_entries)), inp=entries_b)
+
+
+def view_entry(entry):
+    """Show title, username, password, url and notes for an entry.
+
+    Returns: dmenu selection
+
+    """
+    fields = [entry['path'] or "Title: None",
+              entry['login']['username'] or "Username: None",
+              '**********' if entry['login']['password'] else "Password: None",
+              entry['login']['uri'] or "URL: None",
+              "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
+    vault_entries_b = "\n".join(fields).encode(bwm.ENC)
+    sel = dmenu_select(len(fields), inp=vault_entries_b)
+    if sel == "Notes: <Enter to view>":
+        sel = view_notes(entry['notes'])
+    elif sel == "Notes: None":
+        sel = ""
+    elif sel == '**********':
+        sel = entry['login']['password']
+    elif sel == fields[3]:
+        if sel != "URL: None":
+            webbrowser.open(sel)
+        sel = ""
+    return sel
+
+
+def edit_entry(bwvo, kp_entry):  # pylint: disable=too-many-return-statements, too-many-branches
+    """Edit title, username, password, url and autotype sequence for an entry.
+
+    Args: bwvo - vault object
+          kp_entry - selected Entry object
+
+    Returns: True to continue editing
+             False if done
+
+    """
+    fields = [str("Title: {}").format(kp_entry.title),
+              str("Path: {}").format(kp_entry.path.rstrip(kp_entry.title)),
+              str("Username: {}").format(kp_entry.username),
+              str("Password: **********") if kp_entry.password else "Password: None",
+              str("Url: {}").format(kp_entry.url),
+              "Notes: <Enter to Edit>" if kp_entry.notes else "Notes: None",
+              "Delete Entry: "]
+    if hasattr(kp_entry, 'autotype_sequence') and hasattr(kp_entry, 'autotype_enabled'):
+        fields[5:5] = [str("Autotype Sequence: {}").format(kp_entry.autotype_sequence),
+                       str("Autotype Enabled: {}").format(kp_entry.autotype_enabled)]
+    input_b = "\n".join(fields).encode(bwm.ENC)
+    sel = dmenu_select(len(fields), inp=input_b)
+    try:
+        field, sel = sel.split(": ", 1)
+    except (ValueError, TypeError):
+        return False
+    field = field.lower().replace(" ", "_")
+    if field == 'password':
+        sel = kp_entry.password
+    edit_b = sel.encode(bwm.ENC) + b"\n" if sel is not None else b"\n"
+    if field == 'delete_entry':
+        return delete_entry(bwvo, kp_entry)
+    if field == 'path':
+        folder = select_folder(bwvo)
+        if not folder:
+            return True
+        bwvo.move_entry(kp_entry, folder)
+        return True
+    pw_choice = ""
+    if field == 'password':
+        input_b = b"Generate password\nManually enter password\n"
+        pw_choice = dmenu_select(2, "Password", inp=input_b)
+        if pw_choice == "Manually enter password":
+            pass
+        elif not pw_choice:
+            return True
+        else:
+            pw_choice = ''
+            input_b = b"20\n"
+            length = dmenu_select(1, "Password Length?", inp=input_b)
+            if not length:
+                return True
+            try:
+                length = int(length)
+            except ValueError:
+                length = 20
+            chars = get_password_chars()
+            if chars is False:
+                return True
+            sel = gen_passwd(chars, length)
+            if sel is False:
+                dmenu_err("Number of char groups desired is more than requested pw length")
+                return True
+
+    if field == 'autotype_enabled':
+        input_b = b"True\nFalse\n"
+        at_enab = dmenu_select(2, "Autotype Enabled? True/False", inp=input_b)
+        if not at_enab:
+            return True
+        sel = not at_enab == 'False'
+    if (field not in ('password', 'notes', 'path', 'autotype_enabled')) or pw_choice:
+        sel = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
+        if not sel:
+            return True
+        if pw_choice:
+            sel_check = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
+            if not sel_check or sel_check != sel:
+                dmenu_err("Passwords do not match. No changes made.")
+                return True
+    elif field == 'notes':
+        sel = edit_notes(kp_entry.notes)
+    setattr(kp_entry, field, sel)
+    return True
 
 
 def select_folder(bwvo, prompt="Folders"):
@@ -431,117 +539,6 @@ def delete_entry(bwvo, kp_entry):
     return False
 
 
-def view_entry(kp_entry):
-    """Show title, username, password, url and notes for an entry.
-
-    Returns: dmenu selection
-
-    """
-    fields = [kp_entry.path or "Title: None",
-              kp_entry.username or "Username: None",
-              '**********' if kp_entry.password else "Password: None",
-              kp_entry.url or "URL: None",
-              "Notes: <Enter to view>" if kp_entry.notes else "Notes: None"]
-    vault_entries_b = "\n".join(fields).encode(bwm.ENC)
-    sel = dmenu_select(len(fields), inp=vault_entries_b)
-    if sel == "Notes: <Enter to view>":
-        sel = view_notes(kp_entry.notes)
-    elif sel == "Notes: None":
-        sel = ""
-    elif sel == '**********':
-        sel = kp_entry.password
-    elif sel == fields[3]:
-        if sel != "URL: None":
-            webbrowser.open(sel)
-        sel = ""
-    return sel
-
-
-def edit_entry(bwvo, kp_entry):  # pylint: disable=too-many-return-statements, too-many-branches
-    """Edit title, username, password, url and autotype sequence for an entry.
-
-    Args: bwvo - vault object
-          kp_entry - selected Entry object
-
-    Returns: True to continue editing
-             False if done
-
-    """
-    fields = [str("Title: {}").format(kp_entry.title),
-              str("Path: {}").format(kp_entry.path.rstrip(kp_entry.title)),
-              str("Username: {}").format(kp_entry.username),
-              str("Password: **********") if kp_entry.password else "Password: None",
-              str("Url: {}").format(kp_entry.url),
-              "Notes: <Enter to Edit>" if kp_entry.notes else "Notes: None",
-              "Delete Entry: "]
-    if hasattr(kp_entry, 'autotype_sequence') and hasattr(kp_entry, 'autotype_enabled'):
-        fields[5:5] = [str("Autotype Sequence: {}").format(kp_entry.autotype_sequence),
-                       str("Autotype Enabled: {}").format(kp_entry.autotype_enabled)]
-    input_b = "\n".join(fields).encode(bwm.ENC)
-    sel = dmenu_select(len(fields), inp=input_b)
-    try:
-        field, sel = sel.split(": ", 1)
-    except (ValueError, TypeError):
-        return False
-    field = field.lower().replace(" ", "_")
-    if field == 'password':
-        sel = kp_entry.password
-    edit_b = sel.encode(bwm.ENC) + b"\n" if sel is not None else b"\n"
-    if field == 'delete_entry':
-        return delete_entry(bwvo, kp_entry)
-    if field == 'path':
-        folder = select_folder(bwvo)
-        if not folder:
-            return True
-        bwvo.move_entry(kp_entry, folder)
-        return True
-    pw_choice = ""
-    if field == 'password':
-        input_b = b"Generate password\nManually enter password\n"
-        pw_choice = dmenu_select(2, "Password", inp=input_b)
-        if pw_choice == "Manually enter password":
-            pass
-        elif not pw_choice:
-            return True
-        else:
-            pw_choice = ''
-            input_b = b"20\n"
-            length = dmenu_select(1, "Password Length?", inp=input_b)
-            if not length:
-                return True
-            try:
-                length = int(length)
-            except ValueError:
-                length = 20
-            chars = get_password_chars()
-            if chars is False:
-                return True
-            sel = gen_passwd(chars, length)
-            if sel is False:
-                dmenu_err("Number of char groups desired is more than requested pw length")
-                return True
-
-    if field == 'autotype_enabled':
-        input_b = b"True\nFalse\n"
-        at_enab = dmenu_select(2, "Autotype Enabled? True/False", inp=input_b)
-        if not at_enab:
-            return True
-        sel = not at_enab == 'False'
-    if (field not in ('password', 'notes', 'path', 'autotype_enabled')) or pw_choice:
-        sel = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
-        if not sel:
-            return True
-        if pw_choice:
-            sel_check = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
-            if not sel_check or sel_check != sel:
-                dmenu_err("Passwords do not match. No changes made.")
-                return True
-    elif field == 'notes':
-        sel = edit_notes(kp_entry.notes)
-    setattr(kp_entry, field, sel)
-    return True
-
-
 def edit_notes(note):
     """Use $EDITOR (or 'vim' if not set) to edit the notes entry
 
@@ -615,12 +612,14 @@ class DmenuRunner(Process):
         Process.__init__(self)
         self.server = server
         self.session = get_vault()
-        if self.session is False:
+        if self.session is None:
             self.server.kill_flag.set()
             sys.exit()
-        self.entries = bwcli.get_entries(self.session)
-        self.folders = bwcli.get_folders(self.session)
-        self.collections = bwcli.get_collections(self.session)
+        self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
+        if not all((self.entries, self.folders, self.collections)):
+            self.server.kill_flag.set()
+            sys.exit()
+
 
     def _set_timer(self):
         """Set inactivity timer
@@ -682,7 +681,7 @@ class DmenuRunner(Process):
                         [j['name'] for j in self.folders.values()]]
         else:
             hid_fold = []
-        sel = view_all_entries(options, self.folders,
+        sel = view_all_entries(options,
                                [i for i in self.entries if not
                                 any(j in self.folders[i['folderId']]['name'] for
                                     j in hid_fold)])
@@ -690,21 +689,21 @@ class DmenuRunner(Process):
             return
         if sel == options[0]:  # ViewType Individual entries
             options = []
-            sel = view_all_entries(options, self.folders,
+            sel = view_all_entries(options,
                                    [i for i in self.entries if not
                                     any(j in self.folders[i['folderId']]['name'] for
                                         j in hid_fold)])
             try:
-                entry = self.entries.entries[int(sel.split('-', 1)[0])]
+                entry = self.entries[int(sel.split('-', 1)[0])]
             except (ValueError, TypeError):
                 return
             text = view_entry(entry)
             type_text(text)
         elif sel == options[1]:  # Edit entries
             options = []
-            sel = view_all_entries(options, self.folders, self.entries)
+            sel = view_all_entries(options, self.entries)
             try:
-                entry = self.entries.entries[int(sel.split('-', 1)[0])]
+                entry = self.entries[int(sel.split('-', 1)[0])]
             except (ValueError, TypeError):
                 return
             edit = True
@@ -724,8 +723,11 @@ class DmenuRunner(Process):
             if collection:
                 self.entries = bwcli.get_entries(self.session)
         elif sel == options[5]:  # Sync vault
+            res = bwcli.sync(self.session)
+            if res is False:
+                return
             self.entries = bwcli.get_entries(self.session)
-            if not self.entries:
+            if self.entries is False:
                 return
             self.dmenu_run()
         elif sel == options[6]:  # Kill bwm daemon
@@ -735,7 +737,7 @@ class DmenuRunner(Process):
                 return
         else:
             try:
-                entry = self.entries.entries[int(sel.split('-', 1)[0])]
+                entry = self.entries[int(sel.split('-', 1)[0])]
             except (ValueError, TypeError):
                 return
             type_entry(entry)

@@ -28,10 +28,10 @@ LLC.
 - Configure the characters and groups of characters used during password
   generation in the config file (see config.ini.example for instructions).
   Multiple character sets can be selected on the fly when using Rofi.
-- [PLANNED] Use a custom Keepass 2.x style [auto-type sequence][autotype] if you
-  have one defined in the notes section of an entry (except for character
-  repetition and the 'special commands'). Set it per entry or set a default in
-  the config file for all entries. Disable autotype for an entry, if desired.
+- Use a custom Keepass 2.x style [auto-type sequence][autotype] if you have an
+  'autotype' field defined in the entry (except for character repetition and the
+  'special commands'). Set it per entry and/or set a default in the config file
+  for all entries.
 
 ## License
 
@@ -41,12 +41,13 @@ LLC.
 
 1. Python 3.4+. *Note* Python 3.6+ uses the `secrets` module for password
    generation to improve security.
-2. [Pynput][pynput]
-3. Dmenu. Support is included for [Rofi][rofi], but most Rofi
-   configuration/theming should be done via Xresources.
-4. (optional) Pinentry. Make sure to set which flavor of pinentry command to use
+2. [Bitwarden CLI][bwcli]. Ensure the `bw` command is in `$PATH`
+3. [Pynput][pynput]
+4. Dmenu or [Rofi][rofi]. Most Rofi configuration/theming should be done via
+   Rofi theme files.
+5. (optional) Pinentry. Make sure to set which flavor of pinentry command to use
    in the config file.
-5. (optional) xdotool or ydotool (for Wayland). If you have a lot of Unicode
+6. (optional) xdotool or ydotool (for Wayland). If you have a lot of Unicode
    characters or use a non-U.S.  English keyboard layout, xdotool is necessary
    to handle typing those characters.
 
@@ -74,10 +75,10 @@ LLC.
     in config.ini.
   + Adjust `session_timeout_min` if desired. Default is 6 hours (360 min).
   + Set the dmenu_command to `rofi` if you are using that instead
-  + [PLANNED] Adjust the autotype_default, if desired. Allowed codes are the
+  + Adjust the autotype_default, if desired. Allowed codes are the
     `Keepass 2.x codes`_ except for repetitions and most command codes. `{DELAY
     x}` (in milliseconds) is supported.  Individual autotype sequences can be
-    edited or disabled using bwm.
+    edited or deleted using bwm.
   + Set `type_library = xdotool` or `type_library = ydotool` (Wayland) if you
     need support for non-U.S. English keyboard layouts and/or characters.
 
@@ -127,6 +128,7 @@ convenience for testing.
 - To run tests: `python tests/tests.py`
 
 [pynput]: https://github.com/moses-palmer/pynput "Pynput"
+[bwcli]: https://github.com/bitwarden/cli "Bitwarden CLI"
 [rofi]: https://davedavenport.github.io/rofi/ "Rofi"
 [aur]: https://aur.archlinux.org/packages/python-bitwarden-menu-git "Archlinux AUR"
 [autotype]: https://keepass.info/help/base/autotype.html#autoseq "Keepass 2.x Autotype codes"

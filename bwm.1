@@ -10,10 +10,9 @@ vaults.
 \fB1.\fR Auto\-type username and/or password on selection. No clipboard
 copy/paste involved.
 
-\fB2.\fR [PLANNED] Use a custom Keepass 2.x style auto\-type sequence if you
-have one defined (except for character repetition and the \(aqspecial
-commands\(aq). Set it per entry or set a default in the config file for all
-entries. Disable autotype for an entry, if desired.
+\fB2.\fR Use a custom Keepass 2.x style auto\-type sequence if you have one
+defined (except for character repetition and the \(aqspecial commands\(aq). Set
+it per entry and/or set a default in the config file for all entries.
 
 \fB3.\fR Select any single field and have it typed into the active window. Notes
 fields can be viewed line\-by\-line from within dmenu and the selected line will
@@ -58,6 +57,8 @@ released under the terms of the MIT license.
 .SH REQUIREMENTS
 \fB1.\fR Python 3.4+. *Note* Python 3.6+ uses the \fIsecrets\fP module for password
 generation to improve security.
+
+\fB2.\fR \fI\%Bitwarden CLI\fP\&. Ensure the \fIbw\fP command is in \fI$PATH\fP.
 
 \fB2.\fR \fI\%Pynput\fP\&. Install via pip or your distribution\(aqs package
 manager, if available.
@@ -108,10 +109,10 @@ Adjust \fIsession_timeout_min\fP if desired. Default is 6 hours (360 min).
 
 Set the dmenu_command to \fIrofi\fP if you are using that instead
 
-[PLANNED] Adjust the \fIautotype_default\fR, if desired. Allowed codes are the
+Adjust the \fIautotype_default\fR, if desired. Allowed codes are the
 \fI\%Keepass 2.x codes\fP except for repetitions and most command codes.
 \fI{DELAY x}\fP (in milliseconds) is supported. Individual autotype sequences
-can be edited or disabled using bwm.
+can be edited or deleted using bwm.
 
 Set \fItype_library = xdotool\fP or \fItype_library = ydotool\fP (Wayland) if
 you need support for non\-U.S.  English keyboard layouts and/or characters.

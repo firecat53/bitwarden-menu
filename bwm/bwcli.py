@@ -102,9 +102,10 @@ def get_entries(session=b''):
         return False
     items = json.loads(res.stdout)
     folders = get_folders(session)
+    folder_ids = {i['id']: i for i in folders.values()}
     collections = get_collections(session)
     for item in items:
-        path = folders.get(item.get('folderId')).get('name')
+        path = folder_ids.get(item.get('folderId')).get('name')
         if path == 'No Folder':
             path = ''
         path = "/".join([path, item.get('name')]).lstrip('/')
@@ -113,6 +114,8 @@ def get_entries(session=b''):
             for uri in item['login']['uris']:
                 item['login']['uri'] = uri['uri']
                 break
+            else:
+                item['login']['uri'] = ""
         except KeyError:
             item['login']['uri'] = ""
         item['collections'] = [collections[i]['name'] for i in item['collectionIds']]
@@ -124,7 +127,7 @@ def sync(session=b''):
         Return: True on success, False with any errors
 
     """
-    res = run(["bw", "--session", session, "lock"], capture_output=True, check=False)
+    res = run(["bw", "--session", session, "sync"], capture_output=True, check=False)
     if not res.stdout:
         logging.debug(res)
         return False
@@ -133,19 +136,19 @@ def sync(session=b''):
 def get_folders(session):
     """Return all folder names.
 
-        Return: List of folder dicts {id: dict('object':folder,'id':id,'name':<name>)}
+        Return: Dict of folder dicts {name: dict('object':folder,'id':id,'name':<name>)}
 
     """
     res = run(["bw", "--session", session, "list", "folders"], capture_output=True, check=False)
     if not res.stdout:
         logging.debug(res)
         return False
-    return {i['id']:i for i in json.loads(res.stdout)}
+    return {i['name']:i for i in json.loads(res.stdout)}
 
 def get_collections(session):
     """Return all collection names.
 
-        Return: List of collection dicts {id:
+        Return: Dict of collection dicts {id:
             dict('object':collection,'id':id,'organizationId:<org
                  id>,'externalId':<ext id>,'name':<name>)}
 
@@ -156,35 +159,132 @@ def get_collections(session):
         return False
     return {i['id']:i for i in json.loads(res.stdout)}
 
-def add_entry():
+def add_entry(entry, session):
     """Add new entry to vault
 
-    """
+    Args: entry - dict with at least these fields
+    Returns: new item dict
 
-def edit_entry():
+    New item template:
+    {
+        "organizationId":null,
+        "folderId":null,
+        "type":1,
+        "name":"Item name",
+        "notes":"Some notes about this item.",
+        "favorite":false,
+        "fields":[],
+        "login":null,
+        "secureNote":null,
+        "card":null,
+        "identity":null}'
+
+    """
+    enc = run(["bw", "encode"], input=json.dumps(entry).encode(), capture_output=True, check=False)
+    if not enc.stdout:
+        logging.debug(enc)
+        return False
+    res = run(["bw", "--session", session, "create", "item", enc],
+              capture_output=True, check=False)
+    if not res.stdout:
+        logging.debug(res)
+        return False
+    return json.loads(res.stdout)
+
+def edit_entry(entry, session):
     """Modify existing vault entry
 
-    """
+        Args: entry - entry dict object
+        Returns: True on success, False on failure
 
-def delete_entry():
+    """
+    enc = run(["bw", "encode"], input=json.dumps(entry).encode(), capture_output=True, check=False)
+    if not enc.stdout:
+        logging.debug(enc)
+        return False
+    res = run(["bw", "--session", session, "edit", "item", entry['id'], enc.stdout],
+              capture_output=True, check=False)
+    if not res.stdout:
+        logging.debug(res)
+        return False
+    return True
+
+def delete_entry(entry, session):
     """Delete existing vault entry
 
-    """
+        Args: entry - entry dict object
+        Returns: True on success, False on failure
 
-def add_folder():
+    """
+    res = run(["bw", "--session", session, "delete", "item", entry['id']],
+              capture_output=True, check=False)
+    if not res.stdout:
+        logging.debug(res)
+        return False
+    return True
+
+def add_folder(folder, session):
     """Add folder
 
-    """
+        Args: folder - string
+              session - bytes
 
-def delete_folder():
+        Returns: Folder object or False on error
+
+    """
+    folder = {"name": folder}
+    enc = run(["bw", "encode"], input=json.dumps(folder).encode(), capture_output=True, check=False)
+    if not enc.stdout:
+        logging.debug(enc)
+        return False
+    res = run(["bw", "--session", session, "create", "folder", enc],
+              capture_output=True, check=False)
+    if not res.stdout:
+        logging.debug(res)
+        return False
+    return json.loads(res.stdout)
+
+def delete_folder(folders, folder, session):
     """Delete folder
 
-    """
+        folders - dict of folder dicts {'name': {'id': <id>, 'name': <name>, ...}
+        folder - name of folder to delete (string)
+        session - bytes
 
-def move_folder():
-    """Move or rename folder
+    """
+    fid = folders[folder]['id']
+    res = run(["bw", "--session", session, "delete", "folder", fid],
+              capture_output=True, check=False)
+    if not res.stdout:
+        logging.debug(res)
+        return False
+    return True
+
+def move_folder(folders, oldpath, newpath, session):
+    """Move folder
+
+        Args: folders - dict of all folder dicts {'name': {'id':<id>, 'name':<name>, ...}
+              oldpath - string (old name/path)
+              newpath - string (new name/path)
+              session - bytes
+        Returns: True on success, False on failure
 
     """
+    folders[newpath] = folders.pop[oldpath]
+    folders[newpath]['name'] = newpath
+    enc = run(["bw", "encode"],
+              input=json.dumps(folders[newpath]).encode(),
+              capture_output=True,
+              check=False)
+    if not enc.stdout:
+        logging.debug(enc)
+        return False
+    res = run(["bw", "--session", session, "edit", "folder", folders[newpath]['id'], enc],
+              capture_output=True, check=False)
+    if not res.stdout:
+        logging.debug(res)
+        return False
+    return True
 
 def add_collection():
     """Add collection

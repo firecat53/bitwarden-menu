@@ -90,7 +90,7 @@ def get_entries(session=b''):
 
     For now: since the URL is buried in:
         'login'->'uris'->[{match: xxx, uri: http...}, {match2: xxx, uri2: httpxxx}]
-    copy the first uri to 'login'->'uri' for ease of access later.
+    copy the first uri to 'login'->'url' for ease of access later.
 
         Return: items (list of dictionaries), folders, collections
                 False on error
@@ -107,17 +107,16 @@ def get_entries(session=b''):
     for item in items:
         path = folder_ids.get(item.get('folderId')).get('name')
         if path == 'No Folder':
-            path = ''
-        path = "/".join([path, item.get('name')]).lstrip('/')
-        item['path'] = path
+            path = '/'
+        item['folder'] = path
         try:
             for uri in item['login']['uris']:
-                item['login']['uri'] = uri['uri']
+                item['login']['url'] = uri['uri']
                 break
             else:
-                item['login']['uri'] = ""
+                item['login']['url'] = ""
         except KeyError:
-            item['login']['uri'] = ""
+            item['login']['url'] = ""
         item['collections'] = [collections[i]['name'] for i in item['collectionIds']]
     return items, folders, collections
 
@@ -184,7 +183,7 @@ def add_entry(entry, session):
     if not enc.stdout:
         logging.debug(enc)
         return False
-    res = run(["bw", "--session", session, "create", "item", enc],
+    res = run(["bw", "--session", session, "create", "item", enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.debug(res)
@@ -237,7 +236,7 @@ def add_folder(folder, session):
     if not enc.stdout:
         logging.debug(enc)
         return False
-    res = run(["bw", "--session", session, "create", "folder", enc],
+    res = run(["bw", "--session", session, "create", "folder", enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.debug(res)
@@ -279,7 +278,7 @@ def move_folder(folders, oldpath, newpath, session):
     if not enc.stdout:
         logging.debug(enc)
         return False
-    res = run(["bw", "--session", session, "edit", "folder", folders[newpath]['id'], enc],
+    res = run(["bw", "--session", session, "edit", "folder", folders[newpath]['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.debug(res)

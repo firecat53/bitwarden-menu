@@ -252,13 +252,13 @@ def view_all_entries(options, vault_entries):
 
     """
     num_align = len(str(len(vault_entries)))
-    bw_entry_pattern = str("{:>{na}} - {} - {} - {}")  # Path,username,url
+    bw_entry_pattern = str("{:>{na}} - {} - {} - {}")  # Folder/name,username,url
     # Have to number each entry to capture duplicates correctly
     vault_entries_b = str("\n").join(bw_entry_pattern.format(
         j,
-        i['path'],
+        join(i['folder'], i['name']),
         i['login']['username'],
-        i['login']['uri'],
+        i['login']['url'],
         na=num_align) for j, i in enumerate(vault_entries)).encode(bwm.ENC)
     if options:
         options_b = ("\n".join(options) + "\n").encode(bwm.ENC)
@@ -274,10 +274,11 @@ def view_entry(entry):
     Returns: dmenu selection
 
     """
-    fields = [entry['path'] or "Title: None",
+    fields = [entry['name'] or "Title: None",
+              entry['folder'],
               entry['login']['username'] or "Username: None",
               '**********' if entry['login']['password'] else "Password: None",
-              entry['login']['uri'] or "URL: None",
+              entry['login']['url'] or "URL: None",
               "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
     vault_entries_b = "\n".join(fields).encode(bwm.ENC)
     sel = dmenu_select(len(fields), inp=vault_entries_b)
@@ -294,23 +295,63 @@ def view_entry(entry):
     return sel
 
 
+def edit_password(entry):
+    """Edit password
+
+        Args: entry dict
+        Returns: True for no changes, entry for changes
+
+    """
+    sel = entry['login']['password']
+    pw_orig = sel.encode(bwm.ENC) + b"\n" if sel is not None else b"\n"
+    input_b = b"Generate password\nManually enter password\n"
+    pw_choice = dmenu_select(2, "Password", inp=input_b)
+    if pw_choice == "Manually enter password":
+        sel = dmenu_select(1, "Enter password", inp=pw_orig)
+        sel_check = dmenu_select(1, "Verify password")
+        if not sel_check or sel_check != sel:
+            dmenu_err("Passwords do not match. No changes made.")
+            return True
+    elif pw_choice == "Generate password":
+        input_b = b"20\n"
+        length = dmenu_select(1, "Password Length?", inp=input_b)
+        if not length:
+            return True
+        try:
+            length = int(length)
+        except ValueError:
+            length = 20
+        chars = get_password_chars()
+        if chars is False:
+            return True
+        sel = gen_passwd(chars, length)
+        if sel is False:
+            dmenu_err("Number of char groups desired is more than requested pw length")
+            return True
+    else:
+        return True
+    entry['login']['password'] = sel
+    return entry
+
+
 def edit_entry(entry, folders, collections, session):  # pylint: disable=too-many-return-statements, too-many-branches
     """Edit title, username, password, url, notes and autotype sequence for an entry.
 
     Args: entry - selected Entry dict
 
-    Returns: True to continue editing
+    Returns: entry to continue editing when changes are made
+             True to continue editing with no changes made
              False if done
 
     """
     auto = "default"
     if 'fields' in entry and 'autotype' in entry['fields']:
         auto = entry['fields']['autotype']
-    fields = [str("Title: {}").format(entry['name']),
-              str("Path: {}").format(entry['path']),
+    fields = [str("Name: {}").format(entry['name']),
+              str("Folder: {}").format(entry['folder']),
               str("Username: {}").format(entry['login']['username']),
               str("Password: **********") if entry['login']['password'] else "Password: None",
-              str("Url: {}").format(entry['login']['uri']),
+              str("Url: {}").format(entry['login']['url']),
               str("Autotype: {}").format(auto),
               "Notes: <Enter to Edit>" if entry['notes'] else "Notes: None",
               "Delete Entry: "]
@@ -322,56 +363,34 @@ def edit_entry(entry, folders, collections, session):  # pylint: disable=too-man
         return False
     field = field.lower()
     if field == 'password':
-        sel = entry['password']
-    edit_b = sel.encode(bwm.ENC) + b"\n" if sel is not None else b"\n"
+        return edit_password(entry)
     if field == 'delete entry':
         return delete_entry(entry, session)
-    if field == 'path':
+    if field == 'folder':
         folder = select_folder(folders)
         if not folder:
             return True
-        entry['folderId'] = folders[[i['id'] for i in folders if i['name'] == folder][0]]
+        entry['folderId'] = folders[folder]['id']
         entry['folder'] = folder
-        return bwcli.edit_entry(entry, session)
-    pw_choice = ""
-    if field == 'password':
-        input_b = b"Generate password\nManually enter password\n"
-        pw_choice = dmenu_select(2, "Password", inp=input_b)
-        if pw_choice == "Manually enter password":
-            pass
-        elif not pw_choice:
-            return True
-        else:
-            pw_choice = ''
-            input_b = b"20\n"
-            length = dmenu_select(1, "Password Length?", inp=input_b)
-            if not length:
-                return True
-            try:
-                length = int(length)
-            except ValueError:
-                length = 20
-            chars = get_password_chars()
-            if chars is False:
-                return True
-            sel = gen_passwd(chars, length)
-            if sel is False:
-                dmenu_err("Number of char groups desired is more than requested pw length")
-                return True
-
-    if (field not in ('password', 'notes', 'path')) or pw_choice:
-        sel = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
-        if not sel:
-            return True
-        if pw_choice:
-            sel_check = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
-            if not sel_check or sel_check != sel:
-                dmenu_err("Passwords do not match. No changes made.")
-                return True
-    elif field == 'notes':
-        sel = edit_notes(entry.notes)
-    entry[field] = sel
-    return bwcli.edit_entry(entry, session)
+        return entry
+    if field == 'notes':
+        entry['notes'] = edit_notes(entry['notes'])
+        return entry
+    if field in ('username', 'url'):
+        edit_b = entry['login'][field].encode(bwm.ENC) + \
+                b"\n" if entry['login'][field] is not None else b"\n"
+    else:
+        edit_b = entry[field].encode(bwm.ENC) + b"\n" if entry[field] is not None else b"\n"
+    sel = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
+    if not sel:
+        return True
+    if field in ('username', 'url'):
+        entry['login'][field] = sel
+        if field == 'url':
+            entry['login']['uris'] = [{'match': None, 'uri': sel}]
+    else:
+        entry[field] = sel
+    return entry
 
 
 def select_folder(folders, prompt="Folders"):
@@ -392,7 +411,7 @@ def select_folder(folders, prompt="Folders"):
     if not sel:
         return False
     try:
-        return folders[int(sel.split('-', 1)[1])]
+        return sel.split('-', 1)[1].lstrip()
     except (ValueError, TypeError):
         return False
 
@@ -440,6 +459,8 @@ def create_folder(folders, session):
     parentfolder = select_folder(folders, prompt="Select parent folder")
     if not parentfolder:
         return False
+    if parentfolder == "No Folder":
+        parentfolder = ""
     name = dmenu_select(1, "Folder name")
     if not name:
         return False
@@ -482,7 +503,6 @@ def move_folder(folders, session):
         return False
     folder = bwcli.move_folder(folders, folder, join(destfolder, basename(folder)), session)
     return folder
-
 
 
 def rename_folder(folders, session):
@@ -538,8 +558,14 @@ def add_entry(folders, collections, session):
     if entry is False:
         return False
     edit = True
-    while edit is True:
+    entry_ch = False
+    while edit:
         edit = edit_entry(entry, folders, collections, session)
+        if not isinstance(edit, bool):
+            entry_ch = True
+            entry = edit
+    if entry_ch is True:
+        bwcli.edit_entry(entry, session)
     return True
 
 
@@ -700,17 +726,15 @@ class DmenuRunner(Process):
         else:
             hid_fold = []
         sel = view_all_entries(options,
-                               [i for i in self.entries if not
-                                any(j in self.folders[i['folderId']]['name'] for
-                                    j in hid_fold)])
+                               [i for i in self.entries if
+                                i['folder'] not in hid_fold])
         if not sel:
             return
         if sel == options[0]:  # ViewType Individual entries
             options = []
             sel = view_all_entries(options,
-                                   [i for i in self.entries if not
-                                    any(j in self.folders[i['folderId']]['name'] for
-                                        j in hid_fold)])
+                                   [i for i in self.entries if
+                                    i['folder'] not in hid_fold])
             try:
                 entry = self.entries[int(sel.split('-', 1)[0])]
             except (ValueError, TypeError):
@@ -725,9 +749,17 @@ class DmenuRunner(Process):
             except (ValueError, TypeError):
                 return
             edit = True
-            while edit is True:
+            entry_ch = False
+            while edit:
                 edit = edit_entry(entry, self.folders, self.collections, self.session)
-            self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
+                if not isinstance(edit, bool):
+                    entry_ch = True
+                    entry = edit
+            if entry_ch is True:
+                res = bwcli.edit_entry(entry, self.session)
+                if res is False:
+                    return
+                self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
         elif sel == options[2]:  # Add entry
             entry = add_entry(self.folders, self.collections, self.session)
             if entry:

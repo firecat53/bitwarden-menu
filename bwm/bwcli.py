@@ -21,7 +21,7 @@ def status(session=b''):
     """
     res = run(["bw", "--session", session, "status"], capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     return dict(json.loads(res.stdout.split(b'\n')[-1]))
 
@@ -33,7 +33,7 @@ def set_server(url="https://vault.bitwarden.com"):
     """
     res = run(["bw", "config", "server", url], capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     return True
 
@@ -45,7 +45,7 @@ def login(email, password):
     """
     res = run(["bw", "login", "--raw", email, password], capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return (False, res.stderr)
     return res.stdout, None
 
@@ -57,7 +57,7 @@ def unlock(password):
     """
     res = run(["bw", "unlock", "--raw", password], capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return (False, res.stderr)
     return res.stdout, None
 
@@ -69,7 +69,7 @@ def lock():
     """
     res = run(["bw", "lock"], capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     return True
 
@@ -81,7 +81,7 @@ def logout():
     """
     res = run(["bw", "logout"], capture_output=True, check=False)
     if not res.stderr:
-        logging.debug(res)
+        logging.error(res)
         return False
     return True
 
@@ -100,7 +100,7 @@ def get_entries(session=b''):
     """
     res = run(["bw", "--session", session, "list", "items"], capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     items = json.loads(res.stdout)
     folders = get_folders(session)
@@ -133,7 +133,7 @@ def sync(session=b''):
     """
     res = run(["bw", "--session", session, "sync"], capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     return True
 
@@ -146,7 +146,7 @@ def get_folders(session):
     """
     res = run(["bw", "--session", session, "list", "folders"], capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     return {i['name']:i for i in json.loads(res.stdout)}
 
@@ -160,7 +160,7 @@ def get_collections(session):
     """
     res = run(["bw", "--session", session, "list", "collections"], capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     return {i['id']:i for i in json.loads(res.stdout)}
 
@@ -187,12 +187,12 @@ def add_entry(entry, session):
     """
     enc = run(["bw", "encode"], input=json.dumps(entry).encode(), capture_output=True, check=False)
     if not enc.stdout:
-        logging.debug(enc)
+        logging.error(enc)
         return False
     res = run(["bw", "--session", session, "create", "item", enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     return json.loads(res.stdout)
 
@@ -205,12 +205,12 @@ def edit_entry(entry, session):
     """
     enc = run(["bw", "encode"], input=json.dumps(entry).encode(), capture_output=True, check=False)
     if not enc.stdout:
-        logging.debug(enc)
+        logging.error(enc)
         return False
     res = run(["bw", "--session", session, "edit", "item", entry['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     return True
 
@@ -224,7 +224,7 @@ def delete_entry(entry, session):
     res = run(["bw", "--session", session, "delete", "item", entry['id']],
               capture_output=True, check=False)
     if res.returncode != 0:
-        logging.debug(res)
+        logging.error(res)
         return False
     return True
 
@@ -240,12 +240,12 @@ def add_folder(folder, session):
     folder = {"name": folder}
     enc = run(["bw", "encode"], input=json.dumps(folder).encode(), capture_output=True, check=False)
     if not enc.stdout:
-        logging.debug(enc)
+        logging.error(enc)
         return False
     res = run(["bw", "--session", session, "create", "folder", enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     return json.loads(res.stdout)
 
@@ -263,7 +263,7 @@ def delete_folder(folders, folder, session):
     res = run(["bw", "--session", session, "delete", "folder", fid],
               capture_output=True, check=False)
     if res.returncode != 0:
-        logging.debug(res)
+        logging.error(res)
         return False
     return True
 
@@ -284,12 +284,12 @@ def move_folder(folders, oldpath, newpath, session):
               capture_output=True,
               check=False)
     if not enc.stdout:
-        logging.debug(enc)
+        logging.error(enc)
         return False
     res = run(["bw", "--session", session, "edit", "folder", folders[newpath]['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
-        logging.debug(res)
+        logging.error(res)
         return False
     return json.loads(res.stdout)
 

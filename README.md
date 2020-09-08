@@ -78,7 +78,8 @@ LLC.
   + Adjust the autotype_default, if desired. Allowed codes are the
     `Keepass 2.x codes`_ except for repetitions and most command codes. `{DELAY
     x}` (in milliseconds) is supported.  Individual autotype sequences can be
-    edited or deleted using bwm.
+    edited or deleted using bwm. To disable autotype for an entry, set it to
+    `False`.
   + Set `type_library = xdotool` or `type_library = ydotool` (Wayland) if you
     need support for non-U.S. English keyboard layouts and/or characters.
 

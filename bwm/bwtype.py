@@ -10,6 +10,29 @@ from pynput import keyboard
 from bwm import CONF, SEQUENCE
 from bwm.menu import dmenu_err
 
+
+def autotype_seq(entry):
+    """Return value for autotype sequence
+
+        Args: entry - dict
+        Return: string
+
+    """
+    return next((i.get('value') for i in entry['fields'] if i.get('name') == 'autotype'), "")
+
+
+def autotype_index(entry):
+    """Returns index of the autotype field list in entry['fields']
+
+        Args: entry - dict
+        Returns: int  entry['fields'][autotype_index(entry] = \
+                {"name": "autotype", "value": "{USERNAME}{TAB}{PASSWORD}{ENTER}"}
+
+    """
+    return next((entry['fields'].index(i) for i in entry['fields'] if
+                 i.get('name') == 'autotype'))
+
+
 def tokenize_autotype(autotype):
     """Process the autotype sequence
 
@@ -75,10 +98,9 @@ def token_command(token):
 PLACEHOLDER_AUTOTYPE_TOKENS = {
     "{TITLE}"   : lambda e: e['name'],
     "{USERNAME}": lambda e: e['login']['username'],
-    # e['login']['uri'] is created by bwmcli->get_entries
-    "{URL}"     : lambda e: e['login']['uri'],
+    "{URL}"     : lambda e: e['login']['url'],
     "{PASSWORD}": lambda e: e['login']['password'],
-    "{NOTES}"   : lambda e: e.notes,
+    "{NOTES}"   : lambda e: e['notes'],
 }
 
 STRING_AUTOTYPE_TOKENS = {
@@ -181,7 +203,7 @@ def type_entry_pynput(entry, tokens):
         if special:
             cmd = token_command(token)
             if callable(cmd):
-                cmd()
+                cmd()  # pylint: disable=not-callable
             elif token in PLACEHOLDER_AUTOTYPE_TOKENS:
                 to_type = PLACEHOLDER_AUTOTYPE_TOKENS[token](entry)
                 if to_type:
@@ -208,7 +230,7 @@ def type_entry_pynput(entry, tokens):
                     kbd.tap(to_tap)
                     enter_idx = False
             else:
-                dmenu_err("Unsupported auto-type token (pynput): \"%s\"" % (token))
+                dmenu_err("Unsupported auto-type token (pynput): {}".format(token))
                 return
         else:
             try:
@@ -296,7 +318,7 @@ def type_entry_xdotool(entry, tokens):
         if special:
             cmd = token_command(token)
             if callable(cmd):
-                cmd()
+                cmd()  # pylint: disable=not-callable
             elif token in PLACEHOLDER_AUTOTYPE_TOKENS:
                 to_type = PLACEHOLDER_AUTOTYPE_TOKENS[token](entry)
                 if to_type:
@@ -314,7 +336,7 @@ def type_entry_xdotool(entry, tokens):
                     call(cmd)
                     enter_idx = False
             else:
-                dmenu_err("Unsupported auto-type token (xdotool): \"%s\"" % (token))
+                dmenu_err("Unsupported auto-type token (xdotool): {}".format(token))
                 return
         else:
             call(['xdotool', 'type', token])
@@ -397,7 +419,7 @@ def type_entry_ydotool(entry, tokens):
         if special:
             cmd = token_command(token)
             if callable(cmd):
-                cmd()
+                cmd()  # pylint: disable=not-callable
             elif token in PLACEHOLDER_AUTOTYPE_TOKENS:
                 to_type = PLACEHOLDER_AUTOTYPE_TOKENS[token](entry)
                 if to_type:
@@ -415,7 +437,7 @@ def type_entry_ydotool(entry, tokens):
                     call(cmd)
                     enter_idx = False
             else:
-                dmenu_err("Unsupported auto-type token (ydotool): \"%s\"" % (token))
+                dmenu_err("Unsupported auto-type token (ydotool): {}".format(token))
                 return
         else:
             call(['ydotool', 'type', token])
@@ -426,15 +448,15 @@ def type_entry(entry):
 
     Defaults to pynput
 
+    Args: entry - dict
+
     """
-    sequence = SEQUENCE
-    if hasattr(entry, 'autotype_enabled') and entry.autotype_enabled is False:
+    sequence = autotype_seq(entry)
+    if sequence == 'False':
         dmenu_err("Autotype disabled for this entry")
         return
-    if hasattr(entry, 'autotype_sequence') and \
-            entry.autotype_sequence is not None and \
-            entry.autotype_sequence != 'None':
-        sequence = entry.autotype_sequence
+    if not sequence or sequence == 'None':
+        sequence = SEQUENCE
     tokens = tokenize_autotype(sequence)
 
     library = 'pynput'

@@ -17,7 +17,7 @@ from threading import Timer
 import webbrowser
 
 import bwm.bwcli as bwcli
-from bwm.bwtype import type_text, type_entry
+from bwm.bwtype import autotype_index, autotype_seq, type_text, type_entry
 from bwm.menu import dmenu_select, dmenu_err
 import bwm
 
@@ -338,15 +338,12 @@ def edit_entry(entry, folders, collections):  # pylint: disable=too-many-return-
              False if done
 
     """
-    auto_val = next((i.get('value') for i in entry['fields'] if i.get('name') == 'autotype'), "")
-    auto_idx = next((entry['fields'].index(i) for i in entry['fields'] if
-                     i.get('name') == 'autotype'))
     fields = [str("Name: {}").format(entry['name']),
               str("Folder: {}").format(entry['folder']),
               str("Username: {}").format(entry['login']['username']),
               str("Password: **********") if entry['login']['password'] else "Password: None",
               str("Url: {}").format(entry['login']['url']),
-              str("Autotype: {}").format(auto_val),
+              str("Autotype: {}").format(autotype_seq(entry)),
               "Notes: <Enter to Edit>" if entry['notes'] else "Notes: None"]
     input_b = "\n".join(fields).encode(bwm.ENC)
     sel = dmenu_select(len(fields), inp=input_b)
@@ -371,8 +368,8 @@ def edit_entry(entry, folders, collections):  # pylint: disable=too-many-return-
         edit_b = entry['login'][field].encode(bwm.ENC) + \
                 b"\n" if entry['login'][field] is not None else b"\n"
     elif field == 'autotype':
-        edit_b = entry['fields'][auto_idx]['value'].encode(bwm.ENC) + \
-                b"\n" if entry['fields'][auto_idx]['value'] is not None else b"\n"
+        edit_b = entry['fields'][autotype_index(entry)]['value'].encode(bwm.ENC) + \
+                b"\n" if entry['fields'][autotype_index(entry)]['value'] is not None else b"\n"
     else:
         edit_b = entry[field].encode(bwm.ENC) + b"\n" if entry[field] is not None else b"\n"
     sel = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
@@ -383,7 +380,7 @@ def edit_entry(entry, folders, collections):  # pylint: disable=too-many-return-
         if field == 'url':
             entry['login']['uris'] = [{'match': None, 'uri': sel}]
     elif field == 'autotype':
-        entry['fields'][auto_idx]['value'] = sel
+        entry['fields'][autotype_index(entry)]['value'] = sel
     else:
         entry[field] = sel
     return entry

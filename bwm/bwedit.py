@@ -10,7 +10,6 @@ from subprocess import call
 import tempfile
 
 import bwm.bwcli as bwcli
-from bwm.bwm import view_all_entries
 from bwm.bwtype import autotype_index, autotype_seq
 from bwm.menu import dmenu_select, dmenu_err
 import bwm
@@ -26,13 +25,14 @@ except ImportError:
         return random.SystemRandom().choice(seq)
 
 
-def edit_entry(entry, folders, collections):  # pylint: disable=too-many-return-statements, too-many-branches
+def edit_entry(entry, folders, collections, session):  # pylint: disable=too-many-return-statements, too-many-branches
     """Edit title, username, password, url, notes and autotype sequence for an entry.
 
     Args: entry - selected Entry dict
 
     Returns: entry to continue editing when changes are made
              True to continue editing with no changes made
+             'deleted' if item is deleted
              False if done
 
     """
@@ -42,9 +42,17 @@ def edit_entry(entry, folders, collections):  # pylint: disable=too-many-return-
               str("Password: **********") if entry['login']['password'] else "Password: None",
               str("Url: {}").format(entry['login']['url']),
               str("Autotype: {}").format(autotype_seq(entry)),
-              "Notes: <Enter to Edit>" if entry['notes'] else "Notes: None"]
+              "Notes: <Enter to Edit>" if entry['notes'] else "Notes: None",
+              "Delete entry"]
     input_b = "\n".join(fields).encode(bwm.ENC)
     sel = dmenu_select(len(fields), inp=input_b)
+    if sel == 'Delete entry':
+        res = delete_entry(entry, session)
+        if res is True:
+            return "deleted"
+        else:
+            dmenu_err("Item not deleted, see logs")
+            return False
     try:
         field, sel = sel.split(": ", 1)
     except (ValueError, TypeError):
@@ -114,7 +122,7 @@ def add_entry(folders, collections, session):
     edit = True
     entry_ch = False
     while edit:
-        edit = edit_entry(entry, folders, collections)
+        edit = edit_entry(entry, folders, collections, session)
         if not isinstance(edit, bool):
             entry_ch = True
             entry = edit
@@ -125,24 +133,17 @@ def add_entry(folders, collections, session):
     return True
 
 
-def delete_entry(entries, session):
+def delete_entry(entry, session):
     """Delete an entry
 
-    Args: entries - list of entry dicts
+    Args: entry - dict
           session - bytes
     Returns: True if delete
              False if no delete
 
     """
-    sel = view_all_entries([], entries)
-    if not sel:
-        return False
-    try:
-        entry = entries[int(sel.split('-', 1)[0])]
-    except (ValueError, TypeError):
-        return False
     input_b = b"NO\nYes - confirm delete\n"
-    delete = dmenu_select(2, "Confirm delete", inp=input_b)
+    delete = dmenu_select(2, "Confirm delete of {}".format(entry['name']), inp=input_b)
     if delete != "Yes - confirm delete":
         return False
     res = bwcli.delete_entry(entry, session)

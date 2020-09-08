@@ -68,7 +68,7 @@ def lock():
 
     """
     res = run(["bw", "lock"], capture_output=True, check=False)
-    if not res.stderr:
+    if not res.stdout:
         logging.debug(res)
         return False
     return True

@@ -308,7 +308,6 @@ class DmenuRunner(Process):
         options = ['View/Type Individual entries',
                    'Edit entries',
                    'Add entry',
-                   'Delete entry',
                    'Manage folders',
                    'Manage collections',
                    'Sync vault',
@@ -345,37 +344,34 @@ class DmenuRunner(Process):
                 return
             edit = True
             entry_ch = False
-            while edit:
-                edit = edit_entry(entry, self.folders, self.collections)
+            while edit != "deleted" and edit:
+                edit = edit_entry(entry, self.folders, self.collections, self.session)
                 if not isinstance(edit, bool):
                     entry_ch = True
                     entry = edit
             if entry_ch is True:
-                res = bwcli.edit_entry(entry, self.session)
-                if res is False:
-                    return
+                if entry != "deleted":
+                    res = bwcli.edit_entry(entry, self.session)
+                    if res is False:
+                        return
                 self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
         elif sel == options[2]:  # Add entry
             entry = add_entry(self.folders, self.collections, self.session)
             if entry:
                 self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
-        elif sel == options[3]:  # Delete entry
-            if delete_entry(self.entries, self.session) is False:
-                return
-            self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
-        elif sel == options[4]:  # Manage folders
+        elif sel == options[3]:  # Manage folders
             folder_ch = manage_folders(self.folders, self.session)
             if folder_ch is True:
                 self.folders = bwcli.get_folders(self.session)
                 if self.folders is False:
                     return
-        elif sel == options[5]:  # Manage collections
+        elif sel == options[4]:  # Manage collections
             collection = manage_collections(self.collections, self.session)
             if collection:
                 self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
                 if not all((self.entries, self.folders, self.collections)):
                     return
-        elif sel == options[6]:  # Sync vault
+        elif sel == options[5]:  # Sync vault
             res = bwcli.sync(self.session)
             if res is False:
                 return
@@ -383,7 +379,8 @@ class DmenuRunner(Process):
             if not all((self.entries, self.folders, self.collections)):
                 return
             self.dmenu_run()
-        elif sel == options[7]:  # Kill bwm daemon
+        elif sel == options[6]:  # Kill bwm daemon
+            bwcli.lock()
             try:
                 self.server.kill_flag.set()
             except (EOFError, IOError):

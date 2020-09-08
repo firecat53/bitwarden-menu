@@ -95,7 +95,7 @@ def get_auth():
         authkey = auth.get('DEFAULT', 'authkey').encode()
     except (bwm.configparser.NoOptionError, bwm.configparser.MissingSectionHeaderError):
         os.remove(bwm.AUTH_FILE)
-        print("Cache file was corrupted. Stopping all instances. Please try again")
+        dmenu_err("Cache file was corrupted. Stopping all instances. Please try again")
         call(["pkill", "bwm"])  # Kill all prior instances as well
     return int(port), authkey
 
@@ -128,7 +128,7 @@ def get_password_chars():
             try:
                 presets[name.title()] = {k: chars[k] for k in shlex.split(val)}
             except KeyError:
-                print("Error: Unknown value in preset {}. Ignoring.".format(name))
+                dmenu_err("Error: Unknown value in preset {}. Ignoring.".format(name))
                 continue
     input_b = "\n".join(presets).encode(bwm.ENC)
     char_sel = dmenu_select(len(presets),
@@ -150,14 +150,8 @@ def get_vault():
     vaults = []
     for srv in servers:
         idx = srv.rsplit('_', 1)[-1]
-        try:
-            email = args_dict['email_{}'.format(idx)]
-        except KeyError:
-            email = ''
-        try:
-            passw = args_dict['password_{}'.format(idx)]
-        except KeyError:
-            passw = ''
+        email = args_dict.get('email_{}'.format(idx), "")
+        passw = args_dict.get('password_{}'.format(idx), "")
         try:
             cmd = args_dict['password_cmd_{}'.format(idx)]
             res = Popen(shlex.split(cmd), stdout=PIPE, stderr=PIPE).communicate()
@@ -334,7 +328,7 @@ def edit_password(entry):
     return entry
 
 
-def edit_entry(entry, folders, collections, session):  # pylint: disable=too-many-return-statements, too-many-branches
+def edit_entry(entry, folders, collections):  # pylint: disable=too-many-return-statements, too-many-branches
     """Edit title, username, password, url, notes and autotype sequence for an entry.
 
     Args: entry - selected Entry dict
@@ -344,17 +338,16 @@ def edit_entry(entry, folders, collections, session):  # pylint: disable=too-man
              False if done
 
     """
-    auto = "default"
-    if 'fields' in entry and 'autotype' in entry['fields']:
-        auto = entry['fields']['autotype']
+    auto_val = next((i.get('value') for i in entry['fields'] if i.get('name') == 'autotype'), "")
+    auto_idx = next((entry['fields'].index(i) for i in entry['fields'] if
+                     i.get('name') == 'autotype'))
     fields = [str("Name: {}").format(entry['name']),
               str("Folder: {}").format(entry['folder']),
               str("Username: {}").format(entry['login']['username']),
               str("Password: **********") if entry['login']['password'] else "Password: None",
               str("Url: {}").format(entry['login']['url']),
-              str("Autotype: {}").format(auto),
-              "Notes: <Enter to Edit>" if entry['notes'] else "Notes: None",
-              "Delete Entry: "]
+              str("Autotype: {}").format(auto_val),
+              "Notes: <Enter to Edit>" if entry['notes'] else "Notes: None"]
     input_b = "\n".join(fields).encode(bwm.ENC)
     sel = dmenu_select(len(fields), inp=input_b)
     try:
@@ -364,8 +357,6 @@ def edit_entry(entry, folders, collections, session):  # pylint: disable=too-man
     field = field.lower()
     if field == 'password':
         return edit_password(entry)
-    if field == 'delete entry':
-        return delete_entry(entry, session)
     if field == 'folder':
         folder = select_folder(folders)
         if not folder:
@@ -379,6 +370,9 @@ def edit_entry(entry, folders, collections, session):  # pylint: disable=too-man
     if field in ('username', 'url'):
         edit_b = entry['login'][field].encode(bwm.ENC) + \
                 b"\n" if entry['login'][field] is not None else b"\n"
+    elif field == 'autotype':
+        edit_b = entry['fields'][auto_idx]['value'].encode(bwm.ENC) + \
+                b"\n" if entry['fields'][auto_idx]['value'] is not None else b"\n"
     else:
         edit_b = entry[field].encode(bwm.ENC) + b"\n" if entry[field] is not None else b"\n"
     sel = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
@@ -388,6 +382,8 @@ def edit_entry(entry, folders, collections, session):  # pylint: disable=too-man
         entry['login'][field] = sel
         if field == 'url':
             entry['login']['uris'] = [{'match': None, 'uri': sel}]
+    elif field == 'autotype':
+        entry['fields'][auto_idx]['value'] = sel
     else:
         entry[field] = sel
     return entry
@@ -421,7 +417,7 @@ def manage_folders(folders, session):
 
     Args: folders - dict of folder objects {'name': dict, ...}
           session - bytes
-    Returns: True or False
+    Returns: True (on any changes) or False
 
     """
     edit = True
@@ -429,7 +425,7 @@ def manage_folders(folders, session):
                'Move',
                'Rename',
                'Delete']
-    folder = False
+    folder_ch = False
     while edit is True:
         input_b = b"\n".join(i.encode(bwm.ENC) for i in options) + b"\n\n" + \
             b"\n".join(i.encode(bwm.ENC) for i in folders)
@@ -438,15 +434,27 @@ def manage_folders(folders, session):
             edit = False
         elif sel == 'Create':
             folder = create_folder(folders, session)
+            if folder:
+                folders[folder['name']] = folder
+                folder_ch = True
         elif sel == 'Move':
             folder = move_folder(folders, session)
+            if folder:
+                folders[folder['name']] = folder
+                folder_ch = True
         elif sel == 'Rename':
             folder = rename_folder(folders, session)
+            if folder:
+                folders[folder['name']] = folder
+                folder_ch = True
         elif sel == 'Delete':
             folder = delete_folder(folders, session)
+            if folder:
+                del folders[folder]
+                folder_ch = True
         else:
             edit = False
-    return folder
+    return folder_ch
 
 
 def create_folder(folders, session):
@@ -474,7 +482,7 @@ def delete_folder(folders, session):
 
     Args: folder - folder dict obj
           session - bytes
-    Returns: True or False
+    Returns: Folder name or False
 
     """
     folder = select_folder(folders, prompt="Delete Folder:")
@@ -483,16 +491,16 @@ def delete_folder(folders, session):
     input_b = b"NO\nYes - confirm delete\n"
     delete = dmenu_select(2, "Confirm delete", inp=input_b)
     if delete != "Yes - confirm delete":
-        return True
-    bwcli.delete_folder(folders, folder, session)
-    return folder
+        return False
+    res = bwcli.delete_folder(folders, folder, session)
+    return folder if res is True else False
 
 
 def move_folder(folders, session):
     """Move folder
 
     Args: folders - dict {'name': folder dict, ...}
-    Returns: Folder object or False
+    Returns: New folder object or False
 
     """
     folder = select_folder(folders, prompt="Select folder to move")
@@ -501,15 +509,15 @@ def move_folder(folders, session):
     destfolder = select_folder(folders, prompt="Select destination folder")
     if not destfolder:
         return False
-    folder = bwcli.move_folder(folders, folder, join(destfolder, basename(folder)), session)
-    return folder
+    return bwcli.move_folder(folders, folder, join(destfolder, basename(folder)), session)
+
 
 
 def rename_folder(folders, session):
     """Rename folder
 
     Args: folders - dict {'name': folder dict, ...}
-    Returns: Folder object or False
+    Returns: New folder object or False
 
     """
     folder = select_folder(folders, prompt="Select folder to rename")
@@ -518,8 +526,8 @@ def rename_folder(folders, session):
     name = dmenu_select(1, "New folder name", inp=basename(folder).encode(bwm.ENC))
     if not name:
         return False
-    bwcli.move_folder(folders, folder, join(dirname(folder), name), session)
-    return folder
+    new = join(dirname(folder), name)
+    return bwcli.move_folder(folders, folder, new, session)
 
 
 def manage_collections(collections, session):
@@ -542,47 +550,59 @@ def add_entry(folders, collections, session):
     folder = select_folder(folders)
     if folder is False:
         return False
-    entry = {"organizationId": "",
-             "folderId": [i['id'] for i in folders if i['name'] == folder][0],
+    entry = {"organizationId": None,
+             "folderId": folders[folder]['id'],
              "type": 1,
              "name": "",
              "notes": "",
              "favorite": False,
-             "fields": [],
+             "fields": [{"name": "autotype", "value": "", "type": 0}],
              "login": {"username": "",
-                       "password": ""},
+                       "password": "",
+                       "url": ""},
+             "folder": folder if folder != "No Folder" else "/",
              "secureNote": "",
              "card": "",
              "identity": ""}
-    entry = bwcli.add_entry(entry, session)
-    if entry is False:
-        return False
     edit = True
     entry_ch = False
     while edit:
-        edit = edit_entry(entry, folders, collections, session)
+        edit = edit_entry(entry, folders, collections)
         if not isinstance(edit, bool):
             entry_ch = True
             entry = edit
     if entry_ch is True:
-        bwcli.edit_entry(entry, session)
+        entry = bwcli.add_entry(entry, session)
+        if entry is False:
+            return False
     return True
 
 
-def delete_entry(entry, session):
+def delete_entry(entries, session):
     """Delete an entry
 
-    Args: entry - vault entry
-    Returns: True if no delete
-             False if delete
+    Args: entries - list of entry dicts
+          session - bytes
+    Returns: True if delete
+             False if no delete
 
     """
+    sel = view_all_entries([], entries)
+    if not sel:
+        return False
+    try:
+        entry = entries[int(sel.split('-', 1)[0])]
+    except (ValueError, TypeError):
+        return False
     input_b = b"NO\nYes - confirm delete\n"
     delete = dmenu_select(2, "Confirm delete", inp=input_b)
     if delete != "Yes - confirm delete":
-        return True
-    bwcli.delete_entry(entry, session)
-    return False
+        return False
+    res = bwcli.delete_entry(entry, session)
+    if res is False:
+        dmenu_err("Item not deleted. Check logs.")
+        return False
+    return True
 
 
 def edit_notes(note):
@@ -714,6 +734,7 @@ class DmenuRunner(Process):
         options = ['View/Type Individual entries',
                    'Edit entries',
                    'Add entry',
+                   'Delete entry',
                    'Manage folders',
                    'Manage collections',
                    'Sync vault',
@@ -751,7 +772,7 @@ class DmenuRunner(Process):
             edit = True
             entry_ch = False
             while edit:
-                edit = edit_entry(entry, self.folders, self.collections, self.session)
+                edit = edit_entry(entry, self.folders, self.collections)
                 if not isinstance(edit, bool):
                     entry_ch = True
                     entry = edit
@@ -764,19 +785,23 @@ class DmenuRunner(Process):
             entry = add_entry(self.folders, self.collections, self.session)
             if entry:
                 self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
-        elif sel == options[3]:  # Manage folders
-            folder = manage_folders(self.folders, self.session)
-            if folder is not False:
-                self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
-                if not all((self.entries, self.folders, self.collections)):
+        elif sel == options[3]:  # Delete entry
+            if delete_entry(self.entries, self.session) is False:
+                return
+            self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
+        elif sel == options[4]:  # Manage folders
+            folder_ch = manage_folders(self.folders, self.session)
+            if folder_ch is True:
+                self.folders = bwcli.get_folders(self.session)
+                if self.folders is False:
                     return
-        elif sel == options[4]:  # Manage collections
+        elif sel == options[5]:  # Manage collections
             collection = manage_collections(self.collections, self.session)
             if collection:
                 self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
                 if not all((self.entries, self.folders, self.collections)):
                     return
-        elif sel == options[5]:  # Sync vault
+        elif sel == options[6]:  # Sync vault
             res = bwcli.sync(self.session)
             if res is False:
                 return
@@ -784,7 +809,7 @@ class DmenuRunner(Process):
             if not all((self.entries, self.folders, self.collections)):
                 return
             self.dmenu_run()
-        elif sel == options[6]:  # Kill bwm daemon
+        elif sel == options[7]:  # Kill bwm daemon
             try:
                 self.server.kill_flag.set()
             except (EOFError, IOError):

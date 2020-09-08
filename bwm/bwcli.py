@@ -88,9 +88,11 @@ def logout():
 def get_entries(session=b''):
     """Get all entries, folders and collections from vault
 
-    For now: since the URL is buried in:
+    1. since the URL is buried in:
         'login'->'uris'->[{match: xxx, uri: http...}, {match2: xxx, uri2: httpxxx}]
-    copy the first uri to 'login'->'url' for ease of access later.
+        copy the first uri to 'login'->'url' for ease of access later.
+    2. Also adjust 'path' to be just the dirname, not including the 'name'
+    3. Add the 'autotype' field so it can be edited if necessary
 
         Return: items (list of dictionaries), folders, collections
                 False on error
@@ -117,6 +119,9 @@ def get_entries(session=b''):
                 item['login']['url'] = ""
         except KeyError:
             item['login']['url'] = ""
+        item.setdefault('fields', [])
+        if not any([i['name'] == 'autotype' for i in item.get('fields')]):
+            item['fields'].append({'name': 'autotype', 'value':"", 'type':0})
         item['collections'] = [collections[i]['name'] for i in item['collectionIds']]
     return items, folders, collections
 
@@ -136,6 +141,7 @@ def get_folders(session):
     """Return all folder names.
 
         Return: Dict of folder dicts {name: dict('object':folder,'id':id,'name':<name>)}
+                False on error
 
     """
     res = run(["bw", "--session", session, "list", "folders"], capture_output=True, check=False)
@@ -217,7 +223,7 @@ def delete_entry(entry, session):
     """
     res = run(["bw", "--session", session, "delete", "item", entry['id']],
               capture_output=True, check=False)
-    if not res.stdout:
+    if res.returncode != 0:
         logging.debug(res)
         return False
     return True
@@ -246,15 +252,17 @@ def add_folder(folder, session):
 def delete_folder(folders, folder, session):
     """Delete folder
 
-        folders - dict of folder dicts {'name': {'id': <id>, 'name': <name>, ...}
-        folder - name of folder to delete (string)
-        session - bytes
+        Args: folders - dict of folder dicts {'name': {'id': <id>, 'name': <name>, ...}
+              folder - name of folder to delete (string)
+              session - bytes
+        Returns: True on success, False on failure
+
 
     """
     fid = folders[folder]['id']
     res = run(["bw", "--session", session, "delete", "folder", fid],
               capture_output=True, check=False)
-    if not res.stdout:
+    if res.returncode != 0:
         logging.debug(res)
         return False
     return True
@@ -266,10 +274,10 @@ def move_folder(folders, oldpath, newpath, session):
               oldpath - string (old name/path)
               newpath - string (new name/path)
               session - bytes
-        Returns: True on success, False on failure
+        Returns: Folder object on success, False on failure
 
     """
-    folders[newpath] = folders.pop[oldpath]
+    folders[newpath] = folders.pop(oldpath)
     folders[newpath]['name'] = newpath
     enc = run(["bw", "encode"],
               input=json.dumps(folders[newpath]).encode(),
@@ -283,7 +291,7 @@ def move_folder(folders, oldpath, newpath, session):
     if not res.stdout:
         logging.debug(res)
         return False
-    return True
+    return json.loads(res.stdout)
 
 def add_collection():
     """Add collection

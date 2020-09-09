@@ -39,8 +39,7 @@ LLC.
 
 ## Requirements
 
-1. Python 3.4+. *Note* Python 3.6+ uses the `secrets` module for password
-   generation to improve security.
+1. Python 3.7+.
 2. [Bitwarden CLI][bwcli]. Ensure the `bw` command is in `$PATH`
 3. [Pynput][pynput]
 4. Dmenu or [Rofi][rofi]. Most Rofi configuration/theming should be done via
@@ -89,7 +88,7 @@ LLC.
 
 - If using Rofi, you can try some of the command line options in config.ini or
   set them using the `dmenu_command` setting, but I haven't tested most of them
-  so I'd suggest configuring via .Xresources where possible. 
+  so I'd suggest configuring via theme files.
 - Number of lines needs to be configured in the config.ini and not in
   .Xresources or the Rofi config file. Bwm will override any number of
   lines settings set elsewhere.

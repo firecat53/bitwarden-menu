@@ -55,8 +55,7 @@ released under the terms of the MIT license.
 
 
 .SH REQUIREMENTS
-\fB1.\fR Python 3.4+. *Note* Python 3.6+ uses the \fIsecrets\fP module for password
-generation to improve security.
+\fB1.\fR Python 3.7+.
 
 \fB2.\fR \fI\%Bitwarden CLI\fP\&. Ensure the \fIbw\fP command is in \fI$PATH\fP.
 
@@ -64,7 +63,7 @@ generation to improve security.
 manager, if available.
 
 \fB3.\fR Dmenu. Support is included for \fI\%Rofi\fP, but most Rofi
-configuration/theming should be done via Xresources.
+configuration/theming should be done via Rofi theme files.
 
 \fB4.\fR (optional) Pinentry. Make sure to set which flavor of pinentry command
 to use in the config file.
@@ -140,8 +139,7 @@ the default presets will not be displayed unless they are uncommented.
 
 \fB3.\fR If using Rofi, you can try some of the command line options in
 config.ini or set them using the \fIdmenu_command\fP setting, but I haven\(aqt
-tested most of them so I\(aqd suggest configuring via .Xresources where
-possible.
+tested most of them so I\(aqd suggest configuring using Rofi theme files.
 
 \fB4.\fR If using dmenu for passphrase entry (pinentry not set), dmenu options
 in the [dmenu_passphrase] section of config.ini will override those in [dmenu]

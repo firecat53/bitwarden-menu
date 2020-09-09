@@ -16,7 +16,7 @@ from threading import Timer
 import webbrowser
 
 import bwm.bwcli as bwcli
-from bwm.bwedit import add_entry, edit_entry, delete_entry, manage_collections, manage_folders
+from bwm.bwedit import add_entry, edit_entry, manage_collections, manage_folders
 from bwm.bwtype import type_text, type_entry
 from bwm.menu import dmenu_select, dmenu_err
 import bwm

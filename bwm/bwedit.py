@@ -4,6 +4,7 @@
 import os
 from os.path import basename, dirname, join
 import random
+from secrets import choice
 import shlex
 import string
 from subprocess import call
@@ -13,16 +14,6 @@ import bwm.bwcli as bwcli
 from bwm.bwtype import autotype_index, autotype_seq
 from bwm.menu import dmenu_select, dmenu_err
 import bwm
-
-try:
-    # secrets only available python 3.6+
-    from secrets import choice
-except ImportError:
-    def choice(seq):
-        """Provide `choice` function call for pw generation
-
-        """
-        return random.SystemRandom().choice(seq)
 
 
 def edit_entry(entry, folders, collections, session):  # pylint: disable=too-many-return-statements, too-many-branches

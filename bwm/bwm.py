@@ -230,6 +230,98 @@ def view_notes(notes):
     return sel
 
 
+def dmenu_run(entries, folders, collections, session):
+    """Run dmenu with the given list of vault Entry objects
+
+    If 'hide_folders' is defined in config.ini, hide those from main and
+    view/type all views.
+
+    """
+    options = ['View/Type Individual entries',
+               'Edit entries',
+               'Add entry',
+               'Manage folders',
+               'Manage collections',
+               'Sync vault',
+               'Lock vault']
+    if bwm.CONF.has_option("vault", "hide_folders"):
+        hid_fold = bwm.CONF.get("vault", "hide_folders").split("\n")
+        # Validate ignored folder names in config.ini
+        hid_fold = [i for i in hid_fold if i in
+                    [j['name'] for j in folders.values()]]
+    else:
+        hid_fold = []
+    sel = view_all_entries(options,
+                           [i for i in entries if
+                            i['folder'] not in hid_fold])
+    if not sel:
+        return True
+    if sel == options[0]:  # ViewType Individual entries
+        options = []
+        sel = view_all_entries(options,
+                               [i for i in entries if
+                                i['folder'] not in hid_fold])
+        try:
+            entry = entries[int(sel.split('-', 1)[0])]
+        except (ValueError, TypeError):
+            return True
+        text = view_entry(entry)
+        type_text(text)
+    elif sel == options[1]:  # Edit entries
+        options = []
+        sel = view_all_entries(options, entries)
+        try:
+            entry = entries[int(sel.split('-', 1)[0])]
+        except (ValueError, TypeError):
+            return True
+        edit = True
+        entry_ch = False
+        while edit != "deleted" and edit:
+            edit = edit_entry(entry, folders, collections, session)
+            if not isinstance(edit, bool):
+                entry_ch = True
+                entry = edit
+        if entry_ch is True:
+            if entry != "deleted":
+                res = bwcli.edit_entry(entry, session)
+                if res is False:
+                    return True
+            entries, folders, collections = bwcli.get_entries(session)
+    elif sel == options[2]:  # Add entry
+        entry = add_entry(folders, collections, session)
+        if entry:
+            entries, folders, collections = bwcli.get_entries(session)
+    elif sel == options[3]:  # Manage folders
+        folder_ch = manage_folders(folders, session)
+        if folder_ch is True:
+            folders = bwcli.get_folders(session)
+            if folders is False:
+                return True
+    elif sel == options[4]:  # Manage collections
+        collection = manage_collections(collections, session)
+        if collection:
+            entries, folders, collections = bwcli.get_entries(session)
+            if not all((entries, folders, collections)):
+                return True
+    elif sel == options[5]:  # Sync vault
+        res = bwcli.sync(session)
+        if res is False:
+            return True
+        entries, folders, collections = bwcli.get_entries(session)
+        if not all((entries, folders, collections)):
+            return True
+        dmenu_run(entries, folders, collections, session)
+    elif sel == options[6]:  # Kill bwm daemon
+        bwcli.lock()
+        return False
+    else:
+        try:
+            entry = entries[int(sel.split('-', 1)[0])]
+        except (ValueError, TypeError):
+            return True
+        type_entry(entry)
+
+
 def client():
     """Define client connection to server BaseManager
 
@@ -274,10 +366,17 @@ class DmenuRunner(Process):
             self.server.start_flag.wait()
             if self.server.kill_flag.is_set():
                 break
-            if self.entries is False:
+            try:
+                self.cache_timer.cancel()
+            except AttributeError:
                 pass
-            else:
-                self.dmenu_run()
+            self._set_timer()
+            res = dmenu_run(self.entries, self.folders, self.collections, self.session)
+            if res is False:
+                try:
+                    self.server.kill_flag.set()
+                except (EOFError, IOError):
+                    return
             if self.server.cache_time_expired.is_set():
                 self.server.kill_flag.set()
             if self.server.kill_flag.is_set():
@@ -292,105 +391,6 @@ class DmenuRunner(Process):
         if not self.server.start_flag.is_set():
             self.server.kill_flag.set()
             self.server.start_flag.set()
-
-    def dmenu_run(self):  # pylint: disable=too-many-branches,too-many-return-statements
-        """Run dmenu with the given list of vault Entry objects
-
-        If 'hide_folders' is defined in config.ini, hide those from main and
-        view/type all views.
-
-        """
-        try:
-            self.cache_timer.cancel()
-        except AttributeError:
-            pass
-        self._set_timer()
-        options = ['View/Type Individual entries',
-                   'Edit entries',
-                   'Add entry',
-                   'Manage folders',
-                   'Manage collections',
-                   'Sync vault',
-                   'Lock vault']
-        if bwm.CONF.has_option("vault", "hide_folders"):
-            hid_fold = bwm.CONF.get("vault", "hide_folders").split("\n")
-            # Validate ignored folder names in config.ini
-            hid_fold = [i for i in hid_fold if i in
-                        [j['name'] for j in self.folders.values()]]
-        else:
-            hid_fold = []
-        sel = view_all_entries(options,
-                               [i for i in self.entries if
-                                i['folder'] not in hid_fold])
-        if not sel:
-            return
-        if sel == options[0]:  # ViewType Individual entries
-            options = []
-            sel = view_all_entries(options,
-                                   [i for i in self.entries if
-                                    i['folder'] not in hid_fold])
-            try:
-                entry = self.entries[int(sel.split('-', 1)[0])]
-            except (ValueError, TypeError):
-                return
-            text = view_entry(entry)
-            type_text(text)
-        elif sel == options[1]:  # Edit entries
-            options = []
-            sel = view_all_entries(options, self.entries)
-            try:
-                entry = self.entries[int(sel.split('-', 1)[0])]
-            except (ValueError, TypeError):
-                return
-            edit = True
-            entry_ch = False
-            while edit != "deleted" and edit:
-                edit = edit_entry(entry, self.folders, self.collections, self.session)
-                if not isinstance(edit, bool):
-                    entry_ch = True
-                    entry = edit
-            if entry_ch is True:
-                if entry != "deleted":
-                    res = bwcli.edit_entry(entry, self.session)
-                    if res is False:
-                        return
-                self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
-        elif sel == options[2]:  # Add entry
-            entry = add_entry(self.folders, self.collections, self.session)
-            if entry:
-                self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
-        elif sel == options[3]:  # Manage folders
-            folder_ch = manage_folders(self.folders, self.session)
-            if folder_ch is True:
-                self.folders = bwcli.get_folders(self.session)
-                if self.folders is False:
-                    return
-        elif sel == options[4]:  # Manage collections
-            collection = manage_collections(self.collections, self.session)
-            if collection:
-                self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
-                if not all((self.entries, self.folders, self.collections)):
-                    return
-        elif sel == options[5]:  # Sync vault
-            res = bwcli.sync(self.session)
-            if res is False:
-                return
-            self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
-            if not all((self.entries, self.folders, self.collections)):
-                return
-            self.dmenu_run()
-        elif sel == options[6]:  # Kill bwm daemon
-            bwcli.lock()
-            try:
-                self.server.kill_flag.set()
-            except (EOFError, IOError):
-                return
-        else:
-            try:
-                entry = self.entries[int(sel.split('-', 1)[0])]
-            except (ValueError, TypeError):
-                return
-            type_entry(entry)
 
 
 class Server(Process):

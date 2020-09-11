@@ -2,6 +2,7 @@
 
 """
 from contextlib import closing
+from functools import partial
 from multiprocessing import Event, Process
 from multiprocessing.managers import BaseManager
 import os
@@ -230,96 +231,159 @@ def view_notes(notes):
     return sel
 
 
+def dmenu_view(entries):
+    """View/type individual entries (called from dmenu_run)
+
+        Args: entries (list of dicts)
+        Returns: dict {err: <Bool>, reload: <Bool>}
+
+    """
+    sel = view_all_entries([], entries)
+    try:
+        entry = entries[int(sel.split('-', 1)[0])]
+    except (ValueError, TypeError):
+        return {'err': False, 'reload': False}
+    text = view_entry(entry)
+    type_text(text)
+    return {'err': False, 'reload': False}
+
+
+def dmenu_edit(entries, folders, collections, session):
+    """Select items to edit (called from dmenu_run)
+
+        Args: entries (list of dicts)
+              folders (dict of dict objects)
+              collections (dict of dict objects)
+              session (bytes)
+        Returns: dict {err: <Bool>, reload: <Bool>}
+
+    """
+    sel = view_all_entries([], entries)
+    try:
+        entry = entries[int(sel.split('-', 1)[0])]
+    except (ValueError, TypeError):
+        return {'err': False, 'reload': False}
+    edit = True
+    entry_ch = False
+    while edit != "deleted" and edit:
+        edit = edit_entry(entry, folders, collections, session)
+        if not isinstance(edit, bool):
+            entry_ch = True
+            entry = edit
+    if entry_ch is True:
+        if entry != "deleted":
+            res = bwcli.edit_entry(entry, session)
+            if res is False:
+                dmenu_err("Error editing entry")
+                return {'err': True, 'reload': False}
+        return {'err': False, 'reload': True}
+    return {'err': False, 'reload': False}
+
+
+def dmenu_add(folders, collections, session):
+    """Call add item option (called from dmenu_run)
+
+        Args: folders (dict of dict objects)
+              collections (dict of dict objects)
+              session (bytes)
+        Returns: dict {err: <Bool>, reload: <Bool>}
+    """
+    entry = add_entry(folders, collections, session)
+    if entry:
+        return {'err': False, 'reload': True}
+    dmenu_err("No entry added")
+    return {'err': True, 'reload': False}
+
+
+def dmenu_folders(folders, session):
+    """Call manage folders option (called from dmenu_run)
+
+        Args: folders (dict of dict objects)
+              session (bytes)
+        Returns: dict {err: <Bool>, reload: <Bool>}
+
+    """
+    folder_ch = manage_folders(folders, session)
+    if folder_ch is True:
+        return {'err': False, 'reload': True}
+    return {'err': False, 'reload': False}
+
+
+def dmenu_collections(collections, session):
+    """Call manage collections option (called from dmenu_run)
+
+        Args: collections (dict of dict objects)
+              session (bytes)
+        Returns: dict {err: <Bool>, reload: <Bool>}
+
+    """
+    collection = manage_collections(collections, session)
+    if collection:
+        return {'err': False, 'reload': True}
+    return {'err': False, 'reload': False}
+
+
+def dmenu_sync(session):
+    """Call vault sync option (called from dmenu_run)
+
+        Args: session (bytes)
+        Returns: dict {err: <Bool>, reload: <Bool>}
+
+    """
+    res = bwcli.sync(session)
+    if res is False:
+        dmenu_err("Sync error. Check logs.")
+        return {'err': True, 'reload': False}
+    return {'err': False, 'reload': True}
+
+
 def dmenu_run(entries, folders, collections, session):
     """Run dmenu with the given list of vault Entry objects
 
     If 'hide_folders' is defined in config.ini, hide those from main and
     view/type all views.
 
+    Returns: False on locking session, otherwise True
+
     """
-    options = ['View/Type Individual entries',
-               'Edit entries',
-               'Add entry',
-               'Manage folders',
-               'Manage collections',
-               'Sync vault',
-               'Lock vault']
     if bwm.CONF.has_option("vault", "hide_folders"):
         hid_fold = bwm.CONF.get("vault", "hide_folders").split("\n")
         # Validate ignored folder names in config.ini
         hid_fold = [i for i in hid_fold if i in
                     [j['name'] for j in folders.values()]]
+        entries_hid = [i for i in entries if i['folder'] not in hid_fold]
     else:
-        hid_fold = []
-    sel = view_all_entries(options,
-                           [i for i in entries if
-                            i['folder'] not in hid_fold])
+        entries_hid = entries
+    options = {'View/Type Individual entries': partial(dmenu_view, entries_hid),
+               'Edit entries': partial(dmenu_edit, entries, folders, collections, session),
+               'Add entry': partial(dmenu_add, folders, collections, session),
+               'Manage folders': partial(dmenu_folders, folders, session),
+               'Manage collections': partial(dmenu_collections, collections, session),
+               'Sync vault': partial(dmenu_sync, session),
+               'Lock vault': bwcli.lock}
+    sel = view_all_entries(options, entries_hid)
     if not sel:
         return True
-    if sel == options[0]:  # ViewType Individual entries
-        options = []
-        sel = view_all_entries(options,
-                               [i for i in entries if
-                                i['folder'] not in hid_fold])
-        try:
-            entry = entries[int(sel.split('-', 1)[0])]
-        except (ValueError, TypeError):
-            return True
-        text = view_entry(entry)
-        type_text(text)
-    elif sel == options[1]:  # Edit entries
-        options = []
-        sel = view_all_entries(options, entries)
-        try:
-            entry = entries[int(sel.split('-', 1)[0])]
-        except (ValueError, TypeError):
-            return True
-        edit = True
-        entry_ch = False
-        while edit != "deleted" and edit:
-            edit = edit_entry(entry, folders, collections, session)
-            if not isinstance(edit, bool):
-                entry_ch = True
-                entry = edit
-        if entry_ch is True:
-            if entry != "deleted":
-                res = bwcli.edit_entry(entry, session)
-                if res is False:
-                    return True
-            entries, folders, collections = bwcli.get_entries(session)
-    elif sel == options[2]:  # Add entry
-        entry = add_entry(folders, collections, session)
-        if entry:
-            entries, folders, collections = bwcli.get_entries(session)
-    elif sel == options[3]:  # Manage folders
-        folder_ch = manage_folders(folders, session)
-        if folder_ch is True:
-            folders = bwcli.get_folders(session)
-            if folders is False:
-                return True
-    elif sel == options[4]:  # Manage collections
-        collection = manage_collections(collections, session)
-        if collection:
-            entries, folders, collections = bwcli.get_entries(session)
-            if not all((entries, folders, collections)):
-                return True
-    elif sel == options[5]:  # Sync vault
-        res = bwcli.sync(session)
-        if res is False:
-            return True
-        entries, folders, collections = bwcli.get_entries(session)
-        if not all((entries, folders, collections)):
-            return True
-        dmenu_run(entries, folders, collections, session)
-    elif sel == options[6]:  # Kill bwm daemon
-        bwcli.lock()
+    if sel == "Lock vault":  # Kill bwm daemon
         return False
-    else:
+    if sel not in options:
+        # Autotype selected entry
         try:
             entry = entries[int(sel.split('-', 1)[0])]
         except (ValueError, TypeError):
             return True
         type_entry(entry)
+        return True
+    res = options[sel]()
+    if res['err'] is True:
+        return res['err']
+    if res['reload'] is True:
+        entries, folders, collections = bwcli.get_entries(session)
+        if not all((entries, folders, collections)):
+            dmenu_err("Error loading entries. See logs.")
+            return True
+        dmenu_run(entries, folders, collections, session)
+    return True
 
 
 def client():

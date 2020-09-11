@@ -82,3 +82,5 @@ def dmenu_err(prompt):
 
     """
     return dmenu_select(1, prompt)
+
+# vim: set et ts=4 sw=4 :

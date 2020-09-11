@@ -351,13 +351,13 @@ class DmenuRunner(Process):
         if not all((self.entries, self.folders, self.collections)):
             self.server.kill_flag.set()
             sys.exit()
+        self.cache_timer = Timer(bwm.SESSION_TIMEOUT_MIN * 60, self.cache_time)
 
 
     def _set_timer(self):
         """Set inactivity timer
 
         """
-        self.cache_timer = Timer(bwm.SESSION_TIMEOUT_MIN * 60, self.cache_time)
         self.cache_timer.daemon = True
         self.cache_timer.start()
 

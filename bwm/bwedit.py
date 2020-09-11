@@ -39,11 +39,10 @@ def edit_entry(entry, folders, collections, session):  # pylint: disable=too-man
     sel = dmenu_select(len(fields), inp=input_b)
     if sel == 'Delete entry':
         res = delete_entry(entry, session)
-        if res is True:
-            return "deleted"
-        else:
+        if res is False:
             dmenu_err("Item not deleted, see logs")
             return False
+        return "deleted"
     try:
         field, sel = sel.split(": ", 1)
     except (ValueError, TypeError):
@@ -428,3 +427,5 @@ def manage_collections(collections, session):
 
     """
     return False
+
+# vim: set et ts=4 sw=4 :

@@ -376,7 +376,7 @@ def dmenu_run(entries, folders, collections, session):
         return True
     res = options[sel]()
     if res['err'] is True:
-        return res['err']
+        return True
     if res['reload'] is True:
         entries, folders, collections = bwcli.get_entries(session)
         if not all((entries, folders, collections)):

@@ -2,6 +2,7 @@
 
 """
 from contextlib import closing
+from enum import Enum, auto
 from functools import partial
 from multiprocessing import Event, Process
 from multiprocessing.managers import BaseManager
@@ -337,13 +338,22 @@ def dmenu_sync(session):
     return {'err': False, 'reload': True}
 
 
+class Run(Enum):
+    """Enum for dmenu_run return values
+
+    """
+    LOCK = auto()
+    CONTINUE = auto()
+    RELOAD = auto()
+
+
 def dmenu_run(entries, folders, collections, session):
     """Run dmenu with the given list of vault Entry objects
 
     If 'hide_folders' is defined in config.ini, hide those from main and
     view/type all views.
 
-    Returns: False on locking session, otherwise True
+    Returns: Run Enum (LOCK, CONTINUE or RELOAD)
 
     """
     if bwm.CONF.has_option("vault", "hide_folders"):
@@ -363,27 +373,23 @@ def dmenu_run(entries, folders, collections, session):
                'Lock vault': bwcli.lock}
     sel = view_all_entries(options, entries_hid)
     if not sel:
-        return True
+        return Run.CONTINUE
     if sel == "Lock vault":  # Kill bwm daemon
-        return False
+        return Run.LOCK
     if sel not in options:
         # Autotype selected entry
         try:
             entry = entries[int(sel.split('-', 1)[0])]
         except (ValueError, TypeError):
-            return True
+            return Run.CONTINUE
         type_entry(entry)
-        return True
+        return Run.CONTINUE
     res = options[sel]()
     if res['err'] is True:
-        return True
+        return Run.CONTINUE
     if res['reload'] is True:
-        entries, folders, collections = bwcli.get_entries(session)
-        if not all((entries, folders, collections)):
-            dmenu_err("Error loading entries. See logs.")
-            return True
-        dmenu_run(entries, folders, collections, session)
-    return True
+        return Run.RELOAD
+    return Run.CONTINUE
 
 
 def client():
@@ -436,11 +442,15 @@ class DmenuRunner(Process):
                 pass
             self._set_timer()
             res = dmenu_run(self.entries, self.folders, self.collections, self.session)
-            if res is False:
+            if res == Run.LOCK:
                 try:
                     self.server.kill_flag.set()
                 except (EOFError, IOError):
                     return
+            if res == Run.RELOAD:
+                self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
+                if not all((self.entries, self.folders, self.collections)):
+                    dmenu_err("Error loading entries. See logs.")
             if self.server.cache_time_expired.is_set():
                 self.server.kill_flag.set()
             if self.server.kill_flag.is_set():

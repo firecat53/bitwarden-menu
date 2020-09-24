@@ -318,8 +318,8 @@ def dmenu_collections(collections, session):
         Returns: dict {err: <Bool>, reload: <Bool>}
 
     """
-    collection = manage_collections(collections, session)
-    if collection:
+    collection_ch = manage_collections(collections, session)
+    if collection_ch is True:
         return {'err': False, 'reload': True}
     return {'err': False, 'reload': False}
 
@@ -417,8 +417,8 @@ class DmenuRunner(Process):
         if self.session is None:
             self.server.kill_flag.set()
             sys.exit()
-        self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
-        if not all((self.entries, self.folders, self.collections)):
+        self.entries, self.folders, self.collections, self.orgs = bwcli.get_entries(self.session)
+        if not all((self.entries, self.folders, self.collections, self.orgs)):
             self.server.kill_flag.set()
             sys.exit()
 
@@ -448,8 +448,9 @@ class DmenuRunner(Process):
                 except (EOFError, IOError):
                     return
             if res == Run.RELOAD:
-                self.entries, self.folders, self.collections = bwcli.get_entries(self.session)
-                if not all((self.entries, self.folders, self.collections)):
+                self.entries, self.folders, self.collections, self.orgs = \
+                        bwcli.get_entries(self.session)
+                if not all((self.entries, self.folders, self.collections, self.orgs)):
                     dmenu_err("Error loading entries. See logs.")
             if self.server.cache_time_expired.is_set():
                 self.server.kill_flag.set()

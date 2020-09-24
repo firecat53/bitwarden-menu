@@ -85,16 +85,32 @@ def logout():
         return False
     return True
 
-def get_entries(session=b''):
-    """Get all entries, folders and collections from vault
+def get_orgs(session):
+    """Return all organizations for the logged in user
 
+        Return: Dict of org dicts {id: dict('object':'organization','id':id,'name':<name>...)}
+                False on error
+
+    """
+    res = run(["bw", "--session", session, "list", "organizations"],
+              capture_output=True, check=False)
+    if not res.stdout:
+        logging.error(res)
+        return False
+    return {i['id']:i for i in json.loads(res.stdout)}
+
+def get_entries(session=b'', org_name=''):
+    """Get all entries, folders, collections and orgs from vault
+
+    Args: session: bytes
+          org_name: name of organization. If given, only return items for that org
     1. since the URL is buried in:
         'login'->'uris'->[{match: xxx, uri: http...}, {match2: xxx, uri2: httpxxx}]
         copy the first uri to 'login'->'url' for ease of access later.
     2. Also adjust 'path' to be just the dirname, not including the 'name'
     3. Add the 'autotype' field so it can be edited if necessary
 
-        Return: items (list of dictionaries), folders, collections
+        Return: items (list of dictionaries), folders, collections, orgs
                 False on error
 
     """
@@ -104,10 +120,10 @@ def get_entries(session=b''):
         return False
     items = json.loads(res.stdout)
     folders = get_folders(session)
-    folder_ids = {i['id']: i for i in folders.values()}
-    collections = get_collections(session)
+    collections = get_collections(session, org_name)
+    orgs = get_orgs(session)
     for item in items:
-        path = folder_ids.get(item.get('folderId')).get('name')
+        path = folders.get(item.get('folderId')).get('name')
         if path == 'No Folder':
             path = '/'
         item['folder'] = path
@@ -122,8 +138,8 @@ def get_entries(session=b''):
         item.setdefault('fields', [])
         if not any([i['name'] == 'autotype' for i in item.get('fields')]):
             item['fields'].append({'name': 'autotype', 'value':"", 'type':0})
-        item['collections'] = [collections[i]['name'] for i in item['collectionIds']]
-    return items, folders, collections
+        item['collections'] = [collections.get(i).get('name') for i in item['collectionIds']]
+    return items, folders, collections, orgs
 
 def sync(session=b''):
     """Sync web vault changes to local vault
@@ -140,7 +156,7 @@ def sync(session=b''):
 def get_folders(session):
     """Return all folder names.
 
-        Return: Dict of folder dicts {name: dict('object':folder,'id':id,'name':<name>)}
+        Return: Dict of folder dicts {id: dict('object':folder,'id':id,'name':<name>)}
                 False on error
 
     """
@@ -148,17 +164,23 @@ def get_folders(session):
     if not res.stdout:
         logging.error(res)
         return False
-    return {i['name']:i for i in json.loads(res.stdout)}
+    return {i['id']:i for i in json.loads(res.stdout)}
 
-def get_collections(session):
-    """Return all collection names.
+def get_collections(session, org_id=''):
+    """Return all collection names for user.
+
+        Args: session - session id bytes
+              org_id - organization id string.
 
         Return: Dict of collection dicts {id:
             dict('object':collection,'id':id,'organizationId:<org
                  id>,'externalId':<ext id>,'name':<name>)}
 
     """
-    res = run(["bw", "--session", session, "list", "collections"], capture_output=True, check=False)
+    cmd = ["bw", "--session", session, "list", "collections"]
+    if org_id:
+        cmd.extend(["--organizationid", org_id])
+    res = run(cmd, capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
         return False
@@ -200,7 +222,7 @@ def edit_entry(entry, session):
     """Modify existing vault entry
 
         Args: entry - entry dict object
-        Returns: True on success, False on failure
+        Returns: updated entry object (dict) on success, False on failure
 
     """
     enc = run(["bw", "encode"], input=json.dumps(entry).encode(), capture_output=True, check=False)
@@ -212,13 +234,13 @@ def edit_entry(entry, session):
     if not res.stdout:
         logging.error(res)
         return False
-    return True
+    return json.loads(res.stdout)
 
 def delete_entry(entry, session):
     """Delete existing vault entry
 
         Args: entry - entry dict object
-        Returns: True on success, False on failure
+        Returns: entry object (dict) on success, False on failure
 
     """
     res = run(["bw", "--session", session, "delete", "item", entry['id']],
@@ -226,12 +248,12 @@ def delete_entry(entry, session):
     if res.returncode != 0:
         logging.error(res)
         return False
-    return True
+    return entry
 
 def add_folder(folder, session):
     """Add folder
 
-        Args: folder - string
+        Args: folder - string (name of folder)
               session - bytes
 
         Returns: Folder object or False on error
@@ -249,63 +271,143 @@ def add_folder(folder, session):
         return False
     return json.loads(res.stdout)
 
-def delete_folder(folders, folder, session):
+def delete_folder(folder, session):
     """Delete folder
 
-        Args: folders - dict of folder dicts {'name': {'id': <id>, 'name': <name>, ...}
-              folder - name of folder to delete (string)
+        Args: folder - folder object (dict)
               session - bytes
-        Returns: True on success, False on failure
+        Returns: folder object (dict) on success, False on failure
 
 
     """
-    fid = folders[folder]['id']
-    res = run(["bw", "--session", session, "delete", "folder", fid],
+    res = run(["bw", "--session", session, "delete", "folder", folder['id']],
               capture_output=True, check=False)
     if res.returncode != 0:
         logging.error(res)
         return False
-    return True
+    return folder
 
-def move_folder(folders, oldpath, newpath, session):
-    """Move folder
+def move_folder(folder, newpath, session):
+    """Move or rename folder
 
-        Args: folders - dict of all folder dicts {'name': {'id':<id>, 'name':<name>, ...}
-              oldpath - string (old name/path)
+        Args: folder - folder dict object
               newpath - string (new name/path)
               session - bytes
         Returns: Folder object on success, False on failure
 
     """
-    folders[newpath] = folders.pop(oldpath)
-    folders[newpath]['name'] = newpath
+    folder['name'] = newpath
     enc = run(["bw", "encode"],
-              input=json.dumps(folders[newpath]).encode(),
+              input=json.dumps(folder).encode(),
               capture_output=True,
               check=False)
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "edit", "folder", folders[newpath]['id'], enc.stdout],
+    res = run(["bw", "--session", session, "edit", "folder", folder['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
         return False
     return json.loads(res.stdout)
 
-def add_collection():
+def add_collection(collection, org_id, session):
     """Add collection
 
-    """
+        Args: collection - string
+              org - organization id string
+              session - bytes
 
-def delete_collection():
+        Returns: collection object or False on error
+
+        TODO: remove hack below for bug in bw cli where
+        `bw create org-collection` doesn't return the new object id.
+        The collection is created, but a sync is needed to obtain the new
+        collection id.
+        https://github.com/bitwarden/cli/issues/175
+
+    """
+    collection = {"name": collection, "organizationId": org_id}
+    enc = run(["bw", "encode"],
+              input=json.dumps(collection).encode(), capture_output=True, check=False)
+    if not enc.stdout:
+        logging.error(enc)
+        return False
+    res = run(["bw", "--session", session,
+               "--organizationid", org_id.encode(),
+               "create", "org-collection".encode(), enc.stdout],
+              capture_output=True, check=False)
+    if not res.stdout:
+        logging.error(res)
+        return False
+    # Begin hack (see notes above)
+    sync(session)
+    collections = get_collections(session)
+    new = [i for i in collections.values() if i['name'] == collection['name']]
+    if len(new) != 1:
+        logging.error("Adding collection error: name already exists")
+        return False
+    res.stdout = json.dumps(new[0])
+    # End hack
+    return json.loads(res.stdout)
+
+def delete_collection(collection, session):
     """Delete collection
 
-    """
+        Args: collection - collection object (dict)
+              session - bytes
+        Returns: collection object (dict) on success, False on failure
 
-def move_collection():
+    """
+    res = run(["bw", "--session", session,
+               "--organizationid", collection['organizationId'].encode(),
+               "delete", "org-collection", collection['id']],
+              capture_output=True, check=False)
+    if res.returncode != 0:
+        logging.error(res)
+        return False
+    return collection
+
+def move_collection(collection, newpath, session):
     """Move or rename collection
 
+        Args: collection - collection object (dict)
+              newpath - string (new name/path)
+              session - bytes
+        Returns: collection object on success, False on failure
+
+        TODO: remove hack below for bug in bw cli where
+        `bw edit org-collection` doesn't return the new object id.
+        The collection is edited, but a sync is needed to obtain the new
+        collection id.
+        https://github.com/bitwarden/cli/issues/175
+
     """
+    collection['name'] = newpath
+    enc = run(["bw", "encode"],
+              input=json.dumps(collection).encode(),
+              capture_output=True,
+              check=False)
+    if not enc.stdout:
+        logging.error(enc)
+        return False
+    res = run(["bw",
+               "--session", session,
+               "--organizationid", collection['organizationId'].encode(),
+               "edit", "org-collection", collection['id'], enc.stdout],
+              capture_output=True, check=False)
+    if not res.stdout:
+        logging.error(res)
+        return False
+    # Begin hack (see notes above)
+    sync(session)
+    collections = get_collections(session)
+    new = [i for i in collections.values() if i['name'] == collection['name']]
+    if len(new) != 1:
+        logging.error("Editing collection error: name already exists")
+        return False
+    res.stdout = json.dumps(new[0])
+    # End hack
+    return json.loads(res.stdout)
 
 # vim: set et ts=4 sw=4 :

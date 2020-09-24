@@ -29,6 +29,7 @@ def edit_entry(entry, folders, collections, session):  # pylint: disable=too-man
     """
     fields = [str("Name: {}").format(entry['name']),
               str("Folder: {}").format(entry['folder']),
+              str("Collections: {}").format(entry['collections']),
               str("Username: {}").format(entry['login']['username']),
               str("Password: **********") if entry['login']['password'] else "Password: None",
               str("Url: {}").format(entry['login']['url']),
@@ -56,6 +57,13 @@ def edit_entry(entry, folders, collections, session):  # pylint: disable=too-man
             return True
         entry['folderId'] = folders[folder]['id']
         entry['folder'] = folder
+        return entry
+    if field == 'collections':
+        collection = select_collection(collections, session)
+        if not collection:
+            return True
+        entry['collectionIds'] = [collections[collection]['id']]
+        entry['collections'] = [collection]
         return entry
     if field == 'notes':
         entry['notes'] = edit_notes(entry['notes'])
@@ -89,14 +97,15 @@ def add_entry(folders, collections, session):
           collections - dict of collections objects
           session - bytes
     Returns: False if not added
-             True if added
+             Vault object (dict) if added
 
     """
     folder = select_folder(folders)
+    collection = select_collection(collections, session)
     if folder is False:
         return False
     entry = {"organizationId": None,
-             "folderId": folders[folder]['id'],
+             "folderId": folder['id'],
              "type": 1,
              "name": "",
              "notes": "",
@@ -105,7 +114,8 @@ def add_entry(folders, collections, session):
              "login": {"username": "",
                        "password": "",
                        "url": ""},
-             "folder": folder if folder != "No Folder" else "/",
+             "folder": folder['name'] if folder != "No Folder" else "/",
+             "collections": [collection['name']] if collection is not False else [],
              "secureNote": "",
              "card": "",
              "identity": ""}
@@ -120,7 +130,7 @@ def add_entry(folders, collections, session):
         entry = bwcli.add_entry(entry, session)
         if entry is False:
             return False
-    return True
+    return entry
 
 
 def delete_entry(entry, session):
@@ -128,8 +138,8 @@ def delete_entry(entry, session):
 
     Args: entry - dict
           session - bytes
-    Returns: True if delete
-             False if no delete
+    Returns: entry (dict) if deleted
+             False if not deleted
 
     """
     input_b = b"NO\nYes - confirm delete\n"
@@ -139,8 +149,7 @@ def delete_entry(entry, session):
     res = bwcli.delete_entry(entry, session)
     if res is False:
         dmenu_err("Item not deleted. Check logs.")
-        return False
-    return True
+    return res
 
 
 def edit_notes(note):
@@ -285,22 +294,23 @@ def edit_password(entry):
 def select_folder(folders, prompt="Folders"):
     """Select which folder for an entry
 
-    Args: folders - dict of folder dicts ['name': {'id', 'name',...}, ...]
+    Args: folders - dict of folder dicts ['id': {'id', 'name',...}, ...]
           options - list of menu options for folders
 
     Returns: False for no entry
-             folder - string
+             folder - folder object
 
     """
     num_align = len(str(len(folders)))
     pattern = str("{:>{na}} - {}")
-    input_b = str("\n").join([pattern.format(j, i, na=num_align)
-                              for j, i in enumerate(folders)]).encode(bwm.ENC)
+    folder_names = dict(enumerate(folders.values()))
+    input_b = str("\n").join(pattern.format(j, i['name'], na=num_align)
+                             for j, i in folder_names.items()).encode(bwm.ENC)
     sel = dmenu_select(min(bwm.DMENU_LEN, len(folders)), prompt, inp=input_b)
     if not sel:
         return False
     try:
-        return sel.split('-', 1)[1].lstrip()
+        return folder_names[int(sel.split(' - ')[0])]
     except (ValueError, TypeError):
         return False
 
@@ -308,9 +318,9 @@ def select_folder(folders, prompt="Folders"):
 def manage_folders(folders, session):
     """Rename, create, move or delete folders
 
-    Args: folders - dict of folder objects {'name': dict, ...}
+    Args: folders - dict of folder objects {'id': dict, ...}
           session - bytes
-    Returns: True (on any changes) or False
+    Returns: updated folders (dict) on any changes or False
 
     """
     edit = True
@@ -321,30 +331,30 @@ def manage_folders(folders, session):
     folder_ch = False
     while edit is True:
         input_b = b"\n".join(i.encode(bwm.ENC) for i in options) + b"\n\n" + \
-            b"\n".join(i.encode(bwm.ENC) for i in folders)
-        sel = dmenu_select(len(options) + len(folders) + 1, "Folders", inp=input_b)
+            b"\n".join(i['name'].encode(bwm.ENC) for i in folders.values())
+        sel = dmenu_select(len(options) + len(folders) + 1, "Manage Folders", inp=input_b)
         if not sel:
             edit = False
         elif sel == 'Create':
             folder = create_folder(folders, session)
             if folder:
-                folders[folder['name']] = folder
-                folder_ch = True
+                folders[folder['id']] = folder
+                folder_ch = folders
         elif sel == 'Move':
             folder = move_folder(folders, session)
             if folder:
-                folders[folder['name']] = folder
-                folder_ch = True
+                folders[folder['id']] = folder
+                folder_ch = folders
         elif sel == 'Rename':
             folder = rename_folder(folders, session)
             if folder:
-                folders[folder['name']] = folder
-                folder_ch = True
+                folders[folder['id']] = folder
+                folder_ch = folders
         elif sel == 'Delete':
             folder = delete_folder(folders, session)
             if folder:
-                del folders[folder]
-                folder_ch = True
+                del folders[folder['id']]
+                folder_ch = folders
         else:
             edit = False
     return folder_ch
@@ -358,15 +368,18 @@ def create_folder(folders, session):
 
     """
     parentfolder = select_folder(folders, prompt="Select parent folder")
-    if not parentfolder:
+    if parentfolder is False:
         return False
-    if parentfolder == "No Folder":
-        parentfolder = ""
+    pfname = parentfolder['name']
+    if pfname == "No Folder":
+        pfname = ""
     name = dmenu_select(1, "Folder name")
     if not name:
         return False
-    name = join(parentfolder, name)
+    name = join(pfname, name)
     folder = bwcli.add_folder(name, session)
+    if folder is False:
+        dmenu_err("Folder not added. Check logs.")
     return folder
 
 
@@ -375,18 +388,20 @@ def delete_folder(folders, session):
 
     Args: folder - folder dict obj
           session - bytes
-    Returns: Folder name or False
+    Returns: Folder object (dict) or False
 
     """
     folder = select_folder(folders, prompt="Delete Folder:")
-    if not folder:
+    if not folder or folder['name'] == "No Folder":
         return False
     input_b = b"NO\nYes - confirm delete\n"
     delete = dmenu_select(2, "Confirm delete", inp=input_b)
     if delete != "Yes - confirm delete":
         return False
-    res = bwcli.delete_folder(folders, folder, session)
-    return folder if res is True else False
+    res = bwcli.delete_folder(folder, session)
+    if res is False:
+        dmenu_err("Folder not deleted. Check logs.")
+    return res
 
 
 def move_folder(folders, session):
@@ -397,12 +412,19 @@ def move_folder(folders, session):
 
     """
     folder = select_folder(folders, prompt="Select folder to move")
-    if not folder:
+    if folder is False or folder['name'] == "No Folder":
         return False
-    destfolder = select_folder(folders, prompt="Select destination folder")
-    if not destfolder:
+    destfolder = select_folder(folders,
+            prompt="Select destination folder. 'No Folder' is root.")
+    if destfolder is False:
         return False
-    return bwcli.move_folder(folders, folder, join(destfolder, basename(folder)), session)
+    dname = ""
+    if destfolder['name'] != "No Folder":
+        dname = destfolder['name']
+    folder = bwcli.move_folder(folder, join(dname, basename(folder['name'])), session)
+    if folder is False:
+        dmenu_err("Folder not added. Check logs.")
+    return folder
 
 
 def rename_folder(folders, session):
@@ -413,19 +435,195 @@ def rename_folder(folders, session):
 
     """
     folder = select_folder(folders, prompt="Select folder to rename")
-    if not folder:
+    if folder is False or folder['name'] == "No Folder":
         return False
-    name = dmenu_select(1, "New folder name", inp=basename(folder).encode(bwm.ENC))
+    name = dmenu_select(1, "New folder name", inp=basename(folder['name']).encode(bwm.ENC))
     if not name:
         return False
-    new = join(dirname(folder), name)
-    return bwcli.move_folder(folders, folder, new, session)
+    new = join(dirname(folder['name']), name)
+    folder = bwcli.move_folder(folder, new, session)
+    if folder is False:
+        dmenu_err("Folder not renamed. Check logs.")
+    return folder
+
+
+def select_collection(collections, session, prompt="Collections - Organization"):
+    """Select which collection for an entry
+
+    Args: collections - dict of collection dicts ['id': {'id', 'name',...}, ...]
+          options - list of menu options for collections
+
+    Returns: False for no entry
+             collection - dict
+
+    """
+    orgs = bwcli.get_orgs(session)
+    coll_names = dict(enumerate(collections.values()))
+    num_align = len(str(len(collections)))
+    pattern = str("{:>{na}} - {} - {}")
+    input_b = str("\n").join(pattern.format(j,
+                                            i['name'],
+                                            orgs[i['organizationId']]['name'],
+                                            na=num_align)
+                             for j, i in coll_names.items()).encode(bwm.ENC)
+    sel = dmenu_select(min(bwm.DMENU_LEN, len(collections)), prompt, inp=input_b)
+    if not sel:
+        return False
+    try:
+        return coll_names[int(sel.split(' - ')[0])]
+    except (ValueError, TypeError):
+        return False
 
 
 def manage_collections(collections, session):
-    """Manage collections
+    """Rename, create, move or delete collections
+
+    Args: collections - dict of collection objects {'name': dict, ...}
+          session - bytes
+    Returns: updated collections (dict) on any changes or False
 
     """
-    return False
+    edit = True
+    options = ['Create',
+               'Move',
+               'Rename',
+               'Delete']
+    collection_ch = False
+    while edit is True:
+        input_b = b"\n".join(i.encode(bwm.ENC) for i in options) + b"\n\n" + \
+                b"\n".join(i['name'].encode(bwm.ENC) for i in collections.values())
+        sel = dmenu_select(len(options) + len(collections) + 1, "Manage collections", inp=input_b)
+        if not sel:
+            edit = False
+        elif sel == 'Create':
+            collection = create_collection(collections, session)
+            if collection:
+                collections[collection['id']] = collection
+                collection_ch = collections
+        elif sel == 'Move':
+            collection = move_collection(collections, session)
+            if collection:
+                collections[collection['id']] = collection
+                collection_ch = collections
+        elif sel == 'Rename':
+            collection = rename_collection(collections, session)
+            if collection:
+                collections[collection['id']] = collection
+                collection_ch = collections
+        elif sel == 'Delete':
+            collection = delete_collection(collections, session)
+            if collection:
+                del collections[collection['id']]
+
+
+
+
+
+                collection_ch = collections
+        else:
+            edit = False
+    return collection_ch
+
+
+def create_collection(collections, session):
+    """Create new collection
+
+    Args: collections - dict of collection objects
+    Returns: collection object or False
+
+    """
+    parentcollection = select_collection(collections, session,
+            prompt="Select parent collection (Esc for no parent)")
+    pname = ""
+    if parentcollection is not False:
+        pname = parentcollection['name']
+    name = dmenu_select(1, "Collection name")
+    if not name:
+        return False
+    name = join(pname, name)
+    org_id = select_org(session)
+    if org_id is False:
+        return False
+    collection = bwcli.add_collection(name, org_id, session)
+    return collection
+
+
+def delete_collection(collections, session):
+    """Delete a collection
+
+    Args: collections- dict of all collection objects
+          session - bytes
+    Returns: collection obj or False
+
+    """
+    collection = select_collection(collections, session, prompt="Delete collection:")
+    if not collection:
+        return False
+    input_b = b"NO\nYes - confirm delete\n"
+    delete = dmenu_select(2, "Confirm delete", inp=input_b)
+    if delete != "Yes - confirm delete":
+        return False
+    res = bwcli.delete_collection(collection, session)
+    return res if res else False
+
+
+def move_collection(collections, session):
+    """Move collection
+
+    Args: collections - dict {'name': collection dict, ...}
+    Returns: New collection object or False
+
+    """
+    collection = select_collection(collections, session, prompt="Select collection to move")
+    if collection is False:
+        return False
+    destcollection = select_collection(collections, session,
+            prompt="Select destination collection (Esc to move to root directory)")
+    if destcollection is False:
+        destcollection = {'name': ""}
+    return bwcli.move_collection(collection,
+                                 join(destcollection['name'], basename(collection['name'])),
+                                 session)
+
+
+def rename_collection(collections, session):
+    """Rename collection
+
+    Args: collections - dict {'name': collection dict, ...}
+    Returns: New collection object or False
+
+    """
+    collection = select_collection(collections, session, prompt="Select collection to rename")
+    if not collection:
+        return False
+    name = dmenu_select(1, "New collection name", inp=basename(collection['name']).encode(bwm.ENC))
+    if not name:
+        return False
+    new = join(dirname(collection['name']), name)
+    return bwcli.move_collection(collection, new, session)
+
+
+def select_org(session):
+    """Select organization
+
+    Args: session - bytes
+
+    Returns: False for no entry
+             org - string (org id)
+
+    """
+    orgs = bwcli.get_orgs(session)
+    orgs_ids = dict(enumerate(orgs.values()))
+    num_align = len(str(len(orgs)))
+    pattern = str("{:>{na}} - {}")
+    input_b = str("\n").join(pattern.format(j, i['name'], na=num_align)
+                              for j, i in orgs_ids.items()).encode(bwm.ENC)
+    sel = dmenu_select(min(bwm.DMENU_LEN, len(orgs)), "Select Organization", inp=input_b)
+    if not sel:
+        return False
+    try:
+        return orgs_ids[int(sel.split(' - ', 1)[0])]['id']
+    except (ValueError, TypeError):
+        return False
 
 # vim: set et ts=4 sw=4 :

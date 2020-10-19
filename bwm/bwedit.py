@@ -1,6 +1,7 @@
 """Editing functions for bitwarden-menu
 
 """
+from copy import deepcopy
 import os
 from os.path import basename, dirname, join
 import random
@@ -16,94 +17,111 @@ from bwm.menu import dmenu_select, dmenu_err
 import bwm
 
 
-def edit_entry(entry, folders, collections, session):  # pylint: disable=too-many-return-statements, too-many-branches
+def obj_name(obj, oid):
+    """Return name of folder/collection object based on id
+
+        Args: obj - dict
+              oid - string
+
+    """
+    return obj[oid]['name']
+
+
+def edit_entry(entry, entries, folders, collections, session):  # pylint: disable=too-many-branches,too-many-statements
     """Edit title, username, password, url, notes and autotype sequence for an entry.
 
     Args: entry - selected Entry dict
-
-    Returns: entry to continue editing when changes are made
-             True to continue editing with no changes made
-             'deleted' if item is deleted
-             False if done
+          entries - list of dicts
+          folders - dict of dicts {'id': {xxx,yyy}, ... }
+          collections - dict of dicts {'id': {xxx,yyy}, ... }
+          session - bytes
 
     """
-    fields = [str("Name: {}").format(entry['name']),
-              str("Folder: {}").format(entry['folder']),
-              str("Collections: {}").format(entry['collections']),
-              str("Username: {}").format(entry['login']['username']),
-              str("Password: **********") if entry['login']['password'] else "Password: None",
-              str("Url: {}").format(entry['login']['url']),
-              str("Autotype: {}").format(autotype_seq(entry)),
-              "Notes: <Enter to Edit>" if entry['notes'] else "Notes: None",
-              "Delete entry"]
-    input_b = "\n".join(fields).encode(bwm.ENC)
-    sel = dmenu_select(len(fields), inp=input_b)
-    if sel == 'Delete entry':
-        res = delete_entry(entry, session)
-        if res is False:
-            dmenu_err("Item not deleted, see logs")
-            return False
-        return "deleted"
-    try:
-        field, sel = sel.split(": ", 1)
-    except (ValueError, TypeError):
-        return False
-    field = field.lower()
-    if field == 'password':
-        return edit_password(entry)
-    if field == 'folder':
-        folder = select_folder(folders)
-        if not folder:
-            return True
-        entry['folderId'] = folders[folder]['id']
-        entry['folder'] = folder
-        return entry
-    if field == 'collections':
-        collection = select_collection(collections, session)
-        if not collection:
-            return True
-        entry['collectionIds'] = [collections[collection]['id']]
-        entry['collections'] = [collection]
-        return entry
-    if field == 'notes':
-        entry['notes'] = edit_notes(entry['notes'])
-        return entry
-    if field in ('username', 'url'):
-        edit_b = entry['login'][field].encode(bwm.ENC) + \
-                b"\n" if entry['login'][field] is not None else b"\n"
-    elif field == 'autotype':
-        edit_b = entry['fields'][autotype_index(entry)]['value'].encode(bwm.ENC) + \
-                b"\n" if entry['fields'][autotype_index(entry)]['value'] is not None else b"\n"
-    else:
-        edit_b = entry[field].encode(bwm.ENC) + b"\n" if entry[field] is not None else b"\n"
-    sel = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
-    if not sel:
-        return True
-    if field in ('username', 'url'):
-        entry['login'][field] = sel
-        if field == 'url':
-            entry['login']['uris'] = [{'match': None, 'uri': sel}]
-    elif field == 'autotype':
-        entry['fields'][autotype_index(entry)]['value'] = sel
-    else:
-        entry[field] = sel
-    return entry
+    item = deepcopy(entry)
+    while True:
+        fields = [str("Name: {}").format(item['name']),
+                  str("Folder: {}").format(obj_name(folders, item['folderId'])),
+g                  str("Collections: {}").format(obj_name(collections, item['collectionId'])),
+                  str("Username: {}").format(item['login']['username']),
+                  str("Password: **********") if item['login']['password'] else "Password: None",
+                  str("Url: {}").format(item['login']['url']),
+                  str("Autotype: {}").format(autotype_seq(item)),
+                  "Notes: <Enter to Edit>" if item['notes'] else "Notes: None",
+                  "Delete entry",
+                  "Save entry"]
+        input_b = "\n".join(fields).encode(bwm.ENC)
+        sel = dmenu_select(len(fields), inp=input_b)
+        if sel == 'Delete entry':
+            delete_entry(entry, entries, session)
+            break
+        if sel == 'Save entry':
+            if not item.get('id'):
+                res = bwcli.add_entry(item, session)
+                if res is False:
+                    dmenu_err("Entry not added. Check logs.")
+                    return
+                entries.append(res)
+            else:
+                res = bwcli.edit_entry(item, session)
+                if res is False:
+                    dmenu_err("Error saving entry. Changes not saved.")
+                    continue
+                entry = res
+            break
+        try:
+            field, sel = sel.split(": ", 1)
+        except (ValueError, TypeError):
+            break
+        field = field.lower()
+        if field == 'password':
+            item = edit_password(item)
+            continue
+        if field == 'folder':
+            folder = select_folder(folders)
+            if folder is not False:
+                item['folderId'] = folder['id']
+            continue
+        if field == 'collections':
+            collection = select_collection(collections, session)
+            if collection is not False:
+                item['collectionIds'] = [collection['id']]
+            continue
+        if field == 'notes':
+            item['notes'] = edit_notes(item['notes'])
+            continue
+        if field in ('username', 'url'):
+            edit_b = item['login'][field].encode(bwm.ENC) + \
+                    b"\n" if item['login'][field] is not None else b"\n"
+        elif field == 'autotype':
+            edit_b = item['fields'][autotype_index(item)]['value'].encode(bwm.ENC) + \
+                    b"\n" if item['fields'][autotype_index(item)]['value'] is not None else b"\n"
+        else:
+            edit_b = item[field].encode(bwm.ENC) + b"\n" if item[field] is not None else b"\n"
+        sel = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
+        if sel:
+            if field in ('username', 'url'):
+                item['login'][field] = sel
+                if field == 'url':
+                    item['login']['uris'] = [{'match': None, 'uri': sel}]
+            elif field == 'autotype':
+                item['fields'][autotype_index(item)]['value'] = sel
+            else:
+                item[field] = sel
 
 
-def add_entry(folders, collections, session):
+def add_entry(entries, folders, collections, session):
     """Add vault entry
 
-    Args: folders - dict of folder objects
+    Args: entries - list of dicts
+          folders - dict of folder objects
           collections - dict of collections objects
           session - bytes
-    Returns: False if not added
-             Vault object (dict) if added
 
     """
     folder = select_folder(folders)
     collection = select_collection(collections, session)
     if folder is False:
-        return False
+        return
     entry = {"organizationId": None,
              "folderId": folder['id'],
              "type": 1,
@@ -114,42 +132,31 @@ def add_entry(folders, collections, session):
              "login": {"username": "",
                        "password": "",
                        "url": ""},
-             "folder": folder['name'] if folder != "No Folder" else "/",
-             "collections": [collection['name']] if collection is not False else [],
+             "collectionIds": [collection['id']] if collection is not False else [],
              "secureNote": "",
              "card": "",
              "identity": ""}
-    edit = True
-    entry_ch = False
-    while edit:
-        edit = edit_entry(entry, folders, collections, session)
-        if not isinstance(edit, bool):
-            entry_ch = True
-            entry = edit
-    if entry_ch is True:
-        entry = bwcli.add_entry(entry, session)
-        if entry is False:
-            return False
-    return entry
+    entries.append(entry)
+    edit_entry(entry, entries, folders, collections, session)
 
 
-def delete_entry(entry, session):
+def delete_entry(entry, entries, session):
     """Delete an entry
 
     Args: entry - dict
+          entries - list of dicts
           session - bytes
-    Returns: entry (dict) if deleted
-             False if not deleted
 
     """
     input_b = b"NO\nYes - confirm delete\n"
     delete = dmenu_select(2, "Confirm delete of {}".format(entry['name']), inp=input_b)
     if delete != "Yes - confirm delete":
-        return False
+        return
     res = bwcli.delete_entry(entry, session)
     if res is False:
         dmenu_err("Item not deleted. Check logs.")
-    return res
+        return
+    del entries[entries.index(res)]
 
 
 def edit_notes(note):
@@ -256,7 +263,7 @@ def edit_password(entry):
     """Edit password
 
         Args: entry dict
-        Returns: True for no changes, entry for changes
+        Returns: entry dict
 
     """
     sel = entry['login']['password']
@@ -320,67 +327,51 @@ def manage_folders(folders, session):
 
     Args: folders - dict of folder objects {'id': dict, ...}
           session - bytes
-    Returns: updated folders (dict) on any changes or False
 
     """
-    edit = True
     options = ['Create',
                'Move',
                'Rename',
                'Delete']
-    folder_ch = False
-    while edit is True:
+    while True:
         input_b = b"\n".join(i.encode(bwm.ENC) for i in options) + b"\n\n" + \
             b"\n".join(i['name'].encode(bwm.ENC) for i in folders.values())
         sel = dmenu_select(len(options) + len(folders) + 1, "Manage Folders", inp=input_b)
         if not sel:
-            edit = False
-        elif sel == 'Create':
-            folder = create_folder(folders, session)
-            if folder:
-                folders[folder['id']] = folder
-                folder_ch = folders
+            break
+        if sel == 'Create':
+            create_folder(folders, session)
         elif sel == 'Move':
-            folder = move_folder(folders, session)
-            if folder:
-                folders[folder['id']] = folder
-                folder_ch = folders
+            move_folder(folders, session)
         elif sel == 'Rename':
-            folder = rename_folder(folders, session)
-            if folder:
-                folders[folder['id']] = folder
-                folder_ch = folders
+            rename_folder(folders, session)
         elif sel == 'Delete':
-            folder = delete_folder(folders, session)
-            if folder:
-                del folders[folder['id']]
-                folder_ch = folders
+            delete_folder(folders, session)
         else:
-            edit = False
-    return folder_ch
+            break
 
 
 def create_folder(folders, session):
     """Create new folder
 
     Args: folders - dict of folder objects
-    Returns: Folder object or False
 
     """
     parentfolder = select_folder(folders, prompt="Select parent folder")
     if parentfolder is False:
-        return False
+        return
     pfname = parentfolder['name']
     if pfname == "No Folder":
         pfname = ""
     name = dmenu_select(1, "Folder name")
     if not name:
-        return False
+        return
     name = join(pfname, name)
     folder = bwcli.add_folder(name, session)
     if folder is False:
         dmenu_err("Folder not added. Check logs.")
-    return folder
+        return
+    folders[folder['id']] = folder
 
 
 def delete_folder(folders, session):
@@ -388,63 +379,63 @@ def delete_folder(folders, session):
 
     Args: folder - folder dict obj
           session - bytes
-    Returns: Folder object (dict) or False
 
     """
     folder = select_folder(folders, prompt="Delete Folder:")
     if not folder or folder['name'] == "No Folder":
-        return False
+        return
     input_b = b"NO\nYes - confirm delete\n"
     delete = dmenu_select(2, "Confirm delete", inp=input_b)
     if delete != "Yes - confirm delete":
-        return False
+        return
     res = bwcli.delete_folder(folder, session)
     if res is False:
         dmenu_err("Folder not deleted. Check logs.")
-    return res
+        return
+    del folders[folder['id']]
 
 
 def move_folder(folders, session):
     """Move folder
 
     Args: folders - dict {'name': folder dict, ...}
-    Returns: New folder object or False
 
     """
     folder = select_folder(folders, prompt="Select folder to move")
     if folder is False or folder['name'] == "No Folder":
-        return False
+        return
     destfolder = select_folder(folders,
             prompt="Select destination folder. 'No Folder' is root.")
     if destfolder is False:
-        return False
+        return
     dname = ""
     if destfolder['name'] != "No Folder":
         dname = destfolder['name']
     folder = bwcli.move_folder(folder, join(dname, basename(folder['name'])), session)
     if folder is False:
         dmenu_err("Folder not added. Check logs.")
-    return folder
+        return
+    folders[folder['id']] = folder
 
 
 def rename_folder(folders, session):
     """Rename folder
 
     Args: folders - dict {'name': folder dict, ...}
-    Returns: New folder object or False
 
     """
     folder = select_folder(folders, prompt="Select folder to rename")
     if folder is False or folder['name'] == "No Folder":
-        return False
+        return
     name = dmenu_select(1, "New folder name", inp=basename(folder['name']).encode(bwm.ENC))
     if not name:
-        return False
+        return
     new = join(dirname(folder['name']), name)
     folder = bwcli.move_folder(folder, new, session)
     if folder is False:
         dmenu_err("Folder not renamed. Check logs.")
-    return folder
+        return
+    folders[folder['id']] = folder
 
 
 def select_collection(collections, session, prompt="Collections - Organization"):
@@ -480,56 +471,34 @@ def manage_collections(collections, session):
 
     Args: collections - dict of collection objects {'name': dict, ...}
           session - bytes
-    Returns: updated collections (dict) on any changes or False
 
     """
-    edit = True
     options = ['Create',
                'Move',
                'Rename',
                'Delete']
-    collection_ch = False
-    while edit is True:
+    while True:
         input_b = b"\n".join(i.encode(bwm.ENC) for i in options) + b"\n\n" + \
                 b"\n".join(i['name'].encode(bwm.ENC) for i in collections.values())
         sel = dmenu_select(len(options) + len(collections) + 1, "Manage collections", inp=input_b)
         if not sel:
-            edit = False
-        elif sel == 'Create':
-            collection = create_collection(collections, session)
-            if collection:
-                collections[collection['id']] = collection
-                collection_ch = collections
+            break
+        if sel == 'Create':
+            create_collection(collections, session)
         elif sel == 'Move':
-            collection = move_collection(collections, session)
-            if collection:
-                collections[collection['id']] = collection
-                collection_ch = collections
+            move_collection(collections, session)
         elif sel == 'Rename':
-            collection = rename_collection(collections, session)
-            if collection:
-                collections[collection['id']] = collection
-                collection_ch = collections
+            rename_collection(collections, session)
         elif sel == 'Delete':
-            collection = delete_collection(collections, session)
-            if collection:
-                del collections[collection['id']]
-
-
-
-
-
-                collection_ch = collections
+            delete_collection(collections, session)
         else:
-            edit = False
-    return collection_ch
+            break
 
 
 def create_collection(collections, session):
     """Create new collection
 
     Args: collections - dict of collection objects
-    Returns: collection object or False
 
     """
     parentcollection = select_collection(collections, session,
@@ -539,13 +508,13 @@ def create_collection(collections, session):
         pname = parentcollection['name']
     name = dmenu_select(1, "Collection name")
     if not name:
-        return False
+        return
     name = join(pname, name)
     org_id = select_org(session)
     if org_id is False:
-        return False
+        return
     collection = bwcli.add_collection(name, org_id, session)
-    return collection
+    collections[collection['id']] = collection
 
 
 def delete_collection(collections, session):
@@ -553,54 +522,62 @@ def delete_collection(collections, session):
 
     Args: collections- dict of all collection objects
           session - bytes
-    Returns: collection obj or False
 
     """
     collection = select_collection(collections, session, prompt="Delete collection:")
     if not collection:
-        return False
+        return
     input_b = b"NO\nYes - confirm delete\n"
     delete = dmenu_select(2, "Confirm delete", inp=input_b)
     if delete != "Yes - confirm delete":
-        return False
+        return
     res = bwcli.delete_collection(collection, session)
-    return res if res else False
+    if res is False:
+        dmenu_err("Collection not deleted. Check logs.")
+        return
+    del collections[collection['id']]
 
 
 def move_collection(collections, session):
     """Move collection
 
     Args: collections - dict {'name': collection dict, ...}
-    Returns: New collection object or False
 
     """
     collection = select_collection(collections, session, prompt="Select collection to move")
     if collection is False:
-        return False
+        return
     destcollection = select_collection(collections, session,
             prompt="Select destination collection (Esc to move to root directory)")
     if destcollection is False:
         destcollection = {'name': ""}
-    return bwcli.move_collection(collection,
-                                 join(destcollection['name'], basename(collection['name'])),
-                                 session)
+    res = bwcli.move_collection(collection,
+                                join(destcollection['name'], basename(collection['name'])),
+                                session)
+    if res is False:
+        dmenu_err("Collection not moved. Check logs.")
+        return
+    collections[collection['id']] = res
 
 
 def rename_collection(collections, session):
     """Rename collection
 
     Args: collections - dict {'name': collection dict, ...}
-    Returns: New collection object or False
 
     """
     collection = select_collection(collections, session, prompt="Select collection to rename")
     if not collection:
-        return False
+        return
     name = dmenu_select(1, "New collection name", inp=basename(collection['name']).encode(bwm.ENC))
     if not name:
-        return False
+        return
     new = join(dirname(collection['name']), name)
-    return bwcli.move_collection(collection, new, session)
+    res = bwcli.move_collection(collection, new, session)
+    if res is False:
+        dmenu_err("Collection not deleted. Check logs.")
+        return
+    collections[collection['id']] = res
 
 
 def select_org(session):

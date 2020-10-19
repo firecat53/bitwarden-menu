@@ -3,6 +3,7 @@
 TODO: capture_output only works in 3.7+. Maybe need to change that?
 
 """
+from copy import deepcopy
 import json
 import logging
 from subprocess import run
@@ -126,7 +127,6 @@ def get_entries(session=b'', org_name=''):
         path = folders.get(item.get('folderId')).get('name')
         if path == 'No Folder':
             path = '/'
-        item['folder'] = path
         try:
             for uri in item['login']['uris']:
                 item['login']['url'] = uri['uri']
@@ -138,7 +138,6 @@ def get_entries(session=b'', org_name=''):
         item.setdefault('fields', [])
         if not any([i['name'] == 'autotype' for i in item.get('fields')]):
             item['fields'].append({'name': 'autotype', 'value':"", 'type':0})
-        item['collections'] = [collections.get(i).get('name') for i in item['collectionIds']]
     return items, folders, collections, orgs
 
 def sync(session=b''):
@@ -190,7 +189,7 @@ def add_entry(entry, session):
     """Add new entry to vault
 
     Args: entry - dict with at least these fields
-    Returns: new item dict
+    Returns: new item dict or False on error
 
     New item template:
     {
@@ -225,11 +224,12 @@ def edit_entry(entry, session):
         Returns: updated entry object (dict) on success, False on failure
 
     """
-    enc = run(["bw", "encode"], input=json.dumps(entry).encode(), capture_output=True, check=False)
+    item = deepcopy(entry)
+    enc = run(["bw", "encode"], input=json.dumps(item).encode(), capture_output=True, check=False)
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "edit", "item", entry['id'], enc.stdout],
+    res = run(["bw", "--session", session, "edit", "item", item['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -296,15 +296,16 @@ def move_folder(folder, newpath, session):
         Returns: Folder object on success, False on failure
 
     """
-    folder['name'] = newpath
+    fold = deepcopy(folder)
+    fold['name'] = newpath
     enc = run(["bw", "encode"],
-              input=json.dumps(folder).encode(),
+              input=json.dumps(fold).encode(),
               capture_output=True,
               check=False)
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "edit", "folder", folder['id'], enc.stdout],
+    res = run(["bw", "--session", session, "edit", "folder", fold['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -383,9 +384,10 @@ def move_collection(collection, newpath, session):
         https://github.com/bitwarden/cli/issues/175
 
     """
-    collection['name'] = newpath
+    coll = deepcopy(collection)
+    coll['name'] = newpath
     enc = run(["bw", "encode"],
-              input=json.dumps(collection).encode(),
+              input=json.dumps(coll).encode(),
               capture_output=True,
               check=False)
     if not enc.stdout:
@@ -393,8 +395,8 @@ def move_collection(collection, newpath, session):
         return False
     res = run(["bw",
                "--session", session,
-               "--organizationid", collection['organizationId'].encode(),
-               "edit", "org-collection", collection['id'], enc.stdout],
+               "--organizationid", coll['organizationId'].encode(),
+               "edit", "org-collection", coll['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -402,7 +404,7 @@ def move_collection(collection, newpath, session):
     # Begin hack (see notes above)
     sync(session)
     collections = get_collections(session)
-    new = [i for i in collections.values() if i['name'] == collection['name']]
+    new = [i for i in collections.values() if i['name'] == coll['name']]
     if len(new) != 1:
         logging.error("Editing collection error: name already exists")
         return False

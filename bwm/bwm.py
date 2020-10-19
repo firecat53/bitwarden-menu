@@ -169,8 +169,17 @@ def get_initial_vault():
         bwm.CONF.write(conf_file)
     return (url, email, '')
 
+def obj_name(obj, oid):
+    """Return name of folder/collection object based on id
 
-def view_all_entries(options, vault_entries):
+        Args: obj - dict
+              oid - string
+
+    """
+    return obj[oid]['name']
+
+
+def view_all_entries(options, vault_entries, folders):
     """Generate numbered list of all vault entries and open with dmenu.
 
     Returns: dmenu selection
@@ -181,7 +190,7 @@ def view_all_entries(options, vault_entries):
     # Have to number each entry to capture duplicates correctly
     vault_entries_b = str("\n").join(bw_entry_pattern.format(
         j,
-        join(i['folder'], i['name']),
+        join(obj_name(folders, i['folderId']), i['name']),
         i['login']['username'],
         i['login']['url'],
         na=num_align) for j, i in enumerate(vault_entries)).encode(bwm.ENC)
@@ -193,14 +202,14 @@ def view_all_entries(options, vault_entries):
     return dmenu_select(min(bwm.DMENU_LEN, len(options) + len(vault_entries)), inp=entries_b)
 
 
-def view_entry(entry):
+def view_entry(entry, folders):
     """Show title, username, password, url and notes for an entry.
 
     Returns: dmenu selection
 
     """
     fields = [entry['name'] or "Title: None",
-              entry['folder'],
+              obj_name(folders, entry['folderId']),
               entry['login']['username'] or "Username: None",
               '**********' if entry['login']['password'] else "Password: None",
               entry['login']['url'] or "URL: None",
@@ -232,21 +241,20 @@ def view_notes(notes):
     return sel
 
 
-def dmenu_view(entries):
+def dmenu_view(entries, folders):
     """View/type individual entries (called from dmenu_run)
 
         Args: entries (list of dicts)
-        Returns: dict {err: <Bool>, reload: <Bool>}
+              folders (dict of dicts)
 
     """
-    sel = view_all_entries([], entries)
+    sel = view_all_entries([], entries, folders)
     try:
         entry = entries[int(sel.split('-', 1)[0])]
     except (ValueError, TypeError):
-        return {'err': False, 'reload': False}
-    text = view_entry(entry)
+        return
+    text = view_entry(entry, folders)
     type_text(text)
-    return {'err': False, 'reload': False}
 
 
 def dmenu_edit(entries, folders, collections, session):
@@ -256,44 +264,26 @@ def dmenu_edit(entries, folders, collections, session):
               folders (dict of dict objects)
               collections (dict of dict objects)
               session (bytes)
-        Returns: dict {err: <Bool>, reload: <Bool>}
 
     """
-    sel = view_all_entries([], entries)
+    sel = view_all_entries([], entries, folders)
     try:
         entry = entries[int(sel.split('-', 1)[0])]
     except (ValueError, TypeError):
-        return {'err': False, 'reload': False}
-    edit = True
-    entry_ch = False
-    while edit != "deleted" and edit:
-        edit = edit_entry(entry, folders, collections, session)
-        if not isinstance(edit, bool):
-            entry_ch = True
-            entry = edit
-    if entry_ch is True:
-        if entry != "deleted":
-            res = bwcli.edit_entry(entry, session)
-            if res is False:
-                dmenu_err("Error editing entry")
-                return {'err': True, 'reload': False}
-        return {'err': False, 'reload': True}
-    return {'err': False, 'reload': False}
+        return
+    edit_entry(entry, entries, folders, collections, session)
 
 
-def dmenu_add(folders, collections, session):
+def dmenu_add(entries, folders, collections, session):
     """Call add item option (called from dmenu_run)
 
-        Args: folders (dict of dict objects)
+        Args: entries (list of dicts)
+              folders (dict of dict objects)
               collections (dict of dict objects)
               session (bytes)
-        Returns: dict {err: <Bool>, reload: <Bool>}
+
     """
-    entry = add_entry(folders, collections, session)
-    if entry:
-        return {'err': False, 'reload': True}
-    dmenu_err("No entry added")
-    return {'err': True, 'reload': False}
+    add_entry(entries, folders, collections, session)
 
 
 def dmenu_folders(folders, session):
@@ -304,10 +294,7 @@ def dmenu_folders(folders, session):
         Returns: dict {err: <Bool>, reload: <Bool>}
 
     """
-    folder_ch = manage_folders(folders, session)
-    if folder_ch is True:
-        return {'err': False, 'reload': True}
-    return {'err': False, 'reload': False}
+    manage_folders(folders, session)
 
 
 def dmenu_collections(collections, session):
@@ -318,24 +305,18 @@ def dmenu_collections(collections, session):
         Returns: dict {err: <Bool>, reload: <Bool>}
 
     """
-    collection_ch = manage_collections(collections, session)
-    if collection_ch is True:
-        return {'err': False, 'reload': True}
-    return {'err': False, 'reload': False}
+    manage_collections(collections, session)
 
 
 def dmenu_sync(session):
     """Call vault sync option (called from dmenu_run)
 
         Args: session (bytes)
-        Returns: dict {err: <Bool>, reload: <Bool>}
 
     """
     res = bwcli.sync(session)
     if res is False:
         dmenu_err("Sync error. Check logs.")
-        return {'err': True, 'reload': False}
-    return {'err': False, 'reload': True}
 
 
 class Run(Enum):
@@ -364,18 +345,22 @@ def dmenu_run(entries, folders, collections, session):
         entries_hid = [i for i in entries if i['folder'] not in hid_fold]
     else:
         entries_hid = entries
-    options = {'View/Type Individual entries': partial(dmenu_view, entries_hid),
+    options = {'View/Type Individual entries': partial(dmenu_view, entries_hid, folders),
                'Edit entries': partial(dmenu_edit, entries, folders, collections, session),
-               'Add entry': partial(dmenu_add, folders, collections, session),
+               'Add entry': partial(dmenu_add, entries, folders, collections, session),
                'Manage folders': partial(dmenu_folders, folders, session),
                'Manage collections': partial(dmenu_collections, collections, session),
                'Sync vault': partial(dmenu_sync, session),
                'Lock vault': bwcli.lock}
-    sel = view_all_entries(options, entries_hid)
+    sel = view_all_entries(options, entries_hid, folders)
     if not sel:
         return Run.CONTINUE
     if sel == "Lock vault":  # Kill bwm daemon
+        options[sel]()
         return Run.LOCK
+    if sel == "Sync vault":
+        options[sel]()
+        return Run.RELOAD
     if sel not in options:
         # Autotype selected entry
         try:
@@ -384,11 +369,7 @@ def dmenu_run(entries, folders, collections, session):
             return Run.CONTINUE
         type_entry(entry)
         return Run.CONTINUE
-    res = options[sel]()
-    if res['err'] is True:
-        return Run.CONTINUE
-    if res['reload'] is True:
-        return Run.RELOAD
+    options[sel]()
     return Run.CONTINUE
 
 

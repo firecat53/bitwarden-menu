@@ -399,7 +399,8 @@ class DmenuRunner(Process):
             self.server.kill_flag.set()
             sys.exit()
         self.entries, self.folders, self.collections, self.orgs = bwcli.get_entries(self.session)
-        if not all((self.entries, self.folders, self.collections, self.orgs)):
+        if not all(i for i in (self.entries, self.folders, self.collections, self.orgs)
+                   if i is False):
             self.server.kill_flag.set()
             sys.exit()
 
@@ -431,7 +432,8 @@ class DmenuRunner(Process):
             if res == Run.RELOAD:
                 self.entries, self.folders, self.collections, self.orgs = \
                         bwcli.get_entries(self.session)
-                if not all((self.entries, self.folders, self.collections, self.orgs)):
+                if not all(i for i in (self.entries, self.folders, self.collections, self.orgs)
+                           if i is False):
                     dmenu_err("Error loading entries. See logs.")
             if self.server.cache_time_expired.is_set():
                 self.server.kill_flag.set()

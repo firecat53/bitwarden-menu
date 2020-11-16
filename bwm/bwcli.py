@@ -321,12 +321,6 @@ def add_collection(collection, org_id, session):
 
         Returns: collection object or False on error
 
-        TODO: remove hack below for bug in bw cli where
-        `bw create org-collection` doesn't return the new object id.
-        The collection is created, but a sync is needed to obtain the new
-        collection id.
-        https://github.com/bitwarden/cli/issues/175
-
     """
     collection = {"name": collection, "organizationId": org_id}
     enc = run(["bw", "encode"],
@@ -341,15 +335,6 @@ def add_collection(collection, org_id, session):
     if not res.stdout:
         logging.error(res)
         return False
-    # Begin hack (see notes above)
-    sync(session)
-    collections = get_collections(session)
-    new = [i for i in collections.values() if i['name'] == collection['name']]
-    if len(new) != 1:
-        logging.error("Adding collection error: name already exists")
-        return False
-    res.stdout = json.dumps(new[0])
-    # End hack
     return json.loads(res.stdout)
 
 def delete_collection(collection, session):
@@ -377,12 +362,6 @@ def move_collection(collection, newpath, session):
               session - bytes
         Returns: collection object on success, False on failure
 
-        TODO: remove hack below for bug in bw cli where
-        `bw edit org-collection` doesn't return the new object id.
-        The collection is edited, but a sync is needed to obtain the new
-        collection id.
-        https://github.com/bitwarden/cli/issues/175
-
     """
     coll = deepcopy(collection)
     coll['name'] = newpath
@@ -401,15 +380,6 @@ def move_collection(collection, newpath, session):
     if not res.stdout:
         logging.error(res)
         return False
-    # Begin hack (see notes above)
-    sync(session)
-    collections = get_collections(session)
-    new = [i for i in collections.values() if i['name'] == coll['name']]
-    if len(new) != 1:
-        logging.error("Editing collection error: name already exists")
-        return False
-    res.stdout = json.dumps(new[0])
-    # End hack
     return json.loads(res.stdout)
 
 # vim: set et ts=4 sw=4 :

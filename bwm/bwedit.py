@@ -41,7 +41,8 @@ def edit_entry(entry, entries, folders, collections, session):  # pylint: disabl
     while True:
         fields = [str("Name: {}").format(item['name']),
                   str("Folder: {}").format(obj_name(folders, item['folderId'])),
-g                  str("Collections: {}").format(obj_name(collections, item['collectionId'])),
+                  str("Collections: {}").format(", ".join(obj_name(collections, i) for i
+                                                          in item['collectionIds'])),
                   str("Username: {}").format(item['login']['username']),
                   str("Password: **********") if item['login']['password'] else "Password: None",
                   str("Url: {}").format(item['login']['url']),

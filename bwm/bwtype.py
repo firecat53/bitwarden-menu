@@ -101,6 +101,7 @@ PLACEHOLDER_AUTOTYPE_TOKENS = {
     "{URL}"     : lambda e: e['login']['url'],
     "{PASSWORD}": lambda e: e['login']['password'],
     "{NOTES}"   : lambda e: e['notes'],
+    "{CARDNUM}" : lambda e: e['card']['number'],
 }
 
 STRING_AUTOTYPE_TOKENS = {
@@ -451,12 +452,18 @@ def type_entry(entry):
     Args: entry - dict
 
     """
+    # Don't autotype anything except for login and cards - for now TODO
+    if entry['type'] not in (1, 3):
+        dmenu_err("Autotype currently disabled for this type of entry")
+        return
     sequence = autotype_seq(entry)
     if sequence == 'False':
         dmenu_err("Autotype disabled for this entry")
         return
     if not sequence or sequence == 'None':
         sequence = SEQUENCE
+        if entry['type'] == 3:
+            sequence = "{CARDNUM}"
     tokens = tokenize_autotype(sequence)
 
     library = 'pynput'

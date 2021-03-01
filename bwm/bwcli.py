@@ -128,13 +128,10 @@ def get_entries(session=b'', org_name=''):
         if path == 'No Folder':
             path = '/'
         try:
-            for uri in item['login']['uris']:
-                item['login']['url'] = uri['uri']
-                break
-            else:
-                item['login']['url'] = ""
-        except KeyError:
-            item['login']['url'] = ""
+            item['login']['url'] = item['login']['uris'][0]['uri']
+        except (IndexError, KeyError):
+            item.setdefault('login', {})
+            item['login'].setdefault('url', "")
         item.setdefault('fields', [])
         if not any([i['name'] == 'autotype' for i in item.get('fields')]):
             item['fields'].append({'name': 'autotype', 'value':"", 'type':0})

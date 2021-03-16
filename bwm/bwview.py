@@ -105,7 +105,7 @@ def view_login(entry, folders):
         sel = ""
     elif sel == '**********':
         sel = entry['login']['password']
-    elif sel == fields[3]:
+    elif sel == fields[4]:
         if sel != "URL: None":
             webbrowser.open(sel)
         sel = ""

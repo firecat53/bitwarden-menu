@@ -4,7 +4,7 @@
 from contextlib import closing
 from enum import Enum, auto
 from functools import partial
-from multiprocessing import Event, Process
+import multiprocessing
 from multiprocessing.managers import BaseManager
 import os
 from os.path import exists, expanduser
@@ -53,7 +53,8 @@ def get_auth():
     """
     auth = bwm.configparser.ConfigParser()
     if not exists(bwm.AUTH_FILE):
-        with open(bwm.AUTH_FILE, 'w') as a_file:
+        fdr = os.open(bwm.AUTH_FILE, os.O_WRONLY | os.O_CREAT, 0o600)
+        with open(fdr, 'w') as a_file:
             auth.set('DEFAULT', 'port', str(find_free_port()))
             auth.set('DEFAULT', 'authkey', random_str())
             auth.write(a_file)
@@ -61,10 +62,14 @@ def get_auth():
         auth.read(bwm.AUTH_FILE)
         port = auth.get('DEFAULT', 'port')
         authkey = auth.get('DEFAULT', 'authkey').encode()
-    except (bwm.configparser.NoOptionError, bwm.configparser.MissingSectionHeaderError):
+    except (bwm.configparser.NoOptionError,
+            bwm.configparser.MissingSectionHeaderError,
+            bwm.configparser.ParsingError,
+            multiprocessing.context.AuthenticationError):
         os.remove(bwm.AUTH_FILE)
         dmenu_err("Cache file was corrupted. Stopping all instances. Please try again")
         call(["pkill", "bwm"])  # Kill all prior instances as well
+        return None, None
     return int(port), authkey
 
 
@@ -314,14 +319,14 @@ def client():
     return mgr
 
 
-class DmenuRunner(Process):
+class DmenuRunner(multiprocessing.Process):
     """Listen for dmenu calling event and run bwm
 
     Args: server - Server object
 
     """
     def __init__(self, server):
-        Process.__init__(self)
+        multiprocessing.Process.__init__(self)
         self.server = server
         self.session = get_vault()
         if self.session is None:
@@ -380,16 +385,16 @@ class DmenuRunner(Process):
             self.server.start_flag.set()
 
 
-class Server(Process):
+class Server(multiprocessing.Process):
     """Run BaseManager server to listen for dmenu calling events
 
     """
     def __init__(self):
-        Process.__init__(self)
+        multiprocessing.Process.__init__(self)
         self.port, self.authkey = get_auth()
-        self.start_flag = Event()
-        self.kill_flag = Event()
-        self.cache_time_expired = Event()
+        self.start_flag = multiprocessing.Event()
+        self.kill_flag = multiprocessing.Event()
+        self.cache_time_expired = multiprocessing.Event()
         self.start_flag.set()
 
     def run(self):

@@ -100,6 +100,21 @@ def get_orgs(session):
         return False
     return {i['id']:i for i in json.loads(res.stdout)}
 
+class Item(dict):
+    """Set some default attributes to all items
+
+    """
+    def __init__(self, /, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            self['login']['url'] = self['login']['uris'][0]['uri']
+        except (IndexError, KeyError):
+            self.setdefault('login', {})
+            self['login'].setdefault('url', "")
+        self.setdefault('fields', [])
+        if not any(i['name'] == 'autotype' for i in self.get('fields')):
+            self['fields'].append({'name': 'autotype', 'value':"", 'type':0})
+
 def get_entries(session=b'', org_name=''):
     """Get all entries, folders, collections and orgs from vault
 
@@ -111,7 +126,7 @@ def get_entries(session=b'', org_name=''):
     2. Also adjust 'path' to be just the dirname, not including the 'name'
     3. Add the 'autotype' field so it can be edited if necessary
 
-        Return: items (list of dictionaries), folders, collections, orgs
+        Return: items (list of Items), folders, collections, orgs
                 False on error
 
     """
@@ -119,22 +134,10 @@ def get_entries(session=b'', org_name=''):
     if not res.stdout:
         logging.error(res)
         return False
-    items = json.loads(res.stdout)
+    items = [Item(i) for i in json.loads(res.stdout)]
     folders = get_folders(session)
     collections = get_collections(session, org_name)
     orgs = get_orgs(session)
-    for item in items:
-        path = folders.get(item.get('folderId')).get('name')
-        if path == 'No Folder':
-            path = '/'
-        try:
-            item['login']['url'] = item['login']['uris'][0]['uri']
-        except (IndexError, KeyError):
-            item.setdefault('login', {})
-            item['login'].setdefault('url', "")
-        item.setdefault('fields', [])
-        if not any([i['name'] == 'autotype' for i in item.get('fields')]):
-            item['fields'].append({'name': 'autotype', 'value':"", 'type':0})
     return items, folders, collections, orgs
 
 def sync(session=b''):

@@ -15,7 +15,10 @@ def obj_name(obj, oid):
               oid - string
 
     """
-    return obj[oid]['name']
+    path = obj[oid]['name']
+    if path == 'No Folder':
+        path = '/'
+    return path
 
 
 def view_all_entries(options, vault_entries, folders):

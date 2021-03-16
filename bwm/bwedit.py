@@ -61,13 +61,13 @@ def edit_entry(entry, entries, folders, collections, session):  # pylint: disabl
                 if res is False:
                     dmenu_err("Entry not added. Check logs.")
                     return
-                entries.append(res)
+                entries.append(bwcli.Item(res))
             else:
                 res = bwcli.edit_entry(item, session)
                 if res is False:
                     dmenu_err("Error saving entry. Changes not saved.")
                     continue
-                entry = res
+                entries[entries.index(entry)] = bwcli.Item(res)
             break
         try:
             field, sel = sel.split(": ", 1)
@@ -137,7 +137,6 @@ def add_entry(entries, folders, collections, session):
              "secureNote": "",
              "card": "",
              "identity": ""}
-    entries.append(entry)
     edit_entry(entry, entries, folders, collections, session)
 
 

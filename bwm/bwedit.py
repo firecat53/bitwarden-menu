@@ -191,9 +191,12 @@ def edit_notes(note):
         fname.write(note)
         fname.flush()
         editor.append(fname.name)
-        call(editor)
-        fname.seek(0)
-        note = fname.read()
+        try:
+            call(editor)
+            fname.seek(0)
+            note = fname.read()
+        except FileNotFoundError:
+            dmenu_err("Terminal not found. Please update config.ini.")
     note = '' if not note else note.decode(bwm.ENC)
     return note
 

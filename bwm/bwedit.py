@@ -12,7 +12,7 @@ from subprocess import call
 import tempfile
 
 import bwm.bwcli as bwcli
-from bwm.bwtype import autotype_index, autotype_seq
+from bwm.bwtype import autotype_index, autotype_seq, type_text
 from bwm.menu import dmenu_select, dmenu_err
 import bwm
 
@@ -75,7 +75,7 @@ def edit_entry(entry, entries, folders, collections, session):  # pylint: disabl
             break
         field = field.lower()
         if field == 'password':
-            item = edit_password(item)
+            item = edit_password(item) or item
             continue
         if field == 'folder':
             folder = select_folder(folders)
@@ -268,32 +268,38 @@ def edit_password(entry):
     """
     sel = entry['login']['password']
     pw_orig = sel.encode(bwm.ENC) + b"\n" if sel is not None else b"\n"
-    input_b = b"Generate password\nManually enter password\n"
-    pw_choice = dmenu_select(2, "Password", inp=input_b)
+    inputs_b = [b"Generate password",
+                b"Manually enter password"]
+    if entry['login']['password']:
+        inputs_b.append(b"Type existing password")
+    pw_choice = dmenu_select(len(inputs_b), "Password", inp=b"\n".join(inputs_b))
     if pw_choice == "Manually enter password":
         sel = dmenu_select(1, "Enter password", inp=pw_orig)
         sel_check = dmenu_select(1, "Verify password")
         if not sel_check or sel_check != sel:
             dmenu_err("Passwords do not match. No changes made.")
-            return True
+            return False
     elif pw_choice == "Generate password":
         input_b = b"20\n"
         length = dmenu_select(1, "Password Length?", inp=input_b)
         if not length:
-            return True
+            return False
         try:
             length = int(length)
         except ValueError:
             length = 20
         chars = get_password_chars()
         if chars is False:
-            return True
+            return False
         sel = gen_passwd(chars, length)
         if sel is False:
             dmenu_err("Number of char groups desired is more than requested pw length")
-            return True
+            return False
+    elif pw_choice == "Type existing password":
+        type_text(entry['login']['password'])
+        return False
     else:
-        return True
+        return False
     entry['login']['password'] = sel
     return entry
 

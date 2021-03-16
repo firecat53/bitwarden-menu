@@ -72,7 +72,7 @@ def dmenu_select(num_lines, prompt="Entries", inp=""):
         cmd = [cmd[0]] + ["-dmenu"] if "rofi" in cmd[0] else [""]
         Popen(cmd[0], stdin=PIPE, stdout=PIPE, env=bwm.ENV).communicate(input=err)
         sys.exit()
-    if sel:
+    if sel is not None:
         sel = sel.decode(bwm.ENC).rstrip('\n')
     return sel
 

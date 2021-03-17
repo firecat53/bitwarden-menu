@@ -181,15 +181,29 @@ def dmenu_view(entries, folders):
         Args: entries (list of dicts)
               folders (dict of dicts)
 
+        Returns: None or entry (Item)
+
     """
     sel = view_all_entries([], entries, folders)
     try:
         entry = entries[int(sel.split('(', 1)[0])]
     except (ValueError, TypeError):
-        return
+        return None
     text = view_entry(entry, folders)
     type_text(text)
+    return entry
 
+def dmenu_view_previous_entry(entry, folders):
+    """View previous entry
+
+        Args: entry (Item)
+        Returns: entry (Item)
+
+    """
+    if entry is not None:
+        text = view_entry(entry, folders)
+        type_text(text)
+    return entry
 
 def dmenu_edit(entries, folders, collections, session):
     """Select items to edit (called from dmenu_run)
@@ -198,14 +212,15 @@ def dmenu_edit(entries, folders, collections, session):
               folders (dict of dict objects)
               collections (dict of dict objects)
               session (bytes)
+        Returns: None or entry (Item)
 
     """
     sel = view_all_entries([], entries, folders)
     try:
         entry = entries[int(sel.split('(', 1)[0])]
     except (ValueError, TypeError):
-        return
-    edit_entry(entry, entries, folders, collections, session)
+        return None
+    return edit_entry(entry, entries, folders, collections, session)
 
 
 def dmenu_add(entries, folders, collections, session):
@@ -215,9 +230,10 @@ def dmenu_add(entries, folders, collections, session):
               folders (dict of dict objects)
               collections (dict of dict objects)
               session (bytes)
+        Returns: None or entry (Item)
 
     """
-    add_entry(entries, folders, collections, session)
+    return add_entry(entries, folders, collections, session)
 
 
 def dmenu_folders(folders, session):
@@ -229,6 +245,7 @@ def dmenu_folders(folders, session):
 
     """
     manage_folders(folders, session)
+    return Run.CONTINUE
 
 
 def dmenu_collections(collections, session):
@@ -240,6 +257,7 @@ def dmenu_collections(collections, session):
 
     """
     manage_collections(collections, session)
+    return Run.CONTINUE
 
 
 def dmenu_sync(session):
@@ -262,7 +280,7 @@ class Run(Enum):
     RELOAD = auto()
 
 
-def dmenu_run(entries, folders, collections, session):
+def dmenu_run(entries, folders, collections, session, prev_entry):
     """Run dmenu with the given list of vault Entry objects
 
     If 'hide_folders' is defined in config.ini, hide those from main and
@@ -280,6 +298,7 @@ def dmenu_run(entries, folders, collections, session):
     else:
         entries_hid = entries
     options = {'View/Type Individual entries': partial(dmenu_view, entries_hid, folders),
+               'View previous entry': partial(dmenu_view_previous_entry, prev_entry, folders),
                'Edit entries': partial(dmenu_edit, entries, folders, collections, session),
                'Add entry': partial(dmenu_add, entries, folders, collections, session),
                'Manage folders': partial(dmenu_folders, folders, session),
@@ -303,8 +322,7 @@ def dmenu_run(entries, folders, collections, session):
             return Run.CONTINUE
         type_entry(entry)
         return Run.CONTINUE
-    options[sel]()
-    return Run.CONTINUE
+    return options[sel]()
 
 
 def client():
@@ -333,6 +351,7 @@ class DmenuRunner(multiprocessing.Process):
             self.server.kill_flag.set()
             sys.exit()
         self.entries, self.folders, self.collections, self.orgs = bwcli.get_entries(self.session)
+        self.prev_entry = None
         if not all(i for i in (self.entries, self.folders, self.collections, self.orgs)
                    if i is False):
             self.server.kill_flag.set()
@@ -357,7 +376,8 @@ class DmenuRunner(multiprocessing.Process):
             except AttributeError:
                 pass
             self._set_timer()
-            res = dmenu_run(self.entries, self.folders, self.collections, self.session)
+            res = dmenu_run(self.entries, self.folders, self.collections,
+                            self.session, self.prev_entry)
             if res == Run.LOCK:
                 try:
                     self.server.kill_flag.set()
@@ -369,6 +389,8 @@ class DmenuRunner(multiprocessing.Process):
                 if not all(i for i in (self.entries, self.folders, self.collections, self.orgs)
                            if i is False):
                     dmenu_err("Error loading entries. See logs.")
+            if str(res) not in repr(Run.__members__):
+                self.prev_entry = res or self.prev_entry
             if self.server.cache_time_expired.is_set():
                 self.server.kill_flag.set()
             if self.server.kill_flag.is_set():

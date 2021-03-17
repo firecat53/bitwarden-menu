@@ -35,6 +35,7 @@ def edit_entry(entry, entries, folders, collections, session):  # pylint: disabl
           folders - dict of dicts {'id': {xxx,yyy}, ... }
           collections - dict of dicts {'id': {xxx,yyy}, ... }
           session - bytes
+    Returns: None or entry (Item)
 
     """
     item = deepcopy(entry)
@@ -54,13 +55,13 @@ def edit_entry(entry, entries, folders, collections, session):  # pylint: disabl
         sel = dmenu_select(len(fields), inp=input_b)
         if sel == 'Delete entry':
             delete_entry(entry, entries, session)
-            break
+            return None
         if sel == 'Save entry':
             if not item.get('id'):
                 res = bwcli.add_entry(item, session)
                 if res is False:
                     dmenu_err("Entry not added. Check logs.")
-                    return
+                    return None
                 entries.append(bwcli.Item(res))
             else:
                 res = bwcli.edit_entry(item, session)
@@ -68,11 +69,11 @@ def edit_entry(entry, entries, folders, collections, session):  # pylint: disabl
                     dmenu_err("Error saving entry. Changes not saved.")
                     continue
                 entries[entries.index(entry)] = bwcli.Item(res)
-            break
+            return bwcli.Item(res)
         try:
             field, sel = sel.split(": ", 1)
         except (ValueError, TypeError):
-            break
+            return entry
         field = field.lower()
         if field == 'password':
             item = edit_password(item) or item
@@ -117,12 +118,13 @@ def add_entry(entries, folders, collections, session):
           folders - dict of folder objects
           collections - dict of collections objects
           session - bytes
+    Returns: None or entry (Item)
 
     """
     folder = select_folder(folders)
     collection = select_collection(collections, session)
     if folder is False:
-        return
+        return None
     entry = {"organizationId": None,
              "folderId": folder['id'],
              "type": 1,
@@ -137,7 +139,7 @@ def add_entry(entries, folders, collections, session):
              "secureNote": "",
              "card": "",
              "identity": ""}
-    edit_entry(entry, entries, folders, collections, session)
+    return edit_entry(entry, entries, folders, collections, session)
 
 
 def delete_entry(entry, entries, session):

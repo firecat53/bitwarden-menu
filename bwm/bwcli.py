@@ -210,7 +210,9 @@ def add_entry(entry, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "create", "item", enc.stdout],
+    res = run(["bw", "create",
+               "--session", session,
+               "item", enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -229,7 +231,9 @@ def edit_entry(entry, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "edit", "item", item['id'], enc.stdout],
+    res = run(["bw", "edit",
+               "--session", session,
+               "item", item['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -243,7 +247,9 @@ def delete_entry(entry, session):
         Returns: entry object (dict) on success, False on failure
 
     """
-    res = run(["bw", "--session", session, "delete", "item", entry['id']],
+    res = run(["bw", "delete",
+               "--session", session,
+               "item", entry['id']],
               capture_output=True, check=False)
     if res.returncode != 0:
         logging.error(res)
@@ -264,7 +270,9 @@ def add_folder(folder, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "create", "folder", enc.stdout],
+    res = run(["bw", "create",
+               "--session", session,
+               "folder", enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -280,7 +288,9 @@ def delete_folder(folder, session):
 
 
     """
-    res = run(["bw", "--session", session, "delete", "folder", folder['id']],
+    res = run(["bw", "delete",
+               "--session", session,
+               "folder", folder['id']],
               capture_output=True, check=False)
     if res.returncode != 0:
         logging.error(res)
@@ -305,7 +315,9 @@ def move_folder(folder, newpath, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "edit", "folder", fold['id'], enc.stdout],
+    res = run(["bw", "edit",
+               "--session", session,
+               "folder", fold['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -328,9 +340,10 @@ def add_collection(collection, org_id, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session,
+    res = run(["bw", "create",
+               "--session", session,
                "--organizationid", org_id.encode(),
-               "create", "org-collection".encode(), enc.stdout],
+               "org-collection".encode(), enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -345,9 +358,10 @@ def delete_collection(collection, session):
         Returns: collection object (dict) on success, False on failure
 
     """
-    res = run(["bw", "--session", session,
+    res = run(["bw", "delete",
+               "--session", session,
                "--organizationid", collection['organizationId'].encode(),
-               "delete", "org-collection", collection['id']],
+               "org-collection", collection['id']],
               capture_output=True, check=False)
     if res.returncode != 0:
         logging.error(res)
@@ -372,10 +386,10 @@ def move_collection(collection, newpath, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw",
+    res = run(["bw", "edit",
                "--session", session,
                "--organizationid", coll['organizationId'].encode(),
-               "edit", "org-collection", coll['id'], enc.stdout],
+               "org-collection", coll['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)

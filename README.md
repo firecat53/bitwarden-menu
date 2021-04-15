@@ -20,6 +20,7 @@ LLC.
 - Edit notes using terminal or gui editor (set in config.ini, or uses $EDITOR)
 - Add and Delete entries
 - Rename, move, delete and add folders and collections
+- Move any item to or from an organization, including support for multiple collections.
 - Prompts for and saves initial server URL and login email
 - Define multiple vault URLs in the config file.
 - Hide selected folders from the default and 'View/Type Individual entries'

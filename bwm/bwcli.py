@@ -210,31 +210,102 @@ def add_entry(entry, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "create", "item", enc.stdout],
+    res = run(["bw", "create",
+               "--session", session,
+               "item", enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
         return False
     return json.loads(res.stdout)
 
-def edit_entry(entry, session):
+def edit_entry(entry, session, update_coll='NO'):
     """Modify existing vault entry
 
         Args: entry - entry dict object
-        Returns: updated entry object (dict) on success, False on failure
+              session - session id
+              update_coll - 'YES' if item collections have been modified.
+                            'MOVE' if collections are added so item needs to be
+                                move to an org.  Returns: updated entry object
+                                (dict) on success, False on failure
+                            'REMOVE' if collections are removed so item needs to
+                                be moved from the org to personal vault.
 
     """
     item = deepcopy(entry)
+    if update_coll == 'YES':
+        enc = run(["bw", "encode"],
+                  input=json.dumps(item['collectionIds']).encode(),
+                  capture_output=True,
+                  check=False)
+        if not enc.stdout:
+            logging.error(enc)
+            return False
+        res = run(["bw", "edit",
+                   "--session", session,
+                   "item-collections", item['id'], enc.stdout],
+                  capture_output=True, check=False)
+        if not res.stdout:
+            logging.error(res)
+            return False
+    elif update_coll == 'MOVE':
+        res = move_entry(entry, session)
+        if res is False:
+            return False
+    elif update_coll == 'REMOVE':
+        res = delete_entry(entry, session)
+        if res is False:
+            return False
+        item['id'] = None
+        item['collectionIds'] = []
+        item['organizationId'] = None
+        res = add_entry(item, session)
+        if res is False:
+            return False
+        return res
     enc = run(["bw", "encode"], input=json.dumps(item).encode(), capture_output=True, check=False)
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "edit", "item", item['id'], enc.stdout],
+    res = run(["bw", "edit",
+               "--session", session,
+               "item", item['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
         return False
     return json.loads(res.stdout)
+
+
+def move_entry(entry, session):
+    """Move entry to an organization (if it currently belongs to personal vault)
+
+        Assumes entry already has the organizationId and collectionIds updated.
+
+        Args: entry - entry dict object
+              session - session id
+        Returns: updated entry object (dict) on success, False on failure
+
+    """
+    item = deepcopy(entry)
+    enc = run(["bw", "encode"],
+              input=json.dumps(item['collectionIds']).encode(),
+              capture_output=True,
+              check=False)
+    if not enc.stdout:
+        logging.error(enc)
+        return False
+    res = run(["bw", "move",
+               "--session", session,
+               item['id'],
+               item['organizationId'].encode(),
+               enc.stdout],
+              capture_output=True, check=False)
+    if not res.stdout:
+        logging.error(res)
+        return False
+    return json.loads(res.stdout)
+
 
 def delete_entry(entry, session):
     """Delete existing vault entry
@@ -243,7 +314,9 @@ def delete_entry(entry, session):
         Returns: entry object (dict) on success, False on failure
 
     """
-    res = run(["bw", "--session", session, "delete", "item", entry['id']],
+    res = run(["bw", "delete",
+               "--session", session,
+               "item", entry['id']],
               capture_output=True, check=False)
     if res.returncode != 0:
         logging.error(res)
@@ -264,7 +337,9 @@ def add_folder(folder, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "create", "folder", enc.stdout],
+    res = run(["bw", "create",
+               "--session", session,
+               "folder", enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -280,7 +355,9 @@ def delete_folder(folder, session):
 
 
     """
-    res = run(["bw", "--session", session, "delete", "folder", folder['id']],
+    res = run(["bw", "delete",
+               "--session", session,
+               "folder", folder['id']],
               capture_output=True, check=False)
     if res.returncode != 0:
         logging.error(res)
@@ -305,7 +382,9 @@ def move_folder(folder, newpath, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session, "edit", "folder", fold['id'], enc.stdout],
+    res = run(["bw", "edit",
+               "--session", session,
+               "folder", fold['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -328,9 +407,10 @@ def add_collection(collection, org_id, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw", "--session", session,
+    res = run(["bw", "create",
+               "--session", session,
                "--organizationid", org_id.encode(),
-               "create", "org-collection".encode(), enc.stdout],
+               "org-collection".encode(), enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
@@ -345,9 +425,10 @@ def delete_collection(collection, session):
         Returns: collection object (dict) on success, False on failure
 
     """
-    res = run(["bw", "--session", session,
+    res = run(["bw", "delete",
+               "--session", session,
                "--organizationid", collection['organizationId'].encode(),
-               "delete", "org-collection", collection['id']],
+               "org-collection", collection['id']],
               capture_output=True, check=False)
     if res.returncode != 0:
         logging.error(res)
@@ -372,10 +453,10 @@ def move_collection(collection, newpath, session):
     if not enc.stdout:
         logging.error(enc)
         return False
-    res = run(["bw",
+    res = run(["bw", "edit",
                "--session", session,
                "--organizationid", coll['organizationId'].encode(),
-               "edit", "org-collection", coll['id'], enc.stdout],
+               "org-collection", coll['id'], enc.stdout],
               capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)

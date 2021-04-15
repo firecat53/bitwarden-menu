@@ -39,6 +39,7 @@ def edit_entry(entry, entries, folders, collections, session):  # pylint: disabl
 
     """
     item = deepcopy(entry)
+    update_colls = "NO"
     while True:
         fields = [str("Name: {}").format(item['name']),
                   str("Folder: {}").format(obj_name(folders, item['folderId'])),
@@ -64,7 +65,7 @@ def edit_entry(entry, entries, folders, collections, session):  # pylint: disabl
                     return None
                 entries.append(bwcli.Item(res))
             else:
-                res = bwcli.edit_entry(item, session)
+                res = bwcli.edit_entry(item, session, update_colls)
                 if res is False:
                     dmenu_err("Error saving entry. Changes not saved.")
                     continue
@@ -84,9 +85,18 @@ def edit_entry(entry, entries, folders, collections, session):  # pylint: disabl
                 item['folderId'] = folder['id']
             continue
         if field == 'collections':
-            collection = select_collection(collections, session)
-            if collection is not False:
-                item['collectionIds'] = [collection['id']]
+            orig = item['collectionIds']
+            coll_list = [collections[i] for i in collections if i in item['collectionIds']]
+            collection = select_collection(collections, session, coll_list=coll_list)
+            item['collectionIds'] = [*collection]
+            if collection:
+                item['organizationId'] = next(iter(collection.values()))['organizationId']
+            if item['collectionIds'] and item['collectionIds'] != orig and orig:
+                update_colls = "YES"
+            elif item['collectionIds'] != orig and not orig:
+                update_colls = "MOVE"
+            elif not item['collectionIds'] and orig:
+                update_colls = "REMOVE"
             continue
         if field == 'notes':
             item['notes'] = edit_notes(item['notes'])
@@ -122,10 +132,10 @@ def add_entry(entries, folders, collections, session):
 
     """
     folder = select_folder(folders)
-    collection = select_collection(collections, session)
+    colls = select_collection(collections, session, coll_list=[]) or []
     if folder is False:
         return None
-    entry = {"organizationId": None,
+    entry = {"organizationId": next(iter(colls.values()))['organizationId'] if colls else None,
              "folderId": folder['id'],
              "type": 1,
              "name": "",
@@ -135,7 +145,7 @@ def add_entry(entries, folders, collections, session):
              "login": {"username": "",
                        "password": "",
                        "url": ""},
-             "collectionIds": [collection['id']] if collection is not False else [],
+             "collectionIds": [*colls],
              "secureNote": "",
              "card": "",
              "identity": ""}
@@ -449,32 +459,72 @@ def rename_folder(folders, session):
     folders[folder['id']] = folder
 
 
-def select_collection(collections, session, prompt="Collections - Organization"):
+def select_collection(collections, session,
+                      prompt="Collections - Organization (ESC for no selection)",
+                      coll_list=False):
     """Select which collection for an entry
 
-    Args: collections - dict of collection dicts ['id': {'id', 'name',...}, ...]
+    Args: collections - dict of collection dicts {'id': {'id', 'name',...}, ...}
           options - list of menu options for collections
+          prompt - displayed prompt
+          coll_list - list of collection objects or False if only one collection
+                      will be selected
 
-    Returns: False for no entry
-             collection - dict
+    Returns: collections - dict{id: dict, id1: dict, ...}
 
     """
-    orgs = bwcli.get_orgs(session)
-    coll_names = dict(enumerate(collections.values()))
-    num_align = len(str(len(collections)))
+    if coll_list is not False:
+        # When multiple collections will be selected, they have to come from the
+        # same organization.
+        org = select_org(session)
+        if org is False:
+            return False
+        orgs = {org['id']: org}
+        prompt_name = org['name']
+        prompt = "Collections - {} (Enter to select, ESC when done)".format(prompt_name)
+        colls = {i: j for i, j in enumerate(collections.values()) if
+                 j['organizationId'] == org['id']}
+    else:
+        orgs = bwcli.get_orgs(session)
+        colls = dict(enumerate(collections.values()))
+    num_align = len(str(len(colls)))
     pattern = str("{:>{na}} - {} - {}")
-    input_b = str("\n").join(pattern.format(j,
-                                            i['name'],
-                                            orgs[i['organizationId']]['name'],
-                                            na=num_align)
-                             for j, i in coll_names.items()).encode(bwm.ENC)
-    sel = dmenu_select(min(bwm.MAX_LEN, len(collections)), prompt, inp=input_b)
-    if not sel:
-        return False
-    try:
-        return coll_names[int(sel.split(' - ')[0])]
-    except (ValueError, TypeError):
-        return False
+
+    def check_coll(num, coll_list, cur_coll):
+        # Check if name and org_id of cur_coll match in coll_list
+        # Return num if not in list, otherwise return "*num"
+        for i in coll_list:
+            if cur_coll['organizationId'] == i['organizationId'] and cur_coll['name'] == i['name']:
+                return "*{}".format(num)
+        return num
+
+    loop = True
+    while loop:
+        if coll_list is False:
+            coll_list = []
+            loop = False
+        input_b = str("\n").join(pattern.format(check_coll(j, coll_list, i),
+                                                i['name'],
+                                                orgs[i['organizationId']]['name'],
+                                                na=num_align)
+                                 for j, i in colls.items()).encode(bwm.ENC)
+        sel = dmenu_select(min(bwm.MAX_LEN, len(colls)), prompt, inp=input_b)
+        if not sel:
+            return {i['id']: i for i in coll_list}
+        if sel.startswith('*'):
+            sel = sel.lstrip('*')
+            try:
+                col = colls[int(sel.split(' - ')[0])]
+                coll_list.remove(col)
+            except (ValueError, TypeError):
+                loop = False
+        else:
+            try:
+                col = colls[int(sel.split(' - ')[0])]
+                coll_list.append(col)
+            except (ValueError, TypeError):
+                loop = False
+    return {i['id']: i for i in coll_list}
 
 
 def manage_collections(collections, session):
@@ -512,19 +562,19 @@ def create_collection(collections, session):
     Args: collections - dict of collection objects
 
     """
+    org_id = select_org(session)
+    if org_id is False:
+        return
     parentcollection = select_collection(collections, session,
             prompt="Select parent collection (Esc for no parent)")
     pname = ""
-    if parentcollection is not False:
-        pname = parentcollection['name']
+    if parentcollection:
+        pname = next(iter(parentcollection.values()))['name']
     name = dmenu_select(1, "Collection name")
     if not name:
         return
     name = join(pname, name)
-    org_id = select_org(session)
-    if org_id is False:
-        return
-    collection = bwcli.add_collection(name, org_id, session)
+    collection = bwcli.add_collection(name, org_id['id'], session)
     collections[collection['id']] = collection
 
 
@@ -538,8 +588,9 @@ def delete_collection(collections, session):
     collection = select_collection(collections, session, prompt="Delete collection:")
     if not collection:
         return
+    collection = next(iter(collection.values()))
     input_b = b"NO\nYes - confirm delete\n"
-    delete = dmenu_select(2, "Confirm delete", inp=input_b)
+    delete = dmenu_select(2, "Confirm delete of {}".format(collection['name']), inp=input_b)
     if delete != "Yes - confirm delete":
         return
     res = bwcli.delete_collection(collection, session)
@@ -556,12 +607,15 @@ def move_collection(collections, session):
 
     """
     collection = select_collection(collections, session, prompt="Select collection to move")
-    if collection is False:
+    if not collection:
         return
+    collection = next(iter(collection.values()))
     destcollection = select_collection(collections, session,
             prompt="Select destination collection (Esc to move to root directory)")
-    if destcollection is False:
+    if not destcollection:
         destcollection = {'name': ""}
+    else:
+        destcollection = next(iter(destcollection.values()))
     res = bwcli.move_collection(collection,
                                 join(destcollection['name'], basename(collection['name'])),
                                 session)
@@ -580,6 +634,7 @@ def rename_collection(collections, session):
     collection = select_collection(collections, session, prompt="Select collection to rename")
     if not collection:
         return
+    collection = next(iter(collection.values()))
     name = dmenu_select(1, "New collection name", inp=basename(collection['name']).encode(bwm.ENC))
     if not name:
         return
@@ -597,7 +652,7 @@ def select_org(session):
     Args: session - bytes
 
     Returns: False for no entry
-             org - string (org id)
+             org - dict
 
     """
     orgs = bwcli.get_orgs(session)
@@ -610,7 +665,7 @@ def select_org(session):
     if not sel:
         return False
     try:
-        return orgs_ids[int(sel.split(' - ', 1)[0])]['id']
+        return orgs_ids[int(sel.split(' - ', 1)[0])]
     except (ValueError, TypeError):
         return False
 

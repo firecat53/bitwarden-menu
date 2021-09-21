@@ -27,7 +27,8 @@ LLC.
 - Configure session timeout
 - Configure the characters and groups of characters used during password
   generation in the config file (see config.ini.example for instructions).
-  Multiple character sets can be selected on the fly when using Rofi.
+  Multiple character sets can be selected on the fly when using Rofi if the
+  `-multi-select` option is passed to Rofi via `dmenu_command`.
 - Use a custom Keepass 2.x style [auto-type sequence][autotype] if you have an
   'autotype' field defined in the entry (except for character repetition and the
   'special commands'). Set it per entry and/or set a default in the config file
@@ -42,8 +43,8 @@ LLC.
 1. Python 3.7+.
 2. [Bitwarden CLI][bwcli]. Ensure the `bw` command is in `$PATH`
 3. [Pynput][pynput]
-4. Dmenu or [Rofi][rofi]. Most Rofi configuration/theming should be done via
-   Rofi theme files.
+4. Dmenu or [Rofi][rofi]. Rofi configuration/theming should be done via Rofi
+   theme files.
 5. (optional) Pinentry. Make sure to set which flavor of pinentry command to use
    in the config file.
 6. (optional) xdotool or ydotool (for Wayland). If you have a lot of Unicode
@@ -86,16 +87,8 @@ LLC.
       in your window manager or desktop environment initialization. For example:
       `exec setxkbmap de` in ~/.config/i3/config. 
 
-- If using Rofi, you can try some of the command line options in config.ini or
-  set them using the `dmenu_command` setting, but I haven't tested most of them
-  so I'd suggest configuring via theme files.
-- Number of lines needs to be configured in the config.ini and not in
-  .Xresources or the Rofi config file. Bwm will override any number of
-  lines settings set elsewhere.
-- If using dmenu for passphrase entry (pinentry not set), dmenu options in the
-  `[dmenu_passphrase]` section of config.ini will override those in [dmenu] so you
-  can, for example, set the normal foreground and background colors to be the
-  same to obscure the passphrase.
+- If using Rofi, pass desired theme via `dmenu_command = rofi -theme <theme>.rasi`.
+  Dmenu themeing options are also passed via `dmenu_command`
 - New sets of characters can be set in config.ini in the `[password_chars]`
   section. A new preset for each custom set will be listed in addition to the
   default presets. If you redefine one of the default sets (upper, lower,

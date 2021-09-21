@@ -277,9 +277,9 @@ def edit_password(entry):
                 b"Manually enter password"]
     if entry['login']['password']:
         inputs_b.append(b"Type existing password")
-    pw_choice = dmenu_select(len(inputs_b), "Password", inp=b"\n".join(inputs_b))
+    pw_choice = dmenu_select(len(inputs_b), "Password Options", inp=b"\n".join(inputs_b))
     if pw_choice == "Manually enter password":
-        sel = dmenu_select(1, "Enter password", inp=pw_orig)
+        sel = dmenu_select(1, "Password", inp=pw_orig)
         sel_check = dmenu_select(1, "Verify password")
         if not sel_check or sel_check != sel:
             dmenu_err("Passwords do not match. No changes made.")
@@ -324,7 +324,7 @@ def select_folder(folders, prompt="Folders"):
     folder_names = dict(enumerate(folders.values()))
     input_b = str("\n").join(pattern.format(j, i['name'], na=num_align)
                              for j, i in folder_names.items()).encode(bwm.ENC)
-    sel = dmenu_select(min(bwm.DMENU_LEN, len(folders)), prompt, inp=input_b)
+    sel = dmenu_select(min(bwm.MAX_LEN, len(folders)), prompt, inp=input_b)
     if not sel:
         return False
     try:
@@ -468,7 +468,7 @@ def select_collection(collections, session, prompt="Collections - Organization")
                                             orgs[i['organizationId']]['name'],
                                             na=num_align)
                              for j, i in coll_names.items()).encode(bwm.ENC)
-    sel = dmenu_select(min(bwm.DMENU_LEN, len(collections)), prompt, inp=input_b)
+    sel = dmenu_select(min(bwm.MAX_LEN, len(collections)), prompt, inp=input_b)
     if not sel:
         return False
     try:
@@ -606,7 +606,7 @@ def select_org(session):
     pattern = str("{:>{na}} - {}")
     input_b = str("\n").join(pattern.format(j, i['name'], na=num_align)
                               for j, i in orgs_ids.items()).encode(bwm.ENC)
-    sel = dmenu_select(min(bwm.DMENU_LEN, len(orgs)), "Select Organization", inp=input_b)
+    sel = dmenu_select(min(bwm.MAX_LEN, len(orgs)), "Select Organization", inp=input_b)
     if not sel:
         return False
     try:

@@ -93,7 +93,7 @@ def get_passphrase():
             if res.startswith("D "):
                 password = res.split("D ")[1]
     else:
-        password = dmenu_select(0, "Passphrase")
+        password = dmenu_select(0, "Password")
     return password
 
 

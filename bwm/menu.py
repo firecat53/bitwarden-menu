@@ -1,12 +1,12 @@
 """Dmenu/Rofi functions
 
 """
-import itertools
 import shlex
 import sys
 from subprocess import Popen, PIPE
 
 import bwm
+
 
 def dmenu_cmd(num_lines, prompt):
     """Parse config.ini for dmenu options
@@ -14,41 +14,33 @@ def dmenu_cmd(num_lines, prompt):
     Args: args - num_lines: number of lines to display
                  prompt: prompt to show
     Returns: command invocation (as a list of strings) for
-                dmenu -l <num_lines> -p <prompt> -i ...
+                ["dmenu", "-l", "<num_lines>", "-p", "<prompt>", "-i", ...]
 
     """
-    args_dict = {"dmenu_command": "dmenu"}
-    if bwm.CONF.has_section('dmenu'):
-        args = bwm.CONF.items('dmenu')
-        args_dict.update(dict(args))
-    command = shlex.split(args_dict["dmenu_command"])
+    command = ["dmenu"]
+    if bwm.CONF.has_option('dmenu', 'dmenu_command'):
+        command = shlex.split(bwm.CONF.get('dmenu', 'dmenu_command'))
     dmenu_command = command[0]
     dmenu_args = command[1:]
-    del args_dict["dmenu_command"]
-    lines = "-i -dmenu -multi-select -lines" if "rofi" in dmenu_command else "-i -l"
-    if "l" in args_dict:
-        lines = "{} {}".format(lines, min(num_lines, int(args_dict['l'])))
-        del args_dict['l']
+    obscure = True
+    obscure_color = "#222222"
+    if prompt == "Password":
+        if bwm.CONF.has_option('dmenu_passphrase', 'obscure'):
+            obscure = bwm.CONF.getboolean('dmenu_passphrase', 'obscure')
+        if bwm.CONF.has_option('dmenu_passphrase', 'obscure_color'):
+            obscure_color = bwm.CONF.get('dmenu_passphrase', 'obscure_color')
+    if "rofi" in dmenu_command:
+        dmenu = [dmenu_command, "-dmenu", "-p", str(prompt), "-l", str(num_lines)]
+        if obscure is True and prompt in ("Password", "Verify password"):
+            dmenu.append("-password")
+    elif "dmenu" in dmenu_command:
+        dmenu = [dmenu_command, "-p", str(prompt)]
+        if obscure is True and prompt in ("Password", "Verify password"):
+            dmenu.extend(["-nb", obscure_color, "-nf", obscure_color])
     else:
-        lines = "{} {}".format(lines, num_lines)
-    if "pinentry" in args_dict:
-        del args_dict["pinentry"]
-    if prompt == "Passphrase":
-        if bwm.CONF.has_section('dmenu_passphrase'):
-            args = bwm.CONF.items('dmenu_passphrase')
-            args_dict.update(args)
-        rofi_obscure = True
-        if bwm.CONF.has_option('dmenu_passphrase', 'rofi_obscure'):
-            rofi_obscure = bwm.CONF.getboolean('dmenu_passphrase', 'rofi_obscure')
-            del args_dict["rofi_obscure"]
-        if rofi_obscure is True and "rofi" in dmenu_command:
-            dmenu_args.extend(["-password"])
-    extras = (["-" + str(k), str(v)] for (k, v) in args_dict.items())
-    dmenu = [dmenu_command, "-p", str(prompt)]
-    dmenu.extend(dmenu_args)
-    dmenu += list(itertools.chain.from_iterable(extras))
-    dmenu[1:1] = lines.split()
-    dmenu = list(filter(None, dmenu))  # Remove empty list elements
+        # Catchall for some other menu programs. Maybe it'll run and not fail?
+        dmenu = [dmenu_command]
+    dmenu[1:1] = dmenu_args
     return dmenu
 
 

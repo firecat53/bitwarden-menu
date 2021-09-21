@@ -6,6 +6,7 @@ import configparser
 import locale
 import logging
 import os
+import shlex
 import sys
 from os.path import exists, expanduser
 from subprocess import call
@@ -33,9 +34,8 @@ if not exists(CONF_FILE):
         CONF.add_section('dmenu')
         CONF.set('dmenu', 'dmenu_command', 'dmenu')
         CONF.add_section('dmenu_passphrase')
-        CONF.set('dmenu_passphrase', 'nf', '#222222')
-        CONF.set('dmenu_passphrase', 'nb', '#222222')
-        CONF.set('dmenu_passphrase', 'rofi_obscure', 'True')
+        CONF.set('dmenu_passphrase', 'obscure', 'True')
+        CONF.set('dmenu_passphrase', 'obscure_color', '#222222')
         CONF.add_section('vault')
         CONF.set('vault', 'server_1', 'https://vault.bitwarden.com')
         CONF.set('vault', 'email_1', '')
@@ -47,14 +47,16 @@ try:
 except configparser.ParsingError as err:
     dmenu_err("Config file error: {}".format(err))
     sys.exit()
+if CONF.has_option('dmenu', 'dmenu_command'):
+    command = shlex.split(CONF.get('dmenu', 'dmenu_command'))
+if "-l" in command:
+    MAX_LEN = int(command[command.index("-l") + 1])
+else:
+    MAX_LEN = 24
 if CONF.has_option("vault", "session_timeout_min"):
     SESSION_TIMEOUT_MIN = int(CONF.get("vault", "session_timeout_min"))
 else:
     SESSION_TIMEOUT_MIN = SESSION_TIMEOUT_DEFAULT_MIN
-if CONF.has_option("dmenu", "l"):
-    DMENU_LEN = int(CONF.get("dmenu", "l"))
-else:
-    DMENU_LEN = 24
 if CONF.has_option('vault', 'autotype_default'):
     SEQUENCE = CONF.get("vault", "autotype_default")
 if CONF.has_option("vault", "type_library"):

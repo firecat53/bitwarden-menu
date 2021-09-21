@@ -74,7 +74,7 @@ def view_all_entries(options, vault_entries, folders):
         entries_b = options_b + vault_entries_b
     else:
         entries_b = vault_entries_b
-    return dmenu_select(min(bwm.DMENU_LEN, len(options) + len(vault_entries)), inp=entries_b)
+    return dmenu_select(min(bwm.MAX_LEN, len(options) + len(vault_entries)), inp=entries_b)
 
 
 def view_entry(entry, folders):
@@ -199,5 +199,5 @@ def view_notes(notes):
     """
     notes_l = notes.split('\n')
     notes_b = "\n".join(notes_l).encode(bwm.ENC)
-    sel = dmenu_select(min(bwm.DMENU_LEN, len(notes_l)), inp=notes_b)
+    sel = dmenu_select(min(bwm.MAX_LEN, len(notes_l)), inp=notes_b)
     return sel

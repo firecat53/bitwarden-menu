@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name="bitwarden-menu",
-      version="0.1.0",
+      version="0.2.0",
       description="Dmenu/Rofi frontend for Bitwarden CLI tool",
       long_description=open('README.md', 'rb').read().decode('utf-8'),
       author="Scott Hansen",
@@ -12,7 +12,7 @@ setup(name="bitwarden-menu",
       download_url="https://github.com/firecat53/bitwarden-menu/tarball/0.1.0",
       scripts=['bin/bwm'],
       data_files=[('share/doc/bwm', ['README.md', 'LICENSE',
-                                          'config.ini.example']),
+                                     'config.ini.example']),
                   ('share/man/man1', ['bwm.1'])],
       install_requires=["pynput"],
       license="MIT",
@@ -28,4 +28,4 @@ setup(name="bitwarden-menu",
           'Topic :: Utilities',
       ],
       keywords=("dmenu rofi bitwarden bitwarden-menu bwm"),
-     )
+      )

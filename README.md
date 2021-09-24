@@ -119,7 +119,13 @@ convenience for testing.
 
 ## Tests
 
-- To run tests: `python tests/tests.py`
+- To run tests: `python tests/tests.py` (not implemented yet)
+
+## Planned features
+
+- Unit tests
+- TOTP support
+- Notifications for syncing status (e.g. when a sync is complete)
 
 [pynput]: https://github.com/moses-palmer/pynput "Pynput"
 [bwcli]: https://github.com/bitwarden/cli "Bitwarden CLI"

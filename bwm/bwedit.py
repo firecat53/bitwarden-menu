@@ -11,7 +11,7 @@ import string
 from subprocess import call
 import tempfile
 
-import bwm.bwcli as bwcli
+from bwm import bwcli
 from bwm.bwtype import autotype_index, autotype_seq, type_text
 from bwm.menu import dmenu_select, dmenu_err
 import bwm
@@ -338,7 +338,7 @@ def select_folder(folders, prompt="Folders"):
     if not sel:
         return False
     try:
-        return folder_names[int(sel.split(' - ')[0])]
+        return folder_names[int(sel.split(' - ', maxsplit=1)[0])]
     except (ValueError, TypeError):
         return False
 
@@ -426,7 +426,7 @@ def move_folder(folders, session):
     if folder is False or folder['name'] == "No Folder":
         return
     destfolder = select_folder(folders,
-            prompt="Select destination folder. 'No Folder' is root.")
+                               prompt="Select destination folder. 'No Folder' is root.")
     if destfolder is False:
         return
     dname = ""
@@ -514,13 +514,13 @@ def select_collection(collections, session,
         if sel.startswith('*'):
             sel = sel.lstrip('*')
             try:
-                col = colls[int(sel.split(' - ')[0])]
+                col = colls[int(sel.split(' - ', maxsplit=1)[0])]
                 coll_list.remove(col)
             except (ValueError, TypeError):
                 loop = False
         else:
             try:
-                col = colls[int(sel.split(' - ')[0])]
+                col = colls[int(sel.split(' - ', maxsplit=1)[0])]
                 coll_list.append(col)
             except (ValueError, TypeError):
                 loop = False
@@ -566,7 +566,7 @@ def create_collection(collections, session):
     if org_id is False:
         return
     parentcollection = select_collection(collections, session,
-            prompt="Select parent collection (Esc for no parent)")
+                                         prompt="Select parent collection (Esc for no parent)")
     pname = ""
     if parentcollection:
         pname = next(iter(parentcollection.values()))['name']
@@ -611,7 +611,8 @@ def move_collection(collections, session):
         return
     collection = next(iter(collection.values()))
     destcollection = select_collection(collections, session,
-            prompt="Select destination collection (Esc to move to root directory)")
+                                       prompt="Select destination collection "
+                                              "(Esc to move to root directory)")
     if not destcollection:
         destcollection = {'name': ""}
     else:
@@ -660,7 +661,7 @@ def select_org(session):
     num_align = len(str(len(orgs)))
     pattern = str("{:>{na}} - {}")
     input_b = str("\n").join(pattern.format(j, i['name'], na=num_align)
-                              for j, i in orgs_ids.items()).encode(bwm.ENC)
+                             for j, i in orgs_ids.items()).encode(bwm.ENC)
     sel = dmenu_select(min(bwm.MAX_LEN, len(orgs)), "Select Organization", inp=input_b)
     if not sel:
         return False

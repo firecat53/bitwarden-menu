@@ -95,6 +95,7 @@ def token_command(token):
         return cmd
     return None
 
+
 PLACEHOLDER_AUTOTYPE_TOKENS = {
     "{TITLE}"   : lambda e: e['name'],
     "{USERNAME}": lambda e: e['login']['username'],

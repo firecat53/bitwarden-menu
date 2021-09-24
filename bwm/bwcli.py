@@ -8,6 +8,7 @@ import json
 import logging
 from subprocess import run
 
+
 def status(session=b''):
     """Check status of vault
 
@@ -26,6 +27,7 @@ def status(session=b''):
         return False
     return dict(json.loads(res.stdout.split(b'\n')[-1]))
 
+
 def set_server(url="https://vault.bitwarden.com"):
     """Set vault URL
 
@@ -37,6 +39,7 @@ def set_server(url="https://vault.bitwarden.com"):
         logging.error(res)
         return False
     return True
+
 
 def login(email, password):
     """Initial login to Bitwarden Vault.
@@ -50,6 +53,7 @@ def login(email, password):
         return (False, res.stderr)
     return res.stdout, None
 
+
 def unlock(password):
     """Unlock vault
 
@@ -61,6 +65,7 @@ def unlock(password):
         logging.error(res)
         return (False, res.stderr)
     return res.stdout, None
+
 
 def lock():
     """Lock vault
@@ -74,6 +79,7 @@ def lock():
         return False
     return True
 
+
 def logout():
     """Logout of vault
 
@@ -85,6 +91,7 @@ def logout():
         logging.error(res)
         return False
     return True
+
 
 def get_orgs(session):
     """Return all organizations for the logged in user
@@ -98,7 +105,8 @@ def get_orgs(session):
     if not res.stdout:
         logging.error(res)
         return False
-    return {i['id']:i for i in json.loads(res.stdout)}
+    return {i['id']: i for i in json.loads(res.stdout)}
+
 
 class Item(dict):
     """Set some default attributes to all items
@@ -113,7 +121,8 @@ class Item(dict):
             self['login'].setdefault('url', "")
         self.setdefault('fields', [])
         if not any(i['name'] == 'autotype' for i in self.get('fields')):
-            self['fields'].append({'name': 'autotype', 'value':"", 'type':0})
+            self['fields'].append({'name': 'autotype', 'value': "", 'type': 0})
+
 
 def get_entries(session=b'', org_name=''):
     """Get all entries, folders, collections and orgs from vault
@@ -140,6 +149,7 @@ def get_entries(session=b'', org_name=''):
     orgs = get_orgs(session)
     return items, folders, collections, orgs
 
+
 def sync(session=b''):
     """Sync web vault changes to local vault
 
@@ -152,6 +162,7 @@ def sync(session=b''):
         return False
     return True
 
+
 def get_folders(session):
     """Return all folder names.
 
@@ -163,7 +174,8 @@ def get_folders(session):
     if not res.stdout:
         logging.error(res)
         return False
-    return {i['id']:i for i in json.loads(res.stdout)}
+    return {i['id']: i for i in json.loads(res.stdout)}
+
 
 def get_collections(session, org_id=''):
     """Return all collection names for user.
@@ -183,7 +195,8 @@ def get_collections(session, org_id=''):
     if not res.stdout:
         logging.error(res)
         return False
-    return {i['id']:i for i in json.loads(res.stdout)}
+    return {i['id']: i for i in json.loads(res.stdout)}
+
 
 def add_entry(entry, session):
     """Add new entry to vault
@@ -218,6 +231,7 @@ def add_entry(entry, session):
         logging.error(res)
         return False
     return json.loads(res.stdout)
+
 
 def edit_entry(entry, session, update_coll='NO'):
     """Modify existing vault entry
@@ -323,6 +337,7 @@ def delete_entry(entry, session):
         return False
     return entry
 
+
 def add_folder(folder, session):
     """Add folder
 
@@ -346,6 +361,7 @@ def add_folder(folder, session):
         return False
     return json.loads(res.stdout)
 
+
 def delete_folder(folder, session):
     """Delete folder
 
@@ -363,6 +379,7 @@ def delete_folder(folder, session):
         logging.error(res)
         return False
     return folder
+
 
 def move_folder(folder, newpath, session):
     """Move or rename folder
@@ -391,6 +408,7 @@ def move_folder(folder, newpath, session):
         return False
     return json.loads(res.stdout)
 
+
 def add_collection(collection, org_id, session):
     """Add collection
 
@@ -417,6 +435,7 @@ def add_collection(collection, org_id, session):
         return False
     return json.loads(res.stdout)
 
+
 def delete_collection(collection, session):
     """Delete collection
 
@@ -434,6 +453,7 @@ def delete_collection(collection, session):
         logging.error(res)
         return False
     return collection
+
 
 def move_collection(collection, newpath, session):
     """Move or rename collection

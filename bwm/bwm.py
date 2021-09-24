@@ -16,7 +16,7 @@ import sys
 from subprocess import call, Popen, PIPE
 from threading import Timer
 
-import bwm.bwcli as bwcli
+from bwm import bwcli
 from bwm.bwedit import add_entry, edit_entry, manage_collections, manage_folders
 from bwm.bwtype import type_text, type_entry
 from bwm.bwview import view_all_entries, view_entry
@@ -193,6 +193,7 @@ def dmenu_view(entries, folders):
     type_text(text)
     return entry
 
+
 def dmenu_view_previous_entry(entry, folders):
     """View previous entry
 
@@ -204,6 +205,7 @@ def dmenu_view_previous_entry(entry, folders):
         text = view_entry(entry, folders)
         type_text(text)
     return entry
+
 
 def dmenu_edit(entries, folders, collections, session):
     """Select items to edit (called from dmenu_run)
@@ -357,12 +359,11 @@ class DmenuRunner(multiprocessing.Process):
             self.server.kill_flag.set()
             sys.exit()
 
-
     def _set_timer(self):
         """Set inactivity timer
 
         """
-        self.cache_timer = Timer(bwm.SESSION_TIMEOUT_MIN * 60, self.cache_time) # pylint: disable=attribute-defined-outside-init
+        self.cache_timer = Timer(bwm.SESSION_TIMEOUT_MIN * 60, self.cache_time)  # pylint: disable=attribute-defined-outside-init
         self.cache_timer.daemon = True
         self.cache_timer.start()
 

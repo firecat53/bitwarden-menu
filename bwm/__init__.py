@@ -9,7 +9,7 @@ import os
 import shlex
 import sys
 from os.path import exists, expanduser
-from subprocess import call
+from subprocess import run, DEVNULL
 
 from bwm.menu import dmenu_err
 
@@ -62,14 +62,14 @@ if CONF.has_option('vault', 'autotype_default'):
 if CONF.has_option("vault", "type_library"):
     if CONF.get("vault", "type_library") == "xdotool":
         try:
-            call(['xdotool', 'version'])
+            run(['xdotool', 'version'], check=False, stdout=DEVNULL)
         except OSError:
             dmenu_err("Xdotool not installed.\n"
                       "Please install or remove that option from config.ini")
             sys.exit()
     elif CONF.get("vault", "type_library") == "ydotool":
         try:
-            call(['ydotool'])
+            run(['ydotool'], check=False, stdout=DEVNULL)
         except OSError:
             dmenu_err("Ydotool not installed.\n"
                       "Please install or remove that option from config.ini")

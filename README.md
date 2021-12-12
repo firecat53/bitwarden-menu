@@ -64,7 +64,7 @@ LLC.
         pip install bitwarden-menu
 
   + From git. Just clone, install requirements and run
-  + Available in the [Archlinux AUR][aur]. 
+  + Available in the [Archlinux AUR][aur].
 
 - If you start bwm for the first time without a config file, it will prompt
   you for server name and login email and save them in the config file.
@@ -86,7 +86,7 @@ LLC.
 
     * When using xdotool, call `setxkbmap` to set your keyboard type somewhere
       in your window manager or desktop environment initialization. For example:
-      `exec setxkbmap de` in ~/.config/i3/config. 
+      `exec setxkbmap de` in ~/.config/i3/config.
 
 - If using Rofi, pass desired theme via `dmenu_command = rofi -theme <theme>.rasi`.
   Dmenu themeing options are also passed via `dmenu_command`
@@ -116,6 +116,35 @@ convenience for testing.
 - To view a password without typing it, use the 'Edit Entries' option, then
   select the entry, select 'Password' then select 'Manually enter password'.
   Type 'ESC' to exit without making changes.
+
+### Wayland (wlroots - Sway)
+
+- Dmenu or Rofi work under XWayland.
+- To enable ydotool to work without sudo
+    - Pick a group that one or more users
+      belong to (e.g. `users`) and:
+
+            $ echo "KERNEL==\"uinput\", GROUP=\"users\", MODE=\"0660\", \
+            OPTIONS+=\"static_node=uinput\"" | sudo tee \
+            /etc/udev/rules.d/80-uinput.rules > /dev/null
+            # udevadm control --reload-rules && udevadm trigger
+
+    - Create a systemd user service for ydotoold:
+
+            ~/.config/systemd/user/ydotoold.service
+            [Unit]
+            Description=ydotoold Service
+
+            [Service]
+            ExecStart=/usr/bin/ydotoold
+
+            [Install]
+            WantedBy=default.target
+
+    - Enable and start ydotoold.service:
+
+            $ systemctl --user daemon-reload
+            $ systemctl --user enable --now ydotoold.service
 
 ## Tests
 

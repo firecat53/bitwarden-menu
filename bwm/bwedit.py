@@ -27,7 +27,8 @@ def obj_name(obj, oid):
     return obj[oid]['name']
 
 
-def edit_entry(entry, entries, folders, collections, session):  # pylint: disable=too-many-branches,too-many-statements
+def edit_entry(entry, entries, folders, collections, session):
+    # pylint: disable=too-many-branches,too-many-statements,too-many-locals
     """Edit title, username, password, url, notes and autotype sequence for an entry.
 
     Args: entry - selected Entry dict
@@ -109,7 +110,7 @@ def edit_entry(entry, entries, folders, collections, session):  # pylint: disabl
                     b"\n" if item['fields'][autotype_index(item)]['value'] is not None else b"\n"
         else:
             edit_b = item[field].encode(bwm.ENC) + b"\n" if item[field] is not None else b"\n"
-        sel = dmenu_select(1, "{}".format(field.capitalize()), inp=edit_b)
+        sel = dmenu_select(1, f"{field.capitalize()}", inp=edit_b)
         if sel:
             if field in ('username', 'url'):
                 item['login'][field] = sel
@@ -161,7 +162,7 @@ def delete_entry(entry, entries, session):
 
     """
     input_b = b"NO\nYes - confirm delete\n"
-    delete = dmenu_select(2, "Confirm delete of {}".format(entry['name']), inp=input_b)
+    delete = dmenu_select(2, f"Confirm delete of {entry['name']}", inp=input_b)
     if delete != "Yes - confirm delete":
         return
     res = bwcli.delete_entry(entry, session)
@@ -265,7 +266,7 @@ def get_password_chars():
             try:
                 presets[name.title()] = {k: chars[k] for k in shlex.split(val)}
             except KeyError:
-                dmenu_err("Error: Unknown value in preset {}. Ignoring.".format(name))
+                dmenu_err(f"Error: Unknown value in preset {name}. Ignoring.")
                 continue
     input_b = "\n".join(presets).encode(bwm.ENC)
     char_sel = dmenu_select(len(presets),
@@ -274,7 +275,7 @@ def get_password_chars():
     return {k: presets[k] for k in char_sel.split('\n')} if char_sel else False
 
 
-def edit_password(entry):
+def edit_password(entry):  # pylint: disable=too-many-return-statements
     """Edit password
 
         Args: entry dict
@@ -481,7 +482,7 @@ def select_collection(collections, session,
             return False
         orgs = {org['id']: org}
         prompt_name = org['name']
-        prompt = "Collections - {} (Enter to select, ESC when done)".format(prompt_name)
+        prompt = f"Collections - {prompt_name} (Enter to select, ESC when done)"
         colls = {i: j for i, j in enumerate(collections.values()) if
                  j['organizationId'] == org['id']}
     else:
@@ -495,7 +496,7 @@ def select_collection(collections, session,
         # Return num if not in list, otherwise return "*num"
         for i in coll_list:
             if cur_coll['organizationId'] == i['organizationId'] and cur_coll['name'] == i['name']:
-                return "*{}".format(num)
+                return f"*{num}"
         return num
 
     loop = True
@@ -590,7 +591,7 @@ def delete_collection(collections, session):
         return
     collection = next(iter(collection.values()))
     input_b = b"NO\nYes - confirm delete\n"
-    delete = dmenu_select(2, "Confirm delete of {}".format(collection['name']), inp=input_b)
+    delete = dmenu_select(2, f"Confirm delete of {collection['name']}", inp=input_b)
     if delete != "Yes - confirm delete":
         return
     res = bwcli.delete_collection(collection, session)

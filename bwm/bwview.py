@@ -138,7 +138,7 @@ def view_card(entry, folders):
     """
     exp = "Expiration Date: None"
     if entry['card']['expMonth'] or entry['card']['expYear']:
-        exp = "{}/{}".format(entry['card']['expMonth'], entry['card']['expYear'])
+        exp = f"{entry['card']['expMonth']}/{entry['card']['expYear']}"
     fields = [entry['name'] or "Title: None",
               obj_name(folders, entry['folderId']),
               entry['card']['brand'] or "Card Type: None",

@@ -3,7 +3,7 @@
 """
 import shlex
 import sys
-from subprocess import Popen, PIPE
+from subprocess import run
 
 import bwm
 
@@ -55,18 +55,17 @@ def dmenu_select(num_lines, prompt="Entries", inp=""):
 
     """
     cmd = dmenu_cmd(num_lines, prompt)
-    sel, err = Popen(cmd,
-                     stdin=PIPE,
-                     stdout=PIPE,
-                     stderr=PIPE,
-                     env=bwm.ENV).communicate(input=inp)
-    if err:
+    res = run(cmd,
+              capture_output=True,
+              check=False,
+              input=inp,
+              encoding=bwm.ENC,
+              env=bwm.ENV)
+    if res.stderr:
         cmd = [cmd[0]] + ["-dmenu"] if "rofi" in cmd[0] else [""]
-        Popen(cmd[0], stdin=PIPE, stdout=PIPE, env=bwm.ENV).communicate(input=err)
+        run(cmd[0], check=False, input=res.stderr, env=bwm.ENV)
         sys.exit()
-    if sel is not None:
-        sel = sel.decode(bwm.ENC).rstrip('\n')
-    return sel
+    return res.stdout.rstrip('\n') if res.stdout is not None else None
 
 
 def dmenu_err(prompt):

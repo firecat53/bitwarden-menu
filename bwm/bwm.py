@@ -4,10 +4,9 @@
 from enum import Enum, auto
 from functools import partial
 import multiprocessing
-from os.path import exists
 import shlex
 import sys
-from subprocess import Popen, PIPE
+import subprocess
 from threading import Timer
 
 from bwm import bwcli
@@ -29,10 +28,10 @@ def get_passphrase():
         pinentry = bwm.CONF.get("dmenu", "pinentry")
     if pinentry:
         password = ""
-        out = Popen(pinentry,
-                    stdout=PIPE,
-                    stdin=PIPE).communicate(
-                        input=b'setdesc Enter vault password\ngetpin\n')[0]
+        out = subprocess.run(pinentry,
+                             capture_output=True,
+                             check=False,
+                             input=b'setdesc Enter vault password\ngetpin\n').stdout
         if out:
             res = out.decode(bwm.ENC).split("\n")[2]
             if res.startswith("D "):
@@ -43,6 +42,7 @@ def get_passphrase():
 
 
 def get_vault():
+    # pylint: disable=too-many-return-statements,too-many-locals,too-many-branches
     """Read vault login parameters from config or ask for user input.
 
     Returns: Session - bytes
@@ -55,16 +55,19 @@ def get_vault():
     vaults = []
     for srv in servers:
         idx = srv.rsplit('_', 1)[-1]
-        email = args_dict.get('email_{}'.format(idx), "")
-        passw = args_dict.get('password_{}'.format(idx), "")
+        email = args_dict.get(f'email_{idx}', "")
+        passw = args_dict.get(f'password_{idx}', "")
         try:
-            cmd = args_dict['password_cmd_{}'.format(idx)]
-            res = Popen(shlex.split(cmd), stdout=PIPE, stderr=PIPE).communicate()
-            if res[1]:
-                dmenu_err("Password command error: {}".format(res[1]))
+            cmd = args_dict[f'password_cmd_{idx}']
+            res = subprocess.run(shlex.split(cmd),
+                                 check=False,
+                                 capture_output=True,
+                                 encoding=bwm.ENC)
+            if res.stderr:
+                dmenu_err(f"Password command error: {res.stderr}")
                 sys.exit()
             else:
-                passw = res[0].decode().rstrip('\n') if res[0] else passw
+                passw = res.stdout.rstrip('\n') if res.stdout else passw
         except KeyError:
             pass
         if srv:
@@ -112,7 +115,7 @@ def get_initial_vault():
         dmenu_err("No URL entered. Try again.")
         return False
     email = dmenu_select(0, "Enter login email address.")
-    with open(bwm.CONF_FILE, 'w') as conf_file:
+    with open(bwm.CONF_FILE, 'w', encoding=bwm.ENC) as conf_file:
         bwm.CONF.set('vault', 'server_1', url)
         if email:
             bwm.CONF.set('vault', 'email_1', email)
@@ -273,6 +276,7 @@ def dmenu_run(entries, folders, collections, session, prev_entry):
 
 
 class DmenuRunner(multiprocessing.Process):
+    # pylint: disable=too-many-instance-attributes
     """Listen for dmenu calling event and run bwm
 
     Args: server - Server object
@@ -296,7 +300,8 @@ class DmenuRunner(multiprocessing.Process):
         """Set inactivity timer
 
         """
-        self.cache_timer = Timer(bwm.SESSION_TIMEOUT_MIN * 60, self.cache_time)  # pylint: disable=attribute-defined-outside-init
+        # pylint: disable=attribute-defined-outside-init
+        self.cache_timer = Timer(bwm.SESSION_TIMEOUT_MIN * 60, self.cache_time)
         self.cache_timer.daemon = True
         self.cache_timer.start()
 

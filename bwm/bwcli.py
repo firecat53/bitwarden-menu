@@ -234,6 +234,7 @@ def add_entry(entry, session):
 
 
 def edit_entry(entry, session, update_coll='NO'):
+    # pylint: disable=too-many-return-statements
     """Modify existing vault entry
 
         Args: entry - entry dict object

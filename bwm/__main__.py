@@ -47,7 +47,7 @@ def get_auth():
     auth = bwm.configparser.ConfigParser()
     if not exists(bwm.AUTH_FILE):
         fdr = os.open(bwm.AUTH_FILE, os.O_WRONLY | os.O_CREAT, 0o600)
-        with open(fdr, 'w') as a_file:
+        with open(fdr, 'w', encoding=bwm.ENC) as a_file:
             auth.set('DEFAULT', 'port', str(find_free_port()))
             auth.set('DEFAULT', 'authkey', random_str())
             auth.write(a_file)
@@ -101,7 +101,7 @@ class Server(multiprocessing.Process):
         mgr = BaseManager(address=('127.0.0.1', self.port),
                           authkey=self.authkey)
         mgr.register('set_event', callable=self.start_flag.set)
-        mgr.start()
+        mgr.start()  # pylint: disable=consider-using-with
         return mgr
 
 

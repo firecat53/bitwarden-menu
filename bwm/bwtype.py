@@ -1,6 +1,7 @@
 """Module to handling typing using pynput or xdotool
 
 """
+# flake8: noqa
 import re
 import time
 from subprocess import call
@@ -64,7 +65,7 @@ def tokenize_autotype(autotype):
         closing_idx = autotype.find('}')
         if closing_idx == -1:
             dmenu_err("Unable to find matching right brace (}) while" +
-                      "tokenizing auto-type string: %s\n" % (autotype))
+                      f"tokenizing auto-type string: {autotype}\n")
             return
         if closing_idx == opening_idx + 1 and closing_idx + 1 < len(autotype) \
                 and autotype[closing_idx + 1] == '}':
@@ -195,7 +196,7 @@ PYNPUT_AUTOTYPE_TOKENS = {
 }
 
 
-def type_entry_pynput(entry, tokens):
+def type_entry_pynput(entry, tokens):  # pylint: disable=too-many-branches
     """Use pynput to auto-type the selected entry
 
     """
@@ -232,7 +233,7 @@ def type_entry_pynput(entry, tokens):
                     kbd.tap(to_tap)
                     enter_idx = False
             else:
-                dmenu_err("Unsupported auto-type token (pynput): {}".format(token))
+                dmenu_err(f"Unsupported auto-type token (pynput): {token}")
                 return
         else:
             try:
@@ -338,7 +339,7 @@ def type_entry_xdotool(entry, tokens):
                     call(cmd)
                     enter_idx = False
             else:
-                dmenu_err("Unsupported auto-type token (xdotool): {}".format(token))
+                dmenu_err(f"Unsupported auto-type token (xdotool): {token}")
                 return
         else:
             call(['xdotool', 'type', token])
@@ -439,7 +440,7 @@ def type_entry_ydotool(entry, tokens):
                     call(cmd)
                     enter_idx = False
             else:
-                dmenu_err("Unsupported auto-type token (ydotool): {}".format(token))
+                dmenu_err(f"Unsupported auto-type token (ydotool): {token}")
                 return
         else:
             call(['ydotool', 'type', token])

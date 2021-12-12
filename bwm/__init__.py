@@ -30,7 +30,7 @@ if not exists(CONF_FILE):
         os.mkdir(os.path.dirname(CONF_FILE))
     except OSError:
         pass
-    with open(CONF_FILE, 'w') as conf_file:
+    with open(CONF_FILE, 'w', encoding=ENC) as conf_file:
         CONF.add_section('dmenu')
         CONF.set('dmenu', 'dmenu_command', 'dmenu')
         CONF.add_section('dmenu_passphrase')
@@ -45,7 +45,7 @@ if not exists(CONF_FILE):
 try:
     CONF.read(CONF_FILE)
 except configparser.ParsingError as err:
-    dmenu_err("Config file error: {}".format(err))
+    dmenu_err(f"Config file error: {err}")
     sys.exit()
 if CONF.has_option('dmenu', 'dmenu_command'):
     command = shlex.split(CONF.get('dmenu', 'dmenu_command'))

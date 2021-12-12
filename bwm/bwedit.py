@@ -53,8 +53,8 @@ def edit_entry(entry, entries, folders, collections, session):
                   "Notes: <Enter to Edit>" if item['notes'] else "Notes: None",
                   "Delete entry",
                   "Save entry"]
-        input_b = "\n".join(fields).encode(bwm.ENC)
-        sel = dmenu_select(len(fields), inp=input_b)
+        inp = "\n".join(fields)
+        sel = dmenu_select(len(fields), inp=inp)
         if sel == 'Delete entry':
             delete_entry(entry, entries, session)
             return None
@@ -103,14 +103,14 @@ def edit_entry(entry, entries, folders, collections, session):
             item['notes'] = edit_notes(item['notes'])
             continue
         if field in ('username', 'url'):
-            edit_b = item['login'][field].encode(bwm.ENC) + \
-                    b"\n" if item['login'][field] is not None else b"\n"
+            edit = item['login'][field] + \
+                    "\n" if item['login'][field] is not None else "\n"
         elif field == 'autotype':
-            edit_b = item['fields'][autotype_index(item)]['value'].encode(bwm.ENC) + \
-                    b"\n" if item['fields'][autotype_index(item)]['value'] is not None else b"\n"
+            edit = item['fields'][autotype_index(item)]['value'] + \
+                    "\n" if item['fields'][autotype_index(item)]['value'] is not None else "\n"
         else:
-            edit_b = item[field].encode(bwm.ENC) + b"\n" if item[field] is not None else b"\n"
-        sel = dmenu_select(1, f"{field.capitalize()}", inp=edit_b)
+            edit = item[field] + "\n" if item[field] is not None else "\n"
+        sel = dmenu_select(1, f"{field.capitalize()}", inp=edit)
         if sel:
             if field in ('username', 'url'):
                 item['login'][field] = sel
@@ -161,8 +161,8 @@ def delete_entry(entry, entries, session):
           session - bytes
 
     """
-    input_b = b"NO\nYes - confirm delete\n"
-    delete = dmenu_select(2, f"Confirm delete of {entry['name']}", inp=input_b)
+    inp = "NO\nYes - confirm delete\n"
+    delete = dmenu_select(2, f"Confirm delete of {entry['name']}", inp=inp)
     if delete != "Yes - confirm delete":
         return
     res = bwcli.delete_entry(entry, session)
@@ -268,9 +268,9 @@ def get_password_chars():
             except KeyError:
                 dmenu_err(f"Error: Unknown value in preset {name}. Ignoring.")
                 continue
-    input_b = "\n".join(presets).encode(bwm.ENC)
+    inp = "\n".join(presets)
     char_sel = dmenu_select(len(presets),
-                            "Pick character set(s) to use", inp=input_b)
+                            "Pick character set(s) to use", inp=inp)
     # This dictionary return also handles Rofi multiple select
     return {k: presets[k] for k in char_sel.split('\n')} if char_sel else False
 
@@ -283,12 +283,12 @@ def edit_password(entry):  # pylint: disable=too-many-return-statements
 
     """
     sel = entry['login']['password']
-    pw_orig = sel.encode(bwm.ENC) + b"\n" if sel is not None else b"\n"
-    inputs_b = [b"Generate password",
-                b"Manually enter password"]
+    pw_orig = sel + "\n" if sel is not None else "\n"
+    inputs = ["Generate password",
+              "Manually enter password"]
     if entry['login']['password']:
-        inputs_b.append(b"Type existing password")
-    pw_choice = dmenu_select(len(inputs_b), "Password Options", inp=b"\n".join(inputs_b))
+        inputs.append("Type existing password")
+    pw_choice = dmenu_select(len(inputs), "Password Options", inp="\n".join(inputs))
     if pw_choice == "Manually enter password":
         sel = dmenu_select(1, "Password", inp=pw_orig)
         sel_check = dmenu_select(1, "Verify password")
@@ -296,8 +296,8 @@ def edit_password(entry):  # pylint: disable=too-many-return-statements
             dmenu_err("Passwords do not match. No changes made.")
             return False
     elif pw_choice == "Generate password":
-        input_b = b"20\n"
-        length = dmenu_select(1, "Password Length?", inp=input_b)
+        inp = "20\n"
+        length = dmenu_select(1, "Password Length?", inp=inp)
         if not length:
             return False
         try:
@@ -333,9 +333,9 @@ def select_folder(folders, prompt="Folders"):
     num_align = len(str(len(folders)))
     pattern = str("{:>{na}} - {}")
     folder_names = dict(enumerate(folders.values()))
-    input_b = str("\n").join(pattern.format(j, i['name'], na=num_align)
-                             for j, i in folder_names.items()).encode(bwm.ENC)
-    sel = dmenu_select(min(bwm.MAX_LEN, len(folders)), prompt, inp=input_b)
+    inp = str("\n").join(pattern.format(j, i['name'], na=num_align)
+                         for j, i in folder_names.items())
+    sel = dmenu_select(min(bwm.MAX_LEN, len(folders)), prompt, inp=inp)
     if not sel:
         return False
     try:
@@ -356,9 +356,9 @@ def manage_folders(folders, session):
                'Rename',
                'Delete']
     while True:
-        input_b = b"\n".join(i.encode(bwm.ENC) for i in options) + b"\n\n" + \
-            b"\n".join(i['name'].encode(bwm.ENC) for i in folders.values())
-        sel = dmenu_select(len(options) + len(folders) + 1, "Manage Folders", inp=input_b)
+        inp = "\n".join(i for i in options) + "\n\n" + \
+            "\n".join(i['name'] for i in folders.values())
+        sel = dmenu_select(len(options) + len(folders) + 1, "Manage Folders", inp=inp)
         if not sel:
             break
         if sel == 'Create':
@@ -406,8 +406,8 @@ def delete_folder(folders, session):
     folder = select_folder(folders, prompt="Delete Folder:")
     if not folder or folder['name'] == "No Folder":
         return
-    input_b = b"NO\nYes - confirm delete\n"
-    delete = dmenu_select(2, "Confirm delete", inp=input_b)
+    inp = "NO\nYes - confirm delete\n"
+    delete = dmenu_select(2, "Confirm delete", inp=inp)
     if delete != "Yes - confirm delete":
         return
     res = bwcli.delete_folder(folder, session)
@@ -449,7 +449,7 @@ def rename_folder(folders, session):
     folder = select_folder(folders, prompt="Select folder to rename")
     if folder is False or folder['name'] == "No Folder":
         return
-    name = dmenu_select(1, "New folder name", inp=basename(folder['name']).encode(bwm.ENC))
+    name = dmenu_select(1, "New folder name", inp=basename(folder['name']))
     if not name:
         return
     new = join(dirname(folder['name']), name)
@@ -504,12 +504,12 @@ def select_collection(collections, session,
         if coll_list is False:
             coll_list = []
             loop = False
-        input_b = str("\n").join(pattern.format(check_coll(j, coll_list, i),
-                                                i['name'],
-                                                orgs[i['organizationId']]['name'],
-                                                na=num_align)
-                                 for j, i in colls.items()).encode(bwm.ENC)
-        sel = dmenu_select(min(bwm.MAX_LEN, len(colls)), prompt, inp=input_b)
+        inp = str("\n").join(pattern.format(check_coll(j, coll_list, i),
+                                            i['name'],
+                                            orgs[i['organizationId']]['name'],
+                                            na=num_align)
+                             for j, i in colls.items())
+        sel = dmenu_select(min(bwm.MAX_LEN, len(colls)), prompt, inp=inp)
         if not sel:
             return {i['id']: i for i in coll_list}
         if sel.startswith('*'):
@@ -540,9 +540,9 @@ def manage_collections(collections, session):
                'Rename',
                'Delete']
     while True:
-        input_b = b"\n".join(i.encode(bwm.ENC) for i in options) + b"\n\n" + \
-                b"\n".join(i['name'].encode(bwm.ENC) for i in collections.values())
-        sel = dmenu_select(len(options) + len(collections) + 1, "Manage collections", inp=input_b)
+        inp = "\n".join(i for i in options) + "\n\n" + \
+                "\n".join(i['name'] for i in collections.values())
+        sel = dmenu_select(len(options) + len(collections) + 1, "Manage collections", inp=inp)
         if not sel:
             break
         if sel == 'Create':
@@ -590,8 +590,8 @@ def delete_collection(collections, session):
     if not collection:
         return
     collection = next(iter(collection.values()))
-    input_b = b"NO\nYes - confirm delete\n"
-    delete = dmenu_select(2, f"Confirm delete of {collection['name']}", inp=input_b)
+    inp = "NO\nYes - confirm delete\n"
+    delete = dmenu_select(2, f"Confirm delete of {collection['name']}", inp=inp)
     if delete != "Yes - confirm delete":
         return
     res = bwcli.delete_collection(collection, session)
@@ -637,7 +637,7 @@ def rename_collection(collections, session):
     if not collection:
         return
     collection = next(iter(collection.values()))
-    name = dmenu_select(1, "New collection name", inp=basename(collection['name']).encode(bwm.ENC))
+    name = dmenu_select(1, "New collection name", inp=basename(collection['name']))
     if not name:
         return
     new = join(dirname(collection['name']), name)
@@ -661,9 +661,9 @@ def select_org(session):
     orgs_ids = dict(enumerate(orgs.values()))
     num_align = len(str(len(orgs)))
     pattern = str("{:>{na}} - {}")
-    input_b = str("\n").join(pattern.format(j, i['name'], na=num_align)
-                             for j, i in orgs_ids.items()).encode(bwm.ENC)
-    sel = dmenu_select(min(bwm.MAX_LEN, len(orgs)), "Select Organization", inp=input_b)
+    inp = str("\n").join(pattern.format(j, i['name'], na=num_align)
+                         for j, i in orgs_ids.items())
+    sel = dmenu_select(min(bwm.MAX_LEN, len(orgs)), "Select Organization", inp=inp)
     if not sel:
         return False
     try:

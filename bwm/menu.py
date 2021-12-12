@@ -49,7 +49,7 @@ def dmenu_select(num_lines, prompt="Entries", inp=""):
 
     Args: num_lines - number of lines to display
           prompt - prompt to show
-          inp - bytes string to pass to dmenu via STDIN
+          inp - string to pass to dmenu via STDIN
 
     Returns: sel - string
 

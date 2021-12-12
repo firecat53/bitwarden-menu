@@ -68,13 +68,13 @@ def view_all_entries(options, vault_entries, folders):
                 i['identity']['email'],
                 i['identity']['phone'],
                 na=num_align))
-    vault_entries_b = str("\n").join(ven).encode(bwm.ENC)
+    vault_entries_s = str("\n").join(ven)
     if options:
-        options_b = ("\n".join(options) + "\n").encode(bwm.ENC)
-        entries_b = options_b + vault_entries_b
+        options_s = ("\n".join(options) + "\n")
+        entries_s = options_s + vault_entries_s
     else:
-        entries_b = vault_entries_b
-    return dmenu_select(min(bwm.MAX_LEN, len(options) + len(vault_entries)), inp=entries_b)
+        entries_s = vault_entries_s
+    return dmenu_select(min(bwm.MAX_LEN, len(options) + len(vault_entries)), inp=entries_s)
 
 
 def view_entry(entry, folders):
@@ -97,8 +97,8 @@ def view_login(entry, folders):
               '**********' if entry['login']['password'] else "Password: None",
               entry['login']['url'] or "URL: None",
               "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
-    vault_entries_b = "\n".join(fields).encode(bwm.ENC)
-    sel = dmenu_select(len(fields), inp=vault_entries_b)
+    vault_entries = "\n".join(fields)
+    sel = dmenu_select(len(fields), inp=vault_entries)
     if sel == "Notes: <Enter to view>":
         sel = view_notes(entry['notes'])
     elif sel == "Notes: None":
@@ -121,8 +121,8 @@ def view_note(entry, folders):
     fields = [entry['name'] or "Title: None",
               obj_name(folders, entry['folderId']),
               "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
-    vault_entries_b = "\n".join(fields).encode(bwm.ENC)
-    sel = dmenu_select(len(fields), inp=vault_entries_b)
+    vault_entries = "\n".join(fields)
+    sel = dmenu_select(len(fields), inp=vault_entries)
     if sel == "Notes: <Enter to view>":
         sel = view_notes(entry['notes'])
     elif sel == "Notes: None":
@@ -147,8 +147,8 @@ def view_card(entry, folders):
               exp,
               entry['card']['code'] or "CVV Code: None",
               "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
-    vault_entries_b = "\n".join(fields).encode(bwm.ENC)
-    sel = dmenu_select(len(fields), inp=vault_entries_b)
+    vault_entries = "\n".join(fields)
+    sel = dmenu_select(len(fields), inp=vault_entries)
     if sel == "Notes: <Enter to view>":
         sel = view_notes(entry['notes'])
     elif sel == "Notes: None":
@@ -182,8 +182,8 @@ def view_ident(entry, folders):
               entry['identity']['passportNumber'] or "Passport #: None",
               entry['identity']['licenseNumber'] or "License #: None",
               "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
-    vault_entries_b = "\n".join(fields).encode(bwm.ENC)
-    sel = dmenu_select(len(fields), inp=vault_entries_b)
+    vault_entries = "\n".join(fields)
+    sel = dmenu_select(len(fields), inp=vault_entries)
     if sel == "Notes: <Enter to view>":
         sel = view_notes(entry['notes'])
     elif sel == "Notes: None":
@@ -197,7 +197,5 @@ def view_notes(notes):
     Returns: text of the selected line for typing
 
     """
-    notes_l = notes.split('\n')
-    notes_b = "\n".join(notes_l).encode(bwm.ENC)
-    sel = dmenu_select(min(bwm.MAX_LEN, len(notes_l)), inp=notes_b)
+    sel = dmenu_select(min(bwm.MAX_LEN, len(notes.split('\n'))), inp=notes)
     return sel

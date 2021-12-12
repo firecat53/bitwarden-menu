@@ -31,9 +31,10 @@ def get_passphrase():
         out = subprocess.run(pinentry,
                              capture_output=True,
                              check=False,
+                             encoding=bwm.ENC,
                              input=b'setdesc Enter vault password\ngetpin\n').stdout
         if out:
-            res = out.decode(bwm.ENC).split("\n")[2]
+            res = out.split("\n")[2]
             if res.startswith("D "):
                 password = res.split("D ")[1]
     else:
@@ -79,8 +80,8 @@ def get_vault():
         else:
             return None
     if len(vaults) > 1:
-        inp_bytes = "\n".join(i[0] for i in vaults).encode(bwm.ENC)
-        sel = dmenu_select(len(vaults), "Select Vault", inp=inp_bytes)
+        inp = "\n".join(i[0] for i in vaults)
+        sel = dmenu_select(len(vaults), "Select Vault", inp=inp)
         vaults = [i for i in vaults if i[0] == sel]
         if not sel or not vaults:
             return None

@@ -1,7 +1,5 @@
 """Provide methods to manipulate Bitwarden vault using the Bitwarden CLI
 
-TODO: capture_output only works in 3.7+. Maybe need to change that?
-
 """
 from copy import deepcopy
 import json

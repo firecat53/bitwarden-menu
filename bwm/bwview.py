@@ -109,7 +109,7 @@ def view_login(entry, folders):
         if sel != "URL: None":
             webbrowser.open(sel)
         sel = ""
-    return sel
+    return sel if not sel.endswith(": None") else ""
 
 
 def view_note(entry, folders):

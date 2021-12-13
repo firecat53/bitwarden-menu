@@ -39,13 +39,21 @@ def set_server(url="https://vault.bitwarden.com"):
     return True
 
 
-def login(email, password):
+def login(email, password, method=None, code=""):
     """Initial login to Bitwarden Vault.
+
+        Args: email - string
+              password - string
+              method - int (0: Authenticator, 1: Email, 3: Yubikey)
+              code - OTP code
 
         Returns: session (bytes) or False on error, Error message
 
     """
-    res = run(["bw", "login", "--raw", email, password], capture_output=True, check=False)
+    cmd = ["bw", "login", "--raw", email, password]
+    if method and code:
+        cmd = ["bw", "login", "--raw", email, password, "--method", method, "--code", code]
+    res = run(cmd, capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
         return (False, res.stderr)

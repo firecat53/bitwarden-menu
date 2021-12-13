@@ -17,13 +17,16 @@ from bwm.menu import dmenu_select, dmenu_err
 import bwm
 
 
-def get_passphrase():
+def get_passphrase(twofac=False):
     """Get a vault password from dmenu or pinentry
 
-    Returns: string
+        Args: twofac - bool (default False) prompt for 2FA code
+        Returns: string
 
     """
     pinentry = None
+    pin_prompt = 'setdesc Enter vault password\ngetpin\n' if twofac is False \
+        else 'setdesc Enter 2FA code\ngetpin\n'
     if bwm.CONF.has_option("dmenu", "pinentry"):
         pinentry = bwm.CONF.get("dmenu", "pinentry")
     if pinentry:
@@ -32,13 +35,13 @@ def get_passphrase():
                              capture_output=True,
                              check=False,
                              encoding=bwm.ENC,
-                             input=b'setdesc Enter vault password\ngetpin\n').stdout
+                             input=pin_prompt).stdout
         if out:
             res = out.split("\n")[2]
             if res.startswith("D "):
                 password = res.split("D ")[1]
     else:
-        password = dmenu_select(0, "Password")
+        password = dmenu_select(0, "Password" if twofac is False else "2FA Code")
     return password
 
 
@@ -58,6 +61,9 @@ def get_vault():
         idx = srv.rsplit('_', 1)[-1]
         email = args_dict.get(f'email_{idx}', "")
         passw = args_dict.get(f'password_{idx}', "")
+        twofactor = args_dict.get(f'twofactor_{idx}', None)
+        if not args_dict[srv] or not email:
+            continue
         try:
             cmd = args_dict[f'password_cmd_{idx}']
             res = subprocess.run(shlex.split(cmd),
@@ -71,8 +77,7 @@ def get_vault():
                 passw = res.stdout.rstrip('\n') if res.stdout else passw
         except KeyError:
             pass
-        if srv:
-            vaults.append((args_dict[srv], email, passw))
+        vaults.append((args_dict[srv], email, passw, twofactor))
     if not vaults or (not vaults[0][0] or not vaults[0][1]):
         res = get_initial_vault()
         if res:
@@ -85,7 +90,7 @@ def get_vault():
         vaults = [i for i in vaults if i[0] == sel]
         if not sel or not vaults:
             return None
-    url, email, passw = vaults[0]
+    url, email, passw, twofactor = vaults[0]
     status = bwcli.status()
     if status is False:
         return None
@@ -98,7 +103,8 @@ def get_vault():
         if res is False:
             return None
     if status['userEmail'] != email or status['status'] == 'unauthenticated':
-        session, err = bwcli.login(email, passw)
+        code = get_passphrase(True) if twofactor else ""
+        session, err = bwcli.login(email, passw, twofactor, code)
     elif status['status'].endswith('locked'):
         session, err = bwcli.unlock(passw)
     if session is False:
@@ -111,17 +117,21 @@ def get_initial_vault():
     """Ask for initial server URL and email if not entered in config file
 
     """
-    url = dmenu_select(0, "Enter server URL.")
+    url = dmenu_select(0, "Enter server URL.", "https://vault.bitwarden.com")
     if not url:
         dmenu_err("No URL entered. Try again.")
         return False
     email = dmenu_select(0, "Enter login email address.")
+    twofa = {'None': '', 'TOTP': 0, 'Email': 1, 'Yubikey': 3}
+    method = dmenu_select(len(twofa), "Select Two Factor Auth type.", "\n".join(twofa))
     with open(bwm.CONF_FILE, 'w', encoding=bwm.ENC) as conf_file:
         bwm.CONF.set('vault', 'server_1', url)
         if email:
             bwm.CONF.set('vault', 'email_1', email)
+        if method:
+            bwm.CONF.set('vault', 'twofactor_1', str(twofa[method]))
         bwm.CONF.write(conf_file)
-    return (url, email, '')
+    return (url, email, '', twofa[method])
 
 
 def dmenu_view(entries, folders):

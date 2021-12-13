@@ -16,6 +16,7 @@
 # email_1 = <login email>
 # password_1 = vault password  **INSECURE**
 # password_cmd_1 = <command to generate vault password>
+# twofactor_1 = <0 for totp, 1 for email or 3 for yubikey>
 # server_2 = <url>
 # email_2 = <login email>
 # etc....

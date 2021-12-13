@@ -10,6 +10,8 @@ LLC.
 
 - Auto-type username and/or password on selection. No clipboard copy/paste
   involved.
+- Login with 2FA code from Authenticator(TOTP), Email, or Yubikey (only these
+  are supported by the Bitwarden CLI).
 - Select any single field and have it typed into the active window. Notes fields
   can be viewed line-by-line from within dmenu and the selected line will be
   typed when selected.
@@ -67,7 +69,8 @@ LLC.
   + Available in the [Archlinux AUR][aur].
 
 - If you start bwm for the first time without a config file, it will prompt
-  you for server name and login email and save them in the config file.
+  you for server name, login email, and 2FA type and save them in the config
+  file.
 
 - Copy config.ini.example to ~/.config/bwm/config.ini, or use it as a
   reference for additional options.
@@ -107,8 +110,8 @@ convenience for testing.
 ## Usage
 
 - Run script or bind to keystroke combination
-- Enter server URL (default `vault.bitwarden.com`) and login email if not
-  entered into config.ini already.
+- Enter server URL (default `vault.bitwarden.com`), login email and 2FA type if
+  not entered into config.ini already.
 - Start typing to match entries.
 - Hit Enter immediately after dmenu opens ("`View/Type individual entries`") to
   switch modes to view and/or type the individual fields for the entry. If

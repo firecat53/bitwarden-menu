@@ -10,46 +10,49 @@ vaults.
 \fB1.\fR Auto\-type username and/or password on selection. No clipboard
 copy/paste involved.
 
-\fB2.\fR Use a custom Keepass 2.x style auto\-type sequence if you have one
+\fB2.\fR Login with 2FA code from Authenticator(TOTP), Email, or Yubikey (only
+these are supported by the Bitwarden CLI).
+
+\fB3.\fR Use a custom Keepass 2.x style auto\-type sequence if you have one
 defined (except for character repetition and the \(aqspecial commands\(aq). Set
 it per entry and/or set a default in the config file for all entries.
 
-\fB3.\fR Select any single field and have it typed into the active window. Notes
+\fB4.\fR Select any single field and have it typed into the active window. Notes
 fields can be viewed line\-by\-line from within dmenu and the selected line will
 be typed when selected.
 
-\fB4.\fR Open the URL in the default web browser from the View/Type menu.
+\fB5.\fR Open the URL in the default web browser from the View/Type menu.
 
-\fB5.\fR Alternate keyboard languages and layouts supported via xdotool or
+\fB6.\fR Alternate keyboard languages and layouts supported via xdotool or
 ydotool (for Wayland).
 
-\fB6.\fR Edit entry title, username, URL and password (manually typed or
+\fB7.\fR Edit entry title, username, URL and password (manually typed or
 auto\-generate).
 
-\fB7.\fR Edit notes using terminal or gui editor (set in config.ini, or uses
+\fB8.\fR Edit notes using terminal or gui editor (set in config.ini, or uses
 $EDITOR).
 
-\fB8.\fR Add and Delete entries.
+\fB9.\fR Add and Delete entries.
 
-\fB9.\fR Rename, move, delete and add folders and collections.
+\fB10.\fR Rename, move, delete and add folders and collections.
 
-\fB10.\fR Move any item to or from an organization, including support for multiple collections.
+\fB11.\fR Move any item to or from an organization, including support for multiple collections.
 
-\fB11.\fR Prompts for and saves initial server URL and login email.
+\fB12.\fR Prompts for and saves initial server URL and login email.
 
-\fB12.\fR Define multiple vault URLs in the config file.
+\fB13.\fR Define multiple vault URLs in the config file.
 
-\fB13.\fR Hide selected folders from the default and \(aqView/Type Individual
+\fB14.\fR Hide selected folders from the default and \(aqView/Type Individual
 entries\(aq views.
 
-\fB14.\fR Configure session timeout.
+\fB15.\fR Configure session timeout.
 
-\fB15. \fR Configure the characters and groups of characters used during
+\fB16. \fR Configure the characters and groups of characters used during
 password generation in the config file (see config.ini.example for
 instructions). Multiple character sets can be selected on the fly when using
 Rofi if the `-multi-select` option is passed via `dmenu_command`.
 
-\fB16.\fR Optional Pinentry support for secure passphrase entry.
+\fB17.\fR Optional Pinentry support for secure passphrase entry.
 
 .SH LICENSE
 Copyright © 2021 Scott Hansen <firecat4153@gmail.com>.  Bitwarden-menu is
@@ -98,7 +101,8 @@ OR
 
 .SH CONFIGURATION
 \fB1.\fR If you start bwm for the first time without a config file, it will
-prompt you for server name and login email and save them in the config file.
+prompt you for server name, login email and 2FA type and save them in the config
+file.
 
 \fB2.\fR Copy config.ini.example to ~/.config/bwm/config.ini, or use it as a
 reference for additional options.
@@ -153,8 +157,8 @@ convenience for testing.
 .SH USAGE
 \fB1.\fR Run script or bind to keystroke combination
 
-\fB2.\fR Enter server URL (default vault.bitwarden.com) and login email if not
-entered into config.ini already.
+\fB2.\fR Enter server URL (default vault.bitwarden.com), login email and 2FA
+type if not entered into config.ini already.
 
 \fB3.\fR Start typing to match entries.
 

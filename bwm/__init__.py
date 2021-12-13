@@ -24,8 +24,8 @@ ENV['LC_ALL'] = 'C'
 ENC = locale.getpreferredencoding()
 SESSION_TIMEOUT_DEFAULT_MIN = 360
 SEQUENCE = "{USERNAME}{TAB}{PASSWORD}{ENTER}"
-CONF = configparser.ConfigParser()
 if not exists(CONF_FILE):
+    CONF = configparser.ConfigParser()
     try:
         os.mkdir(os.path.dirname(CONF_FILE))
     except OSError:
@@ -42,6 +42,7 @@ if not exists(CONF_FILE):
         CONF.set('vault', 'session_timeout_min ', str(SESSION_TIMEOUT_DEFAULT_MIN))
         CONF.set('vault', 'autotype_default', SEQUENCE)
         CONF.write(conf_file)
+CONF = configparser.ConfigParser()
 try:
     CONF.read(CONF_FILE)
 except configparser.ParsingError as err:

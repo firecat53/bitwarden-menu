@@ -15,8 +15,11 @@ setup(name="bitwarden-menu",
       entry_points={
           'console_scripts': ['bwm=bwm.__main__:main']
       },
-      data_files=[('share/doc/bwm', ['README.md', 'LICENSE',
-                                     'config.ini.example']),
+      data_files=[('share/doc/bitwarden-menu', ['README.md', 'LICENSE',
+                                                'config.ini.example']),
+                  ('share/doc/bitwarden-menu/docs', ['docs/install.md',
+                                                     'docs/configure.md',
+                                                     'docs/usage.md']),
                   ('share/man/man1', ['bwm.1'])],
       install_requires=["pynput"],
       license="MIT",

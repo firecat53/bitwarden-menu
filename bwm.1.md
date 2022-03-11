@@ -2,8 +2,8 @@
 title: Bitwarden-menu
 section: 1
 header: User Manual
-footer: Bitwarden-menu 0.2.0
-date: 2022-03-10
+footer: Bitwarden-menu v0.2.1
+date: 2022-03-11
 ---
 
 # NAME

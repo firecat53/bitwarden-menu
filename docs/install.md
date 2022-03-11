@@ -5,9 +5,9 @@
 ## Requirements
 
 1. Python 3.7+
-2. [Bitwarden CLI][bwcli]. Ensure the `bw` command is in `$PATH`
-3. [Pynput][pynput]
-4. Dmenu, [Rofi][rofi] or [Bemenu][bemenu]
+2. [Bitwarden CLI][1]. Ensure the `bw` command is in `$PATH`
+3. [Pynput][2]
+4. Dmenu, [Rofi][3] or [Bemenu][4]
 5. (optional) Pinentry. Make sure to set which flavor of pinentry command to use
    in the config file.
 6. (optional) xdotool or ydotool (for Wayland). If you have a lot of Unicode
@@ -57,7 +57,7 @@ Link to the executable `/path/to/venv/bin/bwm` when assigning a keyboard shortcu
     $ pip install --user . OR
     $ pip install --user -e . (for editable install)
 
-### Available in [Archlinux AUR][1]
+### Available in [Archlinux AUR][5]
 
 
 ## Wayland (wlroots - Sway)
@@ -88,5 +88,8 @@ Link to the executable `/path/to/venv/bin/bwm` when assigning a keyboard shortcu
             $ systemctl --user daemon-reload 
             $ systemctl --user enable --now ydotoold.service
 
-[1]: https://aur.archlinux.org/packages/bitwarden-menu-git "Archlinux AUR"
+[1]: https://github.com/bitwarden/cli "Bitwarden CLI"
 [2]: https://github.com/moses-palmer/pynput "pynput"
+[3]: https://davedavenport.github.io/rofi/ "Rofi"
+[4]: https://github.com/Cloudef/bemenu "Bemenu"
+[5]: https://aur.archlinux.org/packages/bitwarden-menu-git "Archlinux AUR"

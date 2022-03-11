@@ -4,9 +4,8 @@
 ![PyPI](https://img.shields.io/pypi/v/bitwarden-menu)
 ![GitHub contributors](https://img.shields.io/github/contributors/firecat53/bitwarden-menu)
 
-Dmenu/Rofi frontend for managing Bitwarden vaults. Uses the [Bitwarden
-CLI](https://bitwarden.com/help/article/cli/) tool to interact with the
-Bitwarden database.
+Dmenu/Rofi frontend for managing Bitwarden vaults. Uses the [Bitwarden CLI][2]
+tool to interact with the Bitwarden database.
 
 This project is not associated with the Bitwarden project nor 8bit Solutions
 LLC.
@@ -27,16 +26,16 @@ For full installation documention see the [installation docs][docs/install.md].
 ## Requirements
 
 1. Python 3.7+
-2. [Bitwarden CLI][bwcli]. Ensure the `bw` command is in `$PATH`
-3. [Pynput][pynput]
-4. Dmenu, [Rofi][rofi] or [Bemenu][bemenu]
+2. [Bitwarden CLI][2]. Ensure the `bw` command is in `$PATH`
+3. [Pynput][1]
+4. Dmenu, [Rofi][3] or [Bemenu][4]
 5. (optional) Pinentry.
 6. (optional) xdotool or ydotool (for Wayland).
 
 ## Features
 
 - Supports [bitwarden.com](https://bitwarden.com) and self-hosted
-  [Vaultwarden](https://github.com/dani-garcia/vaultwarden) accounts.
+  [Vaultwarden][5] accounts.
 - Auto-type username and/or password on selection. No clipboard copy/paste
   involved.
 - Supports login with 2FA code from Authenticator(TOTP), Email, or Yubikey.
@@ -88,9 +87,8 @@ To run tests in a venv: `make test` (not implemented yet)
 - Notifications for syncing status (e.g. when a sync is complete)
 - Clipboard support
 
-[pynput]: https://github.com/moses-palmer/pynput "Pynput"
-[bwcli]: https://github.com/bitwarden/cli "Bitwarden CLI"
-[rofi]: https://davedavenport.github.io/rofi/ "Rofi"
-[aur]: https://aur.archlinux.org/packages/bitwarden-menu-git "Archlinux AUR"
-[autotype]: https://keepass.info/help/base/autotype.html#autoseq "Keepass 2.x Autotype codes"
-[bemenu]: https://github.com/Cloudef/bemenu "Bemenu"
+[1]: https://github.com/moses-palmer/pynput "Pynput"
+[2]: https://github.com/bitwarden/cli "Bitwarden CLI"
+[3]: https://davedavenport.github.io/rofi/ "Rofi"
+[4]: https://github.com/Cloudef/bemenu "Bemenu"
+[5]: https://github.com/dani-garcia/vaultwarden "Vaultwarden"

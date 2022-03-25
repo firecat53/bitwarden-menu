@@ -30,7 +30,7 @@ For full installation documention see the [installation docs][docs/install.md].
 3. [Pynput][1]
 4. Dmenu, [Rofi][3] or [Bemenu][4]
 5. (optional) Pinentry.
-6. (optional) xdotool or ydotool (for Wayland).
+6. (optional) xdotool or ydotool >= 1.0.0 (for Wayland).
 
 ## Features
 

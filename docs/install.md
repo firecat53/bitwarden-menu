@@ -10,9 +10,9 @@
 4. Dmenu, [Rofi][3] or [Bemenu][4]
 5. (optional) Pinentry. Make sure to set which flavor of pinentry command to use
    in the config file.
-6. (optional) xdotool or ydotool (for Wayland). If you have a lot of Unicode
-   characters or use a non-U.S. English keyboard layout, xdotool is necessary
-   to handle typing those characters.
+6. (optional) xdotool or ydotool >= 1.0.0 (for Wayland). If you have a lot of
+   Unicode characters or use a non-U.S. English keyboard layout, xdotool is
+   necessary to handle typing those characters.
 
 #### Archlinux
 

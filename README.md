@@ -30,7 +30,7 @@ For full installation documention see the [installation docs][docs/install.md].
 3. [Pynput][1]
 4. Dmenu, [Rofi][3] or [Bemenu][4]
 5. (optional) Pinentry.
-6. (optional) xdotool or ydotool >= 1.0.0 (for Wayland).
+6. (optional) xdotool, ydotool(>= 1.0.0)/wtype (for Wayland).
 
 ## Features
 
@@ -44,7 +44,7 @@ For full installation documention see the [installation docs][docs/install.md].
 - Type, view or edit any field.
 - Open the URL in the default web browser.
 - Non U.S. English keyboard languages and layouts supported via xdotool or
-  ydotool (for Wayland).
+  ydotool/wtype (for Wayland).
 - Edit notes using terminal or gui editor.
 - Add and Delete entries
 - Rename, move, delete and add folders and collections

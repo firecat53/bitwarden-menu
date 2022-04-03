@@ -76,5 +76,12 @@ if CONF.has_option("vault", "type_library"):
             dmenu_err("Ydotool not installed.\n"
                       "Please install or remove that option from config.ini")
             sys.exit()
+    elif CONF.get("vault", "type_library") == "wtype":
+        try:
+            run(['wtype'], check=False, stdout=DEVNULL, stderr=DEVNULL)
+        except OSError:
+            dmenu_err("Wtype not installed.\n"
+                      "Please install or remove that option from config.ini")
+            sys.exit()
 
 # vim: set et ts=4 sw=4 :

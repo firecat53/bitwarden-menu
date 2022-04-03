@@ -27,7 +27,7 @@ reference for additional options.
 |                           | `editor`                     | `vim`                                   |                                                              |
 |                           | `terminal`                   | `xterm`                                 |                                                              |
 |                           | `gui_editor`                 | None                                    |                                                              |
-|                           | `type_library`               | `pynput`                                | xdotool, ydotool or pynput                                   |
+|                           | `type_library`               | `pynput`                                | xdotool, ydotool, wtype or pynput                            |
 |                           | `hide_folders`               | None                                    | See below for formatting of multiple folders                 |
 |                           | `autotype_default`           | `{USERNAME}{TAB}{PASSWORD}{ENTER}`      | [Keepass autotype sequences][1]                              |
 | `[password_chars]`        | `lower`                      | `abcdefghijklmnopqrstuvwxyz`            |                                                              |

@@ -29,11 +29,11 @@
     - Compatible with both [Bitwarden.com](https://bitwarden.com) and
       self-hosted [Vaultwarden](https://github.com/dani-garci/vaultwarden)
       accounts.
-    - Alternate keyboard languages and layouts supported via xdotool or ydotool (for
-      Wayland)
+    - Alternate keyboard languages and layouts supported via xdotool, ydotool or
+      wtype (for Wayland)
 - *Type entries*
     - Auto-type username and/or password on selection. No clipboard copy/paste
-      involved. Use xdotool or ydotool for non-U.S. English keyboard layout.
+      involved. Use xdotool, ydotool, or wtype for non-U.S. English keyboard layout.
     - Use a custom [Keepass 2.x style auto-type sequence][1] if you have one defined
       (except for character repetition and the 'special commands'). Set it per entry
       or set a global default. Disable autotype for an entry, if desired.

@@ -56,6 +56,7 @@ For full installation documention see the [installation docs][docs/install.md].
 - Configure the characters and groups of characters used during password
   generation.
 - Optional Pinentry support for secure passphrase entry.
+- Add, edit and type TOTP codes.
 
 ## License
 

@@ -8,6 +8,7 @@ from subprocess import call
 
 from bwm import CONF, SEQUENCE
 from bwm.menu import dmenu_err
+from bwm.totp import gen_otp
 
 
 def autotype_seq(entry):
@@ -102,6 +103,7 @@ PLACEHOLDER_AUTOTYPE_TOKENS = {
     "{PASSWORD}": lambda e: e['login']['password'],
     "{NOTES}"   : lambda e: e['notes'],
     "{CARDNUM}" : lambda e: e['card']['number'],
+    "{TOTP}"    : lambda e: gen_otp(e['login']['totp']),
 }
 
 STRING_AUTOTYPE_TOKENS = {

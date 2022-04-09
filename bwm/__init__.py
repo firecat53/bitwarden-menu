@@ -15,6 +15,7 @@ from bwm.menu import dmenu_err
 
 AUTH_FILE = expanduser("~/.cache/.bwm-auth")
 CONF_FILE = expanduser("~/.config/bwm/config.ini")
+SERCRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 
 logging.basicConfig(filename=expanduser("~/.cache/bwm.log"), level=logging.ERROR)
 LOGGER = logging.getLogger("bwm")

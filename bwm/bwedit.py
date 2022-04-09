@@ -10,10 +10,12 @@ import shlex
 import string
 from subprocess import call
 import tempfile
+from urllib import parse
 
 from bwm import bwcli
 from bwm.bwtype import autotype_index, autotype_seq, type_text
 from bwm.menu import dmenu_select, dmenu_err
+from bwm.totp import gen_otp
 import bwm
 
 
@@ -48,6 +50,7 @@ def edit_entry(entry, entries, folders, collections, session):
                                                           in item['collectionIds'])),
                   str("Username: {}").format(item['login']['username']),
                   str("Password: **********") if item['login']['password'] else "Password: None",
+                  str("TOTP: ******") if item['login']['totp'] else "TOTP: None",
                   str("Url: {}").format(item['login']['url']),
                   str("Autotype: {}").format(autotype_seq(item)),
                   "Notes: <Enter to Edit>" if item['notes'] else "Notes: None",
@@ -79,6 +82,9 @@ def edit_entry(entry, entries, folders, collections, session):
         field = field.lower()
         if field == 'password':
             item = edit_password(item) or item
+            continue
+        if field == 'totp':
+            item = edit_totp(item) or item
             continue
         if field == 'folder':
             folder = select_folder(folders)
@@ -212,6 +218,93 @@ def edit_notes(note):
             dmenu_err("Terminal not found. Please update config.ini.")
     note = '' if not note else note.decode(bwm.ENC)
     return note
+
+
+def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches
+    """Edit TOTP generation information
+
+    Args: entry - Entry object
+
+    Returns: entry - Entry object or False
+
+    """
+    otp_url = entry['login']['totp']
+
+    if otp_url is not None:
+        inputs = [
+            "Enter secret key",
+            "Type TOTP",
+        ]
+        otp_choice = dmenu_select(len(inputs), "TOTP", inp="\n".join(inputs))
+    else:
+        otp_choice = "Enter secret key"
+
+    if otp_choice == "Type TOTP":
+        type_text(gen_otp(otp_url))
+    elif otp_choice == "Enter secret key":
+        inputs = []
+        if otp_url:
+            parsed_otp_url = parse.urlparse(otp_url)
+            query_string = parse.parse_qs(parsed_otp_url.query)
+            inputs = [query_string["secret"][0]]
+        secret_key = dmenu_select(1, "Secret Key?", inp="\n".join(inputs))
+
+        if not secret_key:
+            return False
+
+        for char in secret_key:
+            if char.upper() not in bwm.SERCRET_VALID_CHARS:
+                dmenu_err("Invaild character in secret key, "
+                          f"valid characters are {bwm.SERCRET_VALID_CHARS}")
+                return False
+
+        inputs = [
+            "Defaut RFC 6238 token settings",
+            "Steam token settings",
+            "Use cusom settings"
+        ]
+
+        otp_settings_choice = dmenu_select(len(inputs), "Settings", inp="\n".join(inputs))
+
+        if otp_settings_choice == "Defaut RFC 6238 token settings":
+            algorithm_choice = "sha1"
+            time_step_choice = 30
+            code_size_choice = 6
+        elif otp_settings_choice == "Steam token settings":
+            algorithm_choice = "sha1"
+            time_step_choice = 30
+            code_size_choice = 5
+        elif otp_settings_choice == "Use custom settings":
+            inputs = ["SHA-1", "SHA-256", "SHA-512"]
+            algorithm_choice = dmenu_select(len(inputs), "Algorithm", inp="\n".join(inputs))
+            if not algorithm_choice:
+                return False
+            algorithm_choice = algorithm_choice.replace("-", "").lower()
+
+            time_step_choice = dmenu_select(1, "Time Step (sec)", inp="30\n")
+            if not time_step_choice:
+                return False
+            try:
+                time_step_choice = int(time_step_choice)
+            except ValueError:
+                time_step_choice = 30
+
+            code_size_choice = dmenu_select(1, "Code Size", inp="6\n")
+            if not code_size_choice:
+                return False
+            try:
+                code_size_choice = int(time_step_choice)
+            except ValueError:
+                code_size_choice = 6
+
+        otp_url = (f"otpauth://totp/Main:none?secret={secret_key}&period={time_step_choice}"
+                   f"&digits={code_size_choice}&issuer=Main")
+        if algorithm_choice != "sha1":
+            otp_url += "&algorithm=" + algorithm_choice
+        if otp_settings_choice == "Steam token settings":
+            otp_url += "&encoder=steam"
+        entry['login']['totp'] = otp_url
+        return entry
 
 
 def gen_passwd(chars, length=20):

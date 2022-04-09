@@ -5,6 +5,7 @@ from os.path import join
 import webbrowser
 
 from bwm.menu import dmenu_select
+from bwm.totp import gen_otp
 import bwm
 
 
@@ -95,6 +96,7 @@ def view_login(entry, folders):
               obj_name(folders, entry['folderId']),
               entry['login']['username'] or "Username: None",
               '**********' if entry['login']['password'] else "Password: None",
+              "TOTP: ******" if entry['login']['totp'] else "TOTP: None",
               entry['login']['url'] or "URL: None",
               "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
     vault_entries = "\n".join(fields)
@@ -105,7 +107,9 @@ def view_login(entry, folders):
         sel = ""
     elif sel == '**********':
         sel = entry['login']['password']
-    elif sel == fields[4]:
+    elif sel == "TOTP: ******":
+        sel = gen_otp(entry['login']['totp'])
+    elif sel == fields[5]:
         if sel != "URL: None":
             webbrowser.open(sel)
         sel = ""

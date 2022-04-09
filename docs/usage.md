@@ -31,6 +31,8 @@
       accounts.
     - Alternate keyboard languages and layouts supported via xdotool, ydotool or
       wtype (for Wayland)
+    - Add, edit and type TOTP codes. RFC 6238, Steam and custom settings are
+      supported.
 - *Type entries*
     - Auto-type username and/or password on selection. No clipboard copy/paste
       involved. Use xdotool, ydotool, or wtype for non-U.S. English keyboard layout.

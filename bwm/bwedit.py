@@ -117,7 +117,7 @@ def edit_entry(entry, entries, folders, collections, session):
         else:
             edit = item[field] + "\n" if item[field] is not None else "\n"
         sel = dmenu_select(1, f"{field.capitalize()}", inp=edit)
-        if sel:
+        if sel is not None:
             if field in ('username', 'url'):
                 item['login'][field] = sel
                 if field == 'url':
@@ -250,8 +250,11 @@ def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches
             inputs = [query_string["secret"][0]]
         secret_key = dmenu_select(1, "Secret Key?", inp="\n".join(inputs))
 
-        if not secret_key:
+        if secret_key is None:
             return False
+        if not secret_key:
+            entry['login']['totp'] = ""
+            return entry
 
         for char in secret_key:
             if char.upper() not in bwm.SERCRET_VALID_CHARS:
@@ -386,7 +389,7 @@ def edit_password(entry):  # pylint: disable=too-many-return-statements
     if pw_choice == "Manually enter password":
         sel = dmenu_select(1, "Password", inp=pw_orig)
         sel_check = dmenu_select(1, "Verify password")
-        if not sel_check or sel_check != sel:
+        if sel_check is None or sel_check != sel:
             dmenu_err("Passwords do not match. No changes made.")
             return False
     elif pw_choice == "Generate password":

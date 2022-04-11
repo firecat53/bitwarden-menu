@@ -151,6 +151,7 @@ def add_entry(entries, folders, collections, session):
              "fields": [{"name": "autotype", "value": "", "type": 0}],
              "login": {"username": "",
                        "password": "",
+                       "totp": "",
                        "url": ""},
              "collectionIds": [*colls],
              "secureNote": "",

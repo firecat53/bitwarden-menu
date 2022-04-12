@@ -8,16 +8,18 @@ import logging
 import os
 import shlex
 import sys
-from os.path import exists, expanduser
+from os.path import exists, join
 from subprocess import run, DEVNULL
 
 from bwm.menu import dmenu_err
+from xdg import XDG_CACHE_HOME, XDG_CONFIG_HOME, XDG_DATA_HOME
 
-AUTH_FILE = expanduser("~/.cache/.bwm-auth")
-CONF_FILE = expanduser("~/.config/bwm/config.ini")
+AUTH_FILE = join(XDG_CACHE_HOME, ".bwm-auth")
+CONF_FILE = join(XDG_CONFIG_HOME, "bwm/config.ini")
+DATA_HOME = join(XDG_DATA_HOME, "bwm")
 SERCRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 
-logging.basicConfig(filename=expanduser("~/.cache/bwm.log"), level=logging.ERROR)
+logging.basicConfig(filename=join(XDG_CACHE_HOME, "bwm.log"), level=logging.ERROR)
 LOGGER = logging.getLogger("bwm")
 
 ENV = os.environ.copy()

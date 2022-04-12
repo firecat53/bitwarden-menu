@@ -6,8 +6,8 @@
 
 1. Python 3.7+
 2. [Bitwarden CLI][1]. Ensure the `bw` command is in `$PATH`
-3. [Pynput][2]
-4. Dmenu, [Rofi][3] or [Bemenu][4]
+3. [Pynput][2] and [Xdg][6]
+4. Dmenu, [Rofi][3], [Wofi][7] or [Bemenu][4]
 5. (optional) Pinentry. Make sure to set which flavor of pinentry command to use
    in the config file.
 6. (optional) xdotool, ydotool(>= 1.0.0) or wtype (for Wayland). If you have a
@@ -93,3 +93,5 @@ Link to the executable `/path/to/venv/bin/bwm` when assigning a keyboard shortcu
 [3]: https://davedavenport.github.io/rofi/ "Rofi"
 [4]: https://github.com/Cloudef/bemenu "Bemenu"
 [5]: https://aur.archlinux.org/packages/bitwarden-menu-git "Archlinux AUR"
+[6]: https://pypi.org/project/xdg/ "Xdg"
+[7]: https://hg.sr.ht/~scoopta/wofi "Wofi"

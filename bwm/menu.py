@@ -24,26 +24,27 @@ def dmenu_cmd(num_lines, prompt):
     dmenu_args = command[1:]
     obscure = True
     obscure_color = "#222222"
-    if prompt == "Password":
+    pwprompts = ("Password", "password", "client_secret")
+    if any(i in prompt for i in pwprompts):
         if bwm.CONF.has_option('dmenu_passphrase', 'obscure'):
             obscure = bwm.CONF.getboolean('dmenu_passphrase', 'obscure')
         if bwm.CONF.has_option('dmenu_passphrase', 'obscure_color'):
             obscure_color = bwm.CONF.get('dmenu_passphrase', 'obscure_color')
     if "rofi" in dmenu_command:
         dmenu = [dmenu_command, "-dmenu", "-p", str(prompt), "-l", str(num_lines)]
-        if obscure is True and prompt in ("Password", "Verify password"):
+        if obscure is True and any(i in prompt for i in pwprompts):
             dmenu.append("-password")
     elif "dmenu" in dmenu_command:
         dmenu = [dmenu_command, "-p", str(prompt)]
-        if obscure is True and prompt in ("Password", "Verify password"):
+        if obscure is True and any(i in prompt for i in pwprompts):
             dmenu.extend(["-nb", obscure_color, "-nf", obscure_color])
     elif "bemenu" in dmenu_command:
         dmenu = [dmenu_command, "-p", str(prompt)]
-        if obscure is True and prompt == "Password":
+        if obscure is True and any(i in prompt for i in pwprompts):
             dmenu.append("-x")
     elif "wofi" in dmenu_command:
         dmenu = [dmenu_command, "-p", str(prompt)]
-        if obscure is True and prompt == "Password":
+        if obscure is True and any(i in prompt for i in pwprompts):
             dmenu.append("-P")
     else:
         # Catchall for some other menu programs. Maybe it'll run and not fail?
@@ -80,6 +81,10 @@ def dmenu_err(prompt):
     """Pops up a dmenu prompt with an error message
 
     """
-    return dmenu_select(1, prompt)
+    try:
+        prompt = prompt.decode(bwm.ENC)
+    except AttributeError:
+        pass
+    return dmenu_select(len(prompt.splitlines()), "Error", inp=prompt)
 
 # vim: set et ts=4 sw=4 :

@@ -4,7 +4,10 @@
 
 If you start bitwarden-menu for the first time without a config file, it will
 prompt you for vault URL, login and 2FA type and save them in the default config
-file `~/.config/bwm/config.ini`.
+file `~/.config/bwm/config.ini`. Initial login to some servers, including
+vault.bitwarden.com, will require the `client_secret` from your account settings
+page. Ensure this is in your clipboard and ready to paste prior to first run.
+Once logged in for the first time, you will not need this value again.
 
 OR Copy config.ini.example to `~/.config/bwm/config.ini` and use it as a
 reference for additional options.

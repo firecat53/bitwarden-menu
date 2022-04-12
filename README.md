@@ -17,6 +17,11 @@ LLC.
 Ensure `~/.local/bin` is in your `$PATH`. Run `bwm` and enter your database
 path, keyfile path, and password.
 
+**NOTE:** _Initial login to some servers, including vault.bitwarden.com, will
+require the `client_secret` from your account settings page. Ensure this is in
+your clipboard and ready to paste prior to first run.  Once logged in for the
+first time, you will not need this value again._
+ 
 For full installation documention see the [installation docs][docs/install.md].
 
 ## Full Documentation
@@ -27,8 +32,8 @@ For full installation documention see the [installation docs][docs/install.md].
 
 1. Python 3.7+
 2. [Bitwarden CLI][2]. Ensure the `bw` command is in `$PATH`
-3. [Pynput][1]
-4. Dmenu, [Rofi][3] or [Bemenu][4]
+3. [Pynput][1] and [Xdg][6]
+4. Dmenu, [Rofi][3], [Wofi][7] or [Bemenu][4]
 5. (optional) Pinentry.
 6. (optional) xdotool, ydotool(>= 1.0.0)/wtype (for Wayland).
 
@@ -84,7 +89,6 @@ To run tests in a venv: `make test` (not implemented yet)
 ## Planned features
 
 - Unit tests
-- TOTP support
 - Notifications for syncing status (e.g. when a sync is complete)
 - Clipboard support
 
@@ -93,3 +97,5 @@ To run tests in a venv: `make test` (not implemented yet)
 [3]: https://davedavenport.github.io/rofi/ "Rofi"
 [4]: https://github.com/Cloudef/bemenu "Bemenu"
 [5]: https://github.com/dani-garcia/vaultwarden "Vaultwarden"
+[6]: https://pypi.org/project/xdg/ "Xdg"
+[7]: https://hg.sr.ht/~scoopta/wofi "Wofi"

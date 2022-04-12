@@ -40,7 +40,7 @@ def set_server(url="https://vault.bitwarden.com"):
 
 
 def login(email, password, method=None, code=""):
-    """Initial login to Bitwarden Vault.
+    """Initial login to Bitwarden Vault. May require BW_CLIENTSECRET to be set.
 
         Args: email - string
               password - string
@@ -54,7 +54,7 @@ def login(email, password, method=None, code=""):
     if method and code:
         cmd = ["bw", "login", "--raw", email, password, "--method", method, "--code", code]
     res = run(cmd, capture_output=True, check=False)
-    if not res.stdout:
+    if not res.stdout or res.stderr:
         logging.error(res)
         return (False, res.stderr)
     return res.stdout, None
@@ -130,7 +130,7 @@ class Item(dict):
             self['fields'].append({'name': 'autotype', 'value': "", 'type': 0})
 
 
-def get_entries(session=b'', org_name=''):
+def get_entries(session, org_name=''):
     """Get all entries, folders, collections and orgs from vault
 
     Args: session: bytes
@@ -145,7 +145,9 @@ def get_entries(session=b'', org_name=''):
                 False on error
 
     """
-    res = run(["bw", "--session", session, "list", "items"], capture_output=True, check=False)
+    res = run(["bw", "--session", session, "list", "items"],
+              capture_output=True,
+              check=False)
     if not res.stdout:
         logging.error(res)
         return False
@@ -156,7 +158,7 @@ def get_entries(session=b'', org_name=''):
     return items, folders, collections, orgs
 
 
-def sync(session=b''):
+def sync(session):
     """Sync web vault changes to local vault
 
         Return: True on success, False with any errors
@@ -176,7 +178,9 @@ def get_folders(session):
                 False on error
 
     """
-    res = run(["bw", "--session", session, "list", "folders"], capture_output=True, check=False)
+    res = run(["bw", "--session", session, "list", "folders"],
+              capture_output=True,
+              check=False)
     if not res.stdout:
         logging.error(res)
         return False
@@ -225,7 +229,10 @@ def add_entry(entry, session):
         "identity":null}'
 
     """
-    enc = run(["bw", "encode"], input=json.dumps(entry).encode(), capture_output=True, check=False)
+    enc = run(["bw", "encode"],
+              input=json.dumps(entry).encode(),
+              capture_output=True,
+              check=False)
     if not enc.stdout:
         logging.error(enc)
         return False
@@ -284,7 +291,10 @@ def edit_entry(entry, session, update_coll='NO'):
         if res is False:
             return False
         return res
-    enc = run(["bw", "encode"], input=json.dumps(item).encode(), capture_output=True, check=False)
+    enc = run(["bw", "encode"],
+              input=json.dumps(item).encode(),
+              capture_output=True,
+              check=False)
     if not enc.stdout:
         logging.error(enc)
         return False
@@ -355,7 +365,10 @@ def add_folder(folder, session):
 
     """
     folder = {"name": folder}
-    enc = run(["bw", "encode"], input=json.dumps(folder).encode(), capture_output=True, check=False)
+    enc = run(["bw", "encode"],
+              input=json.dumps(folder).encode(),
+              capture_output=True,
+              check=False)
     if not enc.stdout:
         logging.error(enc)
         return False
@@ -428,7 +441,9 @@ def add_collection(collection, org_id, session):
     """
     collection = {"name": collection, "organizationId": org_id}
     enc = run(["bw", "encode"],
-              input=json.dumps(collection).encode(), capture_output=True, check=False)
+              input=json.dumps(collection).encode(),
+              capture_output=True,
+              check=False)
     if not enc.stdout:
         logging.error(enc)
         return False

@@ -21,7 +21,7 @@ setup(name="bitwarden-menu",
                                                      'docs/configure.md',
                                                      'docs/usage.md']),
                   ('share/man/man1', ['bwm.1'])],
-      install_requires=["pynput"],
+      install_requires=["pynput", "xdg"],
       license="MIT",
       classifiers=[
           'Development Status :: 4 - Beta',

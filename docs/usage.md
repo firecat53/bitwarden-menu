@@ -28,7 +28,7 @@
 - *General features*
     - Compatible with both [Bitwarden.com](https://bitwarden.com) and
       self-hosted [Vaultwarden](https://github.com/dani-garci/vaultwarden)
-      accounts.
+      accounts. Accounts can be switched on the fly.
     - Alternate keyboard languages and layouts supported via xdotool, ydotool or
       wtype (for Wayland)
     - Add, edit and type TOTP codes. RFC 6238, Steam and custom settings are

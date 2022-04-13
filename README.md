@@ -39,8 +39,8 @@ For full installation documention see the [installation docs][docs/install.md].
 
 ## Features
 
-- Supports [bitwarden.com](https://bitwarden.com) and self-hosted
-  [Vaultwarden][5] accounts.
+- Supports multiple [bitwarden.com](https://bitwarden.com) and self-hosted
+  [Vaultwarden][5] accounts. Accounts can be switched on the fly.
 - Auto-type username and/or password on selection. No clipboard copy/paste
   involved.
 - Supports login with 2FA code from Authenticator(TOTP), Email, or Yubikey.
@@ -57,7 +57,6 @@ For full installation documention see the [installation docs][docs/install.md].
   collections.
 - Hide selected folders from the default and 'View/Type Individual entries'
   views.
-- Define multiple vault URLs in the config file.
 - Configure the characters and groups of characters used during password
   generation.
 - Optional Pinentry support for secure passphrase entry.

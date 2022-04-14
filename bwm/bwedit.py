@@ -51,8 +51,9 @@ def edit_entry(entry, entries, folders, collections, session):
                   str("Username: {}").format(item['login']['username']),
                   str("Password: **********") if item['login']['password'] else "Password: None",
                   str("TOTP: ******") if item['login']['totp'] else "TOTP: None",
-                  str("Url: {}").format(item['login']['url']),
                   str("Autotype: {}").format(autotype_seq(item)),
+                  "URLs: <Enter to Edit>" if item.get('login', {}).get('uris', [])
+                  else "URLs: None",
                   "Notes: <Enter to Edit>" if item['notes'] else "Notes: None",
                   "Delete entry",
                   "Save entry"]
@@ -108,20 +109,21 @@ def edit_entry(entry, entries, folders, collections, session):
         if field == 'notes':
             item['notes'] = edit_notes(item['notes'])
             continue
-        if field in ('username', 'url'):
-            edit = item['login'][field] + \
-                    "\n" if item['login'][field] is not None else "\n"
+        if field.startswith('urls'):
+            item = edit_urls(item)
+            continue
+        if field == 'username':
+            edit = f"{item['login'][field]}\n" if item['login'][field] is not None else "\n"
         elif field == 'autotype':
-            edit = item['fields'][autotype_index(item)]['value'] + \
-                    "\n" if item['fields'][autotype_index(item)]['value'] is not None else "\n"
+            edit = f"{item['fields'][autotype_index(item)]['value']}\n" \
+                    if item['fields'][autotype_index(item)]['value'] is not None else "\n"
         else:
             edit = item[field] + "\n" if item[field] is not None else "\n"
+
         sel = dmenu_select(1, f"{field.capitalize()}", inp=edit)
         if sel is not None:
-            if field in ('username', 'url'):
+            if field == 'username':
                 item['login'][field] = sel
-                if field == 'url':
-                    item['login']['uris'] = [{'match': None, 'uri': sel}]
             elif field == 'autotype':
                 item['fields'][autotype_index(item)]['value'] = sel
             else:
@@ -152,7 +154,7 @@ def add_entry(entries, folders, collections, session):
              "login": {"username": "",
                        "password": "",
                        "totp": "",
-                       "url": ""},
+                       "uris": []},
              "collectionIds": [*colls],
              "secureNote": "",
              "card": "",
@@ -219,6 +221,34 @@ def edit_notes(note):
             dmenu_err("Terminal not found. Please update config.ini.")
     note = '' if not note else note.decode(bwm.ENC)
     return note
+
+
+def edit_urls(entry):
+    """Edit multiple URLs
+
+    Args: entry
+    Returns: entry object with updated URLs
+
+    """
+    uris = entry.get('login', {}).get('uris')
+    urls = [i['uri'] for i in uris] if uris else []
+    sel = dmenu_select(len(urls) or 1, "URL (Type to add new)", inp="\n".join(urls))
+    if not sel:
+        return entry
+    if sel not in urls:
+        entry.setdefault('login', {})
+        entry['login'].setdefault('uris', [])
+        entry['login']['uris'].append({'uri': sel, 'match': None})
+    else:
+        idx = urls.index(sel)
+        sel = dmenu_select(1, "URL", inp=f"{sel}\nDelete URL")
+        if not sel:
+            return entry
+        if sel == "Delete URL":
+            del entry['login']['uris'][idx]
+        else:
+            entry['login']['uris'][idx]['uri'] = sel
+    return entry
 
 
 def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches

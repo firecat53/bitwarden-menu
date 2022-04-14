@@ -86,6 +86,17 @@ def view_entry(entry, folders):
     return entry_types[entry['type']](entry, folders)
 
 
+def make_url_entries(entry):
+    """Parse multiple URL's for viewing
+
+    Args: entry
+    Returns: list of strings ["URL: xxxxx", "URL1: xxxx", "URL2: xxxx"]
+
+    """
+    urls = entry.get('login').get('uris') if entry.get('login') else None
+    return [f"URL{j}: {i['uri']}" for j, i in enumerate(urls, 1)] if urls else ["URL: None"]
+
+
 def view_login(entry, folders):
     """Show title, username, password, url and notes for a login entry.
 
@@ -97,8 +108,8 @@ def view_login(entry, folders):
               entry['login']['username'] or "Username: None",
               '**********' if entry['login']['password'] else "Password: None",
               "TOTP: ******" if entry['login']['totp'] else "TOTP: None",
-              entry['login']['url'] or "URL: None",
               "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
+    fields[-1:] = make_url_entries(entry)
     vault_entries = "\n".join(fields)
     sel = dmenu_select(len(fields), inp=vault_entries)
     if sel == "Notes: <Enter to view>":
@@ -109,9 +120,9 @@ def view_login(entry, folders):
         sel = entry['login']['password']
     elif sel == "TOTP: ******":
         sel = gen_otp(entry['login']['totp'])
-    elif sel == fields[5]:
+    elif sel.startswith("URL"):
         if sel != "URL: None":
-            webbrowser.open(sel)
+            webbrowser.open(sel.split(": ", 1)[-1])
         sel = ""
     return sel if not sel.endswith(": None") else ""
 

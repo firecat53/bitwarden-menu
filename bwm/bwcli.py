@@ -66,6 +66,9 @@ def unlock(password):
         Returns: session (bytes) or False on error, Error message
 
     """
+    if not password:
+        logging.error("No password provided")
+        return (False, "No password provided")
     res = run(["bw", "unlock", "--raw", password], capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)

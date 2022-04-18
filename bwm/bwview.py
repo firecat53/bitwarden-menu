@@ -100,23 +100,22 @@ def make_url_entries(entry):
 def view_login(entry, folders):
     """Show title, username, password, url and notes for a login entry.
 
-    Returns: dmenu selection
+    Returns: dmenu selection to type
 
     """
-    fields = [entry['name'] or "Title: None",
-              obj_name(folders, entry['folderId']),
-              entry['login']['username'] or "Username: None",
-              '**********' if entry['login']['password'] else "Password: None",
-              "TOTP: ******" if entry['login']['totp'] else "TOTP: None",
-              "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
+    fields = [f"Title: {entry['name'] or 'None'}",
+              f"Folder: {obj_name(folders, entry['folderId'])}",
+              f"Username: {entry['login']['username'] or 'None'}",
+              f"Password: {'**********' if entry['login']['password'] else 'None'}",
+              f"TOTP: {'******' if entry['login']['totp'] else 'None'}",
+              f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}"]
     fields[-1:-1] = make_url_entries(entry)
-    vault_entries = "\n".join(fields)
-    sel = dmenu_select(len(fields), inp=vault_entries)
+    sel = dmenu_select(len(fields), inp="\n".join(fields))
+    if sel.endswith(": None") or sel not in fields:
+        return ""
     if sel == "Notes: <Enter to view>":
         sel = view_notes(entry['notes'])
-    elif sel == "Notes: None":
-        sel = ""
-    elif sel == '**********':
+    elif sel == 'Password: **********':
         sel = entry['login']['password']
     elif sel == "TOTP: ******":
         sel = gen_otp(entry['login']['totp'])
@@ -124,7 +123,9 @@ def view_login(entry, folders):
         if sel != "URL: None":
             webbrowser.open(sel.split(": ", 1)[-1])
         sel = ""
-    return sel if not sel.endswith(": None") else ""
+    else:
+        sel = sel.split(": ", 1)[1]
+    return sel
 
 
 def view_note(entry, folders):
@@ -133,15 +134,16 @@ def view_note(entry, folders):
     Returns: dmenu selection
 
     """
-    fields = [entry['name'] or "Title: None",
-              obj_name(folders, entry['folderId']),
-              "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
-    vault_entries = "\n".join(fields)
-    sel = dmenu_select(len(fields), inp=vault_entries)
+    fields = [f"Title: {entry['name'] or 'None'}",
+              f"Folder: {obj_name(folders, entry['folderId'])}",
+              f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}"]
+    sel = dmenu_select(len(fields), inp="\n".join(fields))
+    if sel.endswith(": None") or sel not in fields:
+        return ""
     if sel == "Notes: <Enter to view>":
         sel = view_notes(entry['notes'])
-    elif sel == "Notes: None":
-        sel = ""
+    else:
+        sel = sel.split(": ", 1)[1]
     return sel
 
 
@@ -151,23 +153,17 @@ def view_card(entry, folders):
     Returns: dmenu selection
 
     """
-    exp = "Expiration Date: None"
-    if entry['card']['expMonth'] or entry['card']['expYear']:
-        exp = f"{entry['card']['expMonth']}/{entry['card']['expYear']}"
-    fields = [entry['name'] or "Title: None",
-              obj_name(folders, entry['folderId']),
-              entry['card']['brand'] or "Card Type: None",
-              entry['card']['cardholderName'] or "Card Holder Name: None",
-              entry['card']['number'] or "Card Number: None",
-              exp,
-              entry['card']['code'] or "CVV Code: None",
-              "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
-    vault_entries = "\n".join(fields)
-    sel = dmenu_select(len(fields), inp=vault_entries)
+    fields = [f"Title: {entry['name'] or 'None'}",
+              f"Folder: {obj_name(folders, entry['folderId'])}",
+              f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}"]
+    fields[-1:-1] = [f"{i}: {entry['card'][j] or 'None'}" for i, j in bwm.CARD.items()]
+    sel = dmenu_select(len(fields), inp="\n".join(fields))
+    if sel.endswith(": None") or sel not in fields:
+        return ""
     if sel == "Notes: <Enter to view>":
         sel = view_notes(entry['notes'])
-    elif sel == "Notes: None":
-        sel = ""
+    else:
+        sel = sel.split(": ", 1)[1]
     return sel
 
 
@@ -177,32 +173,17 @@ def view_ident(entry, folders):
     Returns: dmenu selection
 
     """
-    fields = [entry['name'] or "Title: None",
-              obj_name(folders, entry['folderId']),
-              entry['identity']['title'] or "Title: None",
-              entry['identity']['firstName'] or "First name: None",
-              entry['identity']['middleName'] or "Middle name: None",
-              entry['identity']['lastName'] or "Last name: None",
-              entry['identity']['address1'] or "Address1: None",
-              entry['identity']['address2'] or "Address2: None",
-              entry['identity']['address3'] or "Address3: None",
-              entry['identity']['city'] or "City: None",
-              entry['identity']['state'] or "State: None",
-              entry['identity']['postalCode'] or "Postal Code: None",
-              entry['identity']['country'] or "Country: None",
-              entry['identity']['email'] or "Email: None",
-              entry['identity']['phone'] or "Phone: None",
-              entry['identity']['ssn'] or "SSN: None",
-              entry['identity']['username'] or "Username: None",
-              entry['identity']['passportNumber'] or "Passport #: None",
-              entry['identity']['licenseNumber'] or "License #: None",
-              "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
-    vault_entries = "\n".join(fields)
-    sel = dmenu_select(len(fields), inp=vault_entries)
+    fields = [f"Title: {entry['name'] or 'None'}",
+              f"Folder: {obj_name(folders, entry['folderId'])}",
+              f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}"]
+    fields[-1:-1] = [f"{i}: {entry['identity'][j] or 'None'}" for i, j in bwm.IDENTITY.items()]
+    sel = dmenu_select(len(fields), inp="\n".join(fields))
+    if sel.endswith(": None") or sel not in fields:
+        return ""
     if sel == "Notes: <Enter to view>":
         sel = view_notes(entry['notes'])
-    elif sel == "Notes: None":
-        sel = ""
+    else:
+        sel = sel.split(": ", 1)[1]
     return sel
 
 

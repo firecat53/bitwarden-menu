@@ -31,7 +31,7 @@ def obj_name(obj, oid):
 
 def edit_entry(entry, entries, folders, collections, session):
     # pylint: disable=too-many-branches,too-many-statements,too-many-locals
-    """Edit title, username, password, url, notes and autotype sequence for an entry.
+    """Edit an entry.
 
     Args: entry - selected Entry dict
           entries - list of dicts
@@ -44,25 +44,35 @@ def edit_entry(entry, entries, folders, collections, session):
     item = deepcopy(entry)
     update_colls = "NO"
     while True:
-        fields = [str("Name: {}").format(item['name']),
-                  str("Folder: {}").format(obj_name(folders, item['folderId'])),
-                  str("Collections: {}").format(", ".join(obj_name(collections, i) for i
-                                                          in item['collectionIds'])),
-                  str("Username: {}").format(item['login']['username']),
-                  str("Password: **********") if item['login']['password'] else "Password: None",
-                  str("TOTP: ******") if item['login']['totp'] else "TOTP: None",
-                  str("Autotype: {}").format(autotype_seq(item)),
-                  "URLs: <Enter to Edit>" if item.get('login', {}).get('uris', [])
-                  else "URLs: None",
+        colls = ", ".join(obj_name(collections, i) for i in item['collectionIds'])
+        fields = [f"Name: {item['name']}",
+                  f"Folder: {obj_name(folders, item['folderId'])}",
+                  f"Collections: {colls}",
+                  f"Autotype: {autotype_seq(item)}",
                   "Notes: <Enter to Edit>" if item['notes'] else "Notes: None",
                   "Delete entry",
                   "Save entry"]
+        add_f = []
+        if int(item['type']) == 1:
+            add_f = [f"Username: {item['login']['username']}",
+                     "Password: **********" if item['login']['password'] else "Password: None",
+                     "TOTP: ******" if item['login']['totp'] else "TOTP: None",
+                     "URLs: <Enter to Edit>" if item.get('login', {}).get('uris', [])
+                     else "URLs: None"]
+        elif int(item['type']) == 3:
+            add_f = [f"{i}: {item['card'][j]}" for i, j in bwm.CARD.items()]
+        elif int(item['type']) == 4:
+            add_f = [f"{i}: {item['identity'][j]}" for i, j in bwm.IDENTITY.items()]
+        fields[-4:-4] = add_f
         inp = "\n".join(fields)
         sel = dmenu_select(len(fields), inp=inp)
-        if sel == 'Delete entry':
+        if not [i for i in fields if sel and sel in i]:
+            return entry
+        field = sel.split(": ", 1)[0]
+        if field == 'Delete entry':
             delete_entry(entry, entries, session)
             return None
-        if sel == 'Save entry':
+        if field == 'Save entry':
             if not item.get('id'):
                 res = bwcli.add_entry(item, session)
                 if res is False:
@@ -76,23 +86,12 @@ def edit_entry(entry, entries, folders, collections, session):
                     continue
                 entries[entries.index(entry)] = bwcli.Item(res)
             return bwcli.Item(res)
-        try:
-            field, sel = sel.split(": ", 1)
-        except (ValueError, TypeError):
-            return entry
-        field = field.lower()
-        if field == 'password':
-            item = edit_password(item) or item
-            continue
-        if field == 'totp':
-            item = edit_totp(item) or item
-            continue
-        if field == 'folder':
+        if field == 'Folder':
             folder = select_folder(folders)
             if folder is not False:
                 item['folderId'] = folder['id']
             continue
-        if field == 'collections':
+        if field == 'Collections':
             orig = item['collectionIds']
             coll_list = [collections[i] for i in collections if i in item['collectionIds']]
             collection = select_collection(collections, session, coll_list=coll_list)
@@ -106,28 +105,58 @@ def edit_entry(entry, entries, folders, collections, session):
             elif not item['collectionIds'] and orig:
                 update_colls = "REMOVE"
             continue
-        if field == 'notes':
+        if field == 'Notes':
             item['notes'] = edit_notes(item['notes'])
             continue
-        if field.startswith('urls'):
-            item = edit_urls(item)
-            continue
-        if field == 'username':
-            edit = f"{item['login'][field]}\n" if item['login'][field] is not None else "\n"
-        elif field == 'autotype':
+        if field == 'Autotype':
             edit = f"{item['fields'][autotype_index(item)]['value']}\n" \
                     if item['fields'][autotype_index(item)]['value'] is not None else "\n"
-        else:
-            edit = item[field] + "\n" if item[field] is not None else "\n"
-
-        sel = dmenu_select(1, f"{field.capitalize()}", inp=edit)
-        if sel is not None:
-            if field == 'username':
-                item['login'][field] = sel
-            elif field == 'autotype':
+            sel = dmenu_select(1, field, inp=edit)
+            if sel:
                 item['fields'][autotype_index(item)]['value'] = sel
-            else:
-                item[field] = sel
+            continue
+        if field == 'Name':
+            edit = f"{item['name']}\n" if item['name'] is not None else "\n"
+            sel = dmenu_select(1, field, inp=edit)
+            if sel:
+                item['name'] = sel
+            continue
+        if item['type'] == 1:
+            item = _handle_login(item, field)
+            continue
+        if item['type'] == 3:
+            edit = f"{item['card'][bwm.CARD[field]]}\n" if \
+                item['card'][bwm.CARD[field]] is not None else "\n"
+        if item['type'] == 4:
+            edit = f"{item['identity'][bwm.IDENTITY[field]]}\n" if \
+                item['identity'][bwm.IDENTITY[field]] is not None else "\n"
+        sel = dmenu_select(1, field, inp=edit)
+        if sel is not None:
+            if item['type'] == 3:
+                item['card'][bwm.CARD[field]] = sel
+            if item['type'] == 4:
+                item['identity'][bwm.IDENTITY[field]] = sel
+
+
+def _handle_login(item, field):
+    """Handle editing for login type entries
+
+    """
+    if field == 'Password':
+        item = edit_password(item) or item
+        return item
+    if field == 'TOTP':
+        item = edit_totp(item) or item
+        return item
+    if field.startswith('URLs'):
+        item = edit_urls(item)
+        return item
+    edit = f"{item['login'][bwm.LOGIN[field]]}\n" if \
+        item['login'][bwm.LOGIN[field]] is not None else "\n"
+    sel = dmenu_select(1, field, inp=edit)
+    if sel:
+        item['login'][bwm.LOGIN[field]] = sel
+    return item
 
 
 def add_entry(entries, folders, collections, session):
@@ -140,25 +169,59 @@ def add_entry(entries, folders, collections, session):
     Returns: None or entry (Item)
 
     """
+    itypes = {"Login": 1, "Secure Note": 2, "Card": 3, "Identity": 4}
+    itype = dmenu_select(len(itypes), "Item Type", inp="\n".join(itypes))
+    if itype not in itypes:
+        return None
     folder = select_folder(folders)
     colls = select_collection(collections, session, coll_list=[]) or []
     if folder is False:
         return None
     entry = {"organizationId": next(iter(colls.values()))['organizationId'] if colls else None,
              "folderId": folder['id'],
-             "type": 1,
+             "type": itypes[itype],
              "name": "",
              "notes": "",
              "favorite": False,
              "fields": [{"name": "autotype", "value": "", "type": 0}],
-             "login": {"username": "",
-                       "password": "",
-                       "totp": "",
-                       "uris": []},
+             "login": "",
              "collectionIds": [*colls],
              "secureNote": "",
              "card": "",
              "identity": ""}
+    if itype == "Login":
+        entry["login"] = {"username": "",
+                          "password": "",
+                          "totp": "",
+                          "uris": []}
+    elif itype == "Secure Note":
+        entry["secureNote"] = {"type": 0}
+    elif itype == "Card":
+        entry["card"] = {"cardholderName": "",
+                         "brand": "",
+                         "number": "",
+                         "expMonth": "",
+                         "expYear": "",
+                         "code": ""}
+    elif itype == "Identity":
+        entry["identity"] = {"title": "",
+                             "firstName": "",
+                             "middleName": "",
+                             "lastName": "",
+                             "address1": "",
+                             "address2": "",
+                             "address3": "",
+                             "city": "",
+                             "state": "",
+                             "postalCode": "",
+                             "country": "",
+                             "company": "",
+                             "email": "",
+                             "phone": "",
+                             "ssn": "",
+                             "username": "",
+                             "passportNumber": "",
+                             "licenseNumber": ""}
     return edit_entry(entry, entries, folders, collections, session)
 
 

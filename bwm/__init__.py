@@ -87,4 +87,32 @@ if CONF.has_option("vault", "type_library"):
                       "Please install or remove that option from config.ini")
             sys.exit()
 
+LOGIN = {"Username": "username",
+         "Password": "password",
+         "TOTP": "totp"}
+CARD = {"Cardholder Name": "cardholderName",
+        "Brand": "brand",
+        "Number": "number",
+        "Expiration Month": "expMonth",
+        "Expiration Year": "expYear",
+        "Security Code": "code"}
+IDENTITY = {"Title": "title",
+            "First Name": "firstName",
+            "Middle Name": "middleName",
+            "Last Name": "lastName",
+            "Address 1": "address1",
+            "Address 2": "address2",
+            "Address 3": "address3",
+            "City": "city",
+            "State": "state",
+            "Postal Code": "postalCode",
+            "Country": "country",
+            "Company": "company",
+            "Email": "email",
+            "Phone": "phone",
+            "SSN": "ssn",
+            "Username": "username",
+            "Passport Number": "passportNumber",
+            "License Number": "licenseNumber"}
+
 # vim: set et ts=4 sw=4 :

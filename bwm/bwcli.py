@@ -123,11 +123,6 @@ class Item(dict):
     """
     def __init__(self, /, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        try:
-            self['login']['url'] = self['login']['uris'][0]['uri']
-        except (IndexError, KeyError):
-            self.setdefault('login', {})
-            self['login'].setdefault('url', "")
         self.setdefault('fields', [])
         if not any(i['name'] == 'autotype' for i in self.get('fields')):
             self['fields'].append({'name': 'autotype', 'value': "", 'type': 0})
@@ -223,7 +218,7 @@ def add_entry(entry, session):
         "folderId":null,
         "type":1,
         "name":"Item name",
-        "notes":"Some notes about this item.",
+        "notes":null,
         "favorite":false,
         "fields":[],
         "login":null,

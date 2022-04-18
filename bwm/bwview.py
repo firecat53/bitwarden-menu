@@ -45,7 +45,7 @@ def view_all_entries(options, vault_entries, folders):
                 j,
                 join(obj_name(folders, i['folderId']), i['name']),
                 i['login']['username'],
-                i['login']['url'],
+                make_url_entries(i)[0].split(": ", 1)[1],
                 na=num_align))
         elif i['type'] == 2:
             ven.append(bw_note_pattern.format(
@@ -109,7 +109,7 @@ def view_login(entry, folders):
               '**********' if entry['login']['password'] else "Password: None",
               "TOTP: ******" if entry['login']['totp'] else "TOTP: None",
               "Notes: <Enter to view>" if entry['notes'] else "Notes: None"]
-    fields[-1:] = make_url_entries(entry)
+    fields[-1:-1] = make_url_entries(entry)
     vault_entries = "\n".join(fields)
     sel = dmenu_select(len(fields), inp=vault_entries)
     if sel == "Notes: <Enter to view>":

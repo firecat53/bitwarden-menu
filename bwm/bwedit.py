@@ -95,6 +95,8 @@ def edit_entry(entry, entries, folders, collections, session):
             orig = item['collectionIds']
             coll_list = [collections[i] for i in collections if i in item['collectionIds']]
             collection = select_collection(collections, session, coll_list=coll_list)
+            if collection is False:
+                continue
             item['collectionIds'] = [*collection]
             if collection:
                 item['organizationId'] = next(iter(collection.values()))['organizationId']
@@ -174,7 +176,9 @@ def add_entry(entries, folders, collections, session):
     if itype not in itypes:
         return None
     folder = select_folder(folders)
-    colls = select_collection(collections, session, coll_list=[]) or []
+    colls = []
+    if collections:
+        colls = select_collection(collections, session, coll_list=[]) or []
     if folder is False:
         return None
     entry = {"organizationId": next(iter(colls.values()))['organizationId'] if colls else None,
@@ -661,7 +665,7 @@ def select_collection(collections, session,
           coll_list - list of collection objects or False if only one collection
                       will be selected
 
-    Returns: collections - dict{id: dict, id1: dict, ...}
+    Returns: collections - dict{id: dict, id1: dict, ...} or False for no selection
 
     """
     if coll_list is not False:

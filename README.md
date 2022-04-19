@@ -75,6 +75,9 @@ For full installation documention see the [installation docs][docs/install.md].
 - Start typing to match entries.
 - [Configure](docs/configure.md) ~/.config/bwm/config.ini as desired.
 - More detailed [usage information](docs/usage.md).
+- Screencast (Using Bemenu on Sway):
+
+![Screencast](docs/short.gif)
 
 ## Tests
 
@@ -98,3 +101,8 @@ To run tests in a venv: `make test` (not implemented yet)
 [5]: https://github.com/dani-garcia/vaultwarden "Vaultwarden"
 [6]: https://pypi.org/project/xdg/ "Xdg"
 [7]: https://hg.sr.ht/~scoopta/wofi "Wofi"
+
+
+
+
+

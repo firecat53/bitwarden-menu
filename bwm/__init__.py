@@ -17,7 +17,7 @@ from xdg import XDG_CACHE_HOME, XDG_CONFIG_HOME, XDG_DATA_HOME
 AUTH_FILE = join(XDG_CACHE_HOME, ".bwm-auth")
 CONF_FILE = join(XDG_CONFIG_HOME, "bwm/config.ini")
 DATA_HOME = join(XDG_DATA_HOME, "bwm")
-SERCRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+SECRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 
 logging.basicConfig(filename=join(XDG_CACHE_HOME, "bwm.log"), level=logging.ERROR)
 LOGGER = logging.getLogger("bwm")

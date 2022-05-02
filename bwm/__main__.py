@@ -1,4 +1,4 @@
-"""Read, type and edit Bitwarden vault entries using dmenu or rofi
+"""Read, type and edit Bitwarden vault entries using dmenu style launchers
 
 """
 from contextlib import closing

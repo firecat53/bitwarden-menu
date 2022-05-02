@@ -1,4 +1,4 @@
-"""Dmenu/Rofi functions
+"""Launcher functions
 
 """
 import shlex
@@ -17,40 +17,42 @@ def dmenu_cmd(num_lines, prompt):
                 ["dmenu", "-l", "<num_lines>", "-p", "<prompt>", "-i", ...]
 
     """
-    command = ["dmenu"]
-    if bwm.CONF.has_option('dmenu', 'dmenu_command'):
-        command = shlex.split(bwm.CONF.get('dmenu', 'dmenu_command'))
-    dmenu_command = command[0]
-    dmenu_args = command[1:]
-    obscure = True
-    obscure_color = "#222222"
-    pwprompts = ("Password", "password", "client_secret")
-    if any(i in prompt for i in pwprompts):
-        if bwm.CONF.has_option('dmenu_passphrase', 'obscure'):
-            obscure = bwm.CONF.getboolean('dmenu_passphrase', 'obscure')
-        if bwm.CONF.has_option('dmenu_passphrase', 'obscure_color'):
-            obscure_color = bwm.CONF.get('dmenu_passphrase', 'obscure_color')
-    if "rofi" in dmenu_command:
-        dmenu = [dmenu_command, "-dmenu", "-p", str(prompt), "-l", str(num_lines)]
-        if obscure is True and any(i in prompt for i in pwprompts):
-            dmenu.append("-password")
-    elif "dmenu" in dmenu_command:
-        dmenu = [dmenu_command, "-p", str(prompt)]
-        if obscure is True and any(i in prompt for i in pwprompts):
-            dmenu.extend(["-nb", obscure_color, "-nf", obscure_color])
-    elif "bemenu" in dmenu_command:
-        dmenu = [dmenu_command, "-p", str(prompt)]
-        if obscure is True and any(i in prompt for i in pwprompts):
-            dmenu.append("-x")
-    elif "wofi" in dmenu_command:
-        dmenu = [dmenu_command, "-p", str(prompt)]
-        if obscure is True and any(i in prompt for i in pwprompts):
-            dmenu.append("-P")
-    else:
-        # Catchall for some other menu programs. Maybe it'll run and not fail?
-        dmenu = [dmenu_command]
-    dmenu[1:1] = dmenu_args
-    return dmenu
+    commands = {"bemenu": ["-p", str(prompt), "-l", str(num_lines)],
+                "dmenu": ["-p", str(prompt), "-l", str(num_lines)],
+                "rofi": ["-dmenu", "-p", str(prompt), "-l", str(num_lines)],
+                "wofi": ["-p", str(prompt), "-L", str(num_lines)]}
+    command = shlex.split(bwm.CONF.get('dmenu', 'dmenu_command', fallback='dmenu'))
+    command.extend(commands.get(command[0], []))
+    pwprompts = ("Password", "password", "client_secret", "Verify password", "Enter Password")
+    obscure = bwm.CONF.getboolean('dmenu_passphrase', 'obscure', fallback=True)
+    if any(i == prompt for i in pwprompts) and obscure is True:
+        pass_prompts = {"dmenu": dmenu_pass(command[0]),
+                        "rofi": ['-password'],
+                        "bemenu": ['-x'],
+                        "wofi": ['-P']}
+        command.extend(pass_prompts.get(command[0], []))
+    return command
+
+
+def dmenu_pass(command):
+    """Check if dmenu passphrase patch is applied and return the correct command
+    line arg list
+
+    Args: command - string
+    Returns: list or None
+
+    """
+    if command != 'dmenu':
+        return None
+    try:
+        # Check for dmenu password patch
+        dm_patch = b'P' in run(["dmenu", "-h"],
+                               capture_output=True,
+                               check=False).stderr
+    except FileNotFoundError:
+        dm_patch = False
+    color = bwm.CONF.get('dmenu_passphrase', 'obscure_color', fallback="#222222")
+    return ["-P"] if dm_patch else ["-nb", color, "-nf", color]
 
 
 def dmenu_select(num_lines, prompt="Entries", inp=""):

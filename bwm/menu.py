@@ -72,9 +72,8 @@ def dmenu_select(num_lines, prompt="Entries", inp=""):
               input=inp,
               encoding=bwm.ENC,
               env=bwm.ENV)
-    if res.stderr and "rofi " in cmd[0]:
-        cmd = [cmd[0]] + ["-dmenu"] if "rofi" in cmd[0] else [""]
-        run(cmd[0], check=False, input=res.stderr, env=bwm.ENV)
+    if res.stderr:
+        print(res.stderr)
         sys.exit()
     return res.stdout.rstrip('\n') if res.stdout is not None else None
 

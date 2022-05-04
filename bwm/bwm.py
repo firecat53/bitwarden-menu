@@ -28,10 +28,8 @@ def get_passphrase(secret="Password"):
         Returns: string
 
     """
-    pinentry = None
     pin_prompt = f"setdesc Enter {secret}\ngetpin\n"
-    if bwm.CONF.has_option("dmenu", "pinentry"):
-        pinentry = bwm.CONF.get("dmenu", "pinentry")
+    pinentry = bwm.CONF.get("dmenu", "pinentry", fallback=None)
     if pinentry:
         password = ""
         out = subprocess.run(pinentry,
@@ -65,27 +63,31 @@ class Vault:  # pylint: disable=too-many-instance-attributes
     orgs: dict[dict] = field(default_factory=dict)
 
 
-def get_vault(vaults=None):
-    """Read vault login parameters from config or ask for user input.
+def get_vault(vaults=None, **kwargs):
+    """Read vault login parameters from config, CLI, or ask for user input.
 
+    Args: vaults - list of Vault objects
+          **kwargs - vault (URL string)
+                     login (login email address)
     Returns: vaults - list of Vault objects (1st is active) or None on error
                       opening/reading a single vault.
 
     """
     vaults = [] if vaults is None else vaults
+    vault_cli = kwargs.get('vault', "")
+    login_cli = kwargs.get('login', "")
     if not vaults:
-        args = bwm.CONF.items('vault')
-        args_dict = dict(args)
-        servers = [i for i in args_dict if i.startswith('server')]
+        args = dict(bwm.CONF.items('vault'))
+        servers = [i for i in args if i.startswith('server')]
         for srv in servers:
             idx = srv.rsplit('_', 1)[-1]
-            email = args_dict.get(f'email_{idx}', "")
-            passw = args_dict.get(f'password_{idx}', "")
-            twofactor = args_dict.get(f'twofactor_{idx}', "")
-            if not args_dict[srv] or not email:
+            email = args.get(f'email_{idx}', "")
+            passw = args.get(f'password_{idx}', "")
+            twofactor = args.get(f'twofactor_{idx}', "")
+            if not args[srv] or not email:
                 continue
             try:
-                cmd = args_dict[f'password_cmd_{idx}']
+                cmd = args[f'password_cmd_{idx}']
                 res = subprocess.run(shlex.split(cmd),
                                      check=False,
                                      capture_output=True,
@@ -97,14 +99,21 @@ def get_vault(vaults=None):
                     passw = res.stdout.rstrip('\n') if res.stdout else passw
             except KeyError:
                 pass
-            vaults.append(Vault(args_dict[srv], email, passw, twofactor))
+            vaults.append(Vault(args[srv], email, passw, twofactor))
+    if vault_cli:
+        va_ = [i for i in vaults if i.url == vault_cli
+               and (i.email == login_cli or not login_cli)]
+        if va_:
+            vaults.insert(0, vaults.pop(vaults.index(va_[0])))
+        else:
+            vaults.insert(0, Vault(vault_cli, login_cli, '', ''))
     if not vaults or (not vaults[0].url or not vaults[0].email):
-        res = get_initial_vault()
-        if res:
-            vaults.insert(0, res)
+        sel = get_initial_vault(vault_cli, login_cli)
+        if sel:
+            vaults[0] = sel
         else:
             return None
-    if len(vaults) > 1:
+    if len(vaults) > 1 and not vault_cli:
         inp = "\n".join(i.url for i in vaults)
         sel = dmenu_select(len(vaults), "Select Vault", inp=inp)
         if not sel or (vaults[0].url == sel and vaults[0].session):
@@ -163,23 +172,39 @@ def set_vault(vaults):
     return vaults
 
 
-def get_initial_vault():
-    """Ask for initial server URL and email if not entered in config file
+def get_initial_vault(url=None, email=None):
+    """Ask for initial server URL and email if not entered in config file or
+       passed on the CLI.
+
+        Args: url - string
+              login - string
+
+        Returns: Vault object
 
     """
-    url = dmenu_select(0, "Enter server URL.", "https://vault.bitwarden.com")
     if not url:
-        dmenu_err("No URL entered. Try again.")
-        return False
-    email = dmenu_select(0, "Enter login email address.")
+        url = dmenu_select(0, "Enter server URL.", "https://vault.bitwarden.com")
+        if not url:
+            dmenu_err("No URL entered. Try again.")
+            return False
+    if not email:
+        email = dmenu_select(0, "Enter login email address.")
+        if not email:
+            dmenu_err("No login email address entered. Try again.")
+            return False
     twofa = {'None': '', 'TOTP': 0, 'Email': 1, 'Yubikey': 3}
     method = dmenu_select(len(twofa), "Select Two Factor Auth type.", "\n".join(twofa))
+    idx = max((i.rsplit('_', 1)[-1] for i in dict(bwm.CONF.items('vault'))
+               if i.startswith('server')), default='1')
+    # Overwrite blank initial values instead of adding new values (server_2)
+    if int(idx) == 1 and not bwm.CONF.get('vault', 'server_1', fallback=''):
+        idx = 0
+    bwm.CONF.set('vault', f'server_{int(idx) + 1}', url)
+    if email:
+        bwm.CONF.set('vault', f'email_{int(idx) + 1}', email)
+    if method:
+        bwm.CONF.set('vault', f'twofactor_{int(idx) + 1}', str(twofa[method]))
     with open(bwm.CONF_FILE, 'w', encoding=bwm.ENC) as conf_file:
-        bwm.CONF.set('vault', 'server_1', url)
-        if email:
-            bwm.CONF.set('vault', 'email_1', email)
-        if method:
-            bwm.CONF.set('vault', 'twofactor_1', str(twofa[method]))
         bwm.CONF.write(conf_file)
     return Vault(url, email, '', twofa[method])
 
@@ -350,10 +375,10 @@ class DmenuRunner(multiprocessing.Process):
     Args: server - Server object
 
     """
-    def __init__(self, server):
+    def __init__(self, server, **kwargs):
         multiprocessing.Process.__init__(self)
         self.server = server
-        self.vaults = get_vault()
+        self.vaults = get_vault(**kwargs)
         if self.vaults is None:
             self.server.kill_flag.set()
             sys.exit()
@@ -385,7 +410,13 @@ class DmenuRunner(multiprocessing.Process):
             except AttributeError:
                 pass
             self._set_timer()
-            res = dmenu_run(self.vault)
+            dargs = {}
+            if self.server.args_flag.is_set():
+                dargs = self.server.get_args()
+                res = Run.SWITCH
+                self.server.args_flag.clear()
+            else:
+                res = dmenu_run(self.vault)
             if res == Run.LOCK:
                 try:
                     self.server.kill_flag.set()
@@ -400,7 +431,7 @@ class DmenuRunner(multiprocessing.Process):
                     dmenu_err("Error loading entries. See logs.")
                 continue
             if res == Run.SWITCH:
-                self.vaults = get_vault(self.vaults)
+                self.vaults = get_vault(self.vaults, **dargs)
                 self.vault = self.vaults[0]
                 if not self.vault.folders:
                     # Check if folders exist because there will always be the

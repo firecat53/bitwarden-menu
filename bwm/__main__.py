@@ -1,6 +1,7 @@
 """Read, type and edit Bitwarden vault entries using dmenu style launchers
 
 """
+import argparse
 from contextlib import closing
 import multiprocessing
 from multiprocessing.managers import BaseManager
@@ -10,7 +11,6 @@ import random
 import socket
 import string
 from subprocess import call
-import sys
 
 import bwm
 from bwm.bwm import DmenuRunner
@@ -74,11 +74,13 @@ def client():
     port, auth = get_auth()
     mgr = BaseManager(address=('', port), authkey=auth)
     mgr.register('set_event')
+    mgr.register('get_pipe')
+    mgr.register('read_args_from_pipe')
     mgr.connect()
     return mgr
 
 
-class Server(multiprocessing.Process):
+class Server(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     """Run BaseManager server to listen for dmenu calling events
 
     """
@@ -88,11 +90,23 @@ class Server(multiprocessing.Process):
         self.start_flag = multiprocessing.Event()
         self.kill_flag = multiprocessing.Event()
         self.cache_time_expired = multiprocessing.Event()
+        self.args_flag = multiprocessing.Event()
         self.start_flag.set()
+        self.args = None
+        self._parent_conn, self._child_conn = multiprocessing.Pipe(duplex=False)
 
     def run(self):
         _ = self.server()
         self.kill_flag.wait()
+
+    def _get_pipe(self):
+        return self._child_conn
+
+    def get_args(self):
+        """ Reads arguments sent by the client to the server
+
+        """
+        return self._parent_conn.recv()
 
     def server(self):
         """Set up BaseManager server
@@ -101,16 +115,18 @@ class Server(multiprocessing.Process):
         mgr = BaseManager(address=('127.0.0.1', self.port),
                           authkey=self.authkey)
         mgr.register('set_event', callable=self.start_flag.set)
+        mgr.register('get_pipe', callable=self._get_pipe)
+        mgr.register('read_args_from_pipe', callable=self.args_flag.set)
         mgr.start()  # pylint: disable=consider-using-with
         return mgr
 
 
-def run():
+def run(**kwargs):
     """Main entrypoint. Start the background Manager and Dmenu runner processes.
 
     """
     server = Server()
-    dmenu = DmenuRunner(server)
+    dmenu = DmenuRunner(server, **kwargs)
     dmenu.daemon = True
     server.start()
     dmenu.start()
@@ -120,17 +136,49 @@ def run():
 
 
 def main():
-    """CLI entrypoint
+    """Main script entrypoint
 
     """
-    if len(sys.argv) > 1:
-        print("See `man bwm` for help")
-        sys.exit()
+    parser = argparse.ArgumentParser(
+        description="Dmenu-compatible launcher frontend for Bitwarden/Vaultwarden")
+
+    parser.add_argument(
+        "-a",
+        "--autotype",
+        type=str,
+        required=False,
+        help="Override autotype sequence in config.ini",
+    )
+
+    parser.add_argument(
+        "-l",
+        "--login",
+        type=str,
+        required=False,
+        help="Login email address",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--vault",
+        type=str,
+        required=False,
+        help="Vault URL to open, skipping the database selection menu",
+    )
+
+    args = vars(parser.parse_args())
+
+    args = args if any(args.values()) else {}
+
     try:
         manager = client()
+        conn = manager.get_pipe()  # pylint: disable=no-member
+        if args:
+            conn.send(args)
+            manager.read_args_from_pipe()  # pylint: disable=no-member
         manager.set_event()  # pylint: disable=no-member
     except ConnectionRefusedError:
-        run()
+        run(**args)
 
 
 if __name__ == '__main__':

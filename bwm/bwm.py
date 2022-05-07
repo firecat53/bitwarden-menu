@@ -55,6 +55,7 @@ class Vault:  # pylint: disable=too-many-instance-attributes
     email: str
     passw: str
     twofactor: str
+    autotype: str = field(default=None)
     session: bytes = field(default_factory=bytes)
     prev_entry: list[bwcli.Item] = field(default=None)
     entries: list[bwcli.Item] = field(default_factory=bwcli.Item)
@@ -363,7 +364,7 @@ def dmenu_run(vault):
             entry = vault.entries[int(sel.split('(', 1)[0])]
         except (ValueError, TypeError):
             return Run.CONTINUE
-        type_entry(entry)
+        type_entry(entry, vault.autotype)
         return Run.CONTINUE
     return options[sel]()
 
@@ -401,6 +402,7 @@ class DmenuRunner(multiprocessing.Process):
         self.cache_timer.start()
 
     def run(self):
+        at_saved = ""
         while True:
             self.server.start_flag.wait()
             if self.server.kill_flag.is_set():
@@ -413,9 +415,14 @@ class DmenuRunner(multiprocessing.Process):
             dargs = {}
             if self.server.args_flag.is_set():
                 dargs = self.server.get_args()
-                res = Run.SWITCH
                 self.server.args_flag.clear()
+            self.vault.autotype = dargs.get('autotype', "") or bwm.SEQUENCE
+            if dargs.get('vault', ""):
+                res = Run.SWITCH
+                at_saved = self.vault.autotype
             else:
+                self.vault.autotype = at_saved if at_saved else self.vault.autotype
+                at_saved = ""
                 res = dmenu_run(self.vault)
             if res == Run.LOCK:
                 try:

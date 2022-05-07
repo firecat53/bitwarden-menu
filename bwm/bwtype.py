@@ -277,7 +277,7 @@ def type_entry_wtype(entry, tokens):
             call(['wtype', '--', token])
 
 
-def type_entry(entry):
+def type_entry(entry, atype=""):
     """Pick which library to use to type strings
 
     Defaults to pynput
@@ -289,12 +289,13 @@ def type_entry(entry):
     if entry['type'] not in (1, 3):
         dmenu_err("Autotype currently disabled for this type of entry")
         return
+    # Autotype for entry > CLI --autotype > config.ini autotype
     sequence = autotype_seq(entry)
     if sequence == 'False':
         dmenu_err("Autotype disabled for this entry")
         return
     if not sequence or sequence == 'None':
-        sequence = SEQUENCE
+        sequence = atype
         if entry['type'] == 3:
             sequence = "{CARDNUM}"
     tokens = tokenize_autotype(sequence)

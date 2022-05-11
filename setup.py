@@ -3,14 +3,14 @@
 from setuptools import setup
 
 setup(name="bitwarden-menu",
-      version="v0.4.0",
+      version="v0.4.1",
       description="Dmenu/Rofi frontend for Bitwarden CLI tool",
       long_description=open('README.md', 'rb').read().decode('utf-8'),
       long_description_content_type="text/markdown",
       author="Scott Hansen",
       author_email="firecat4153@gmail.com",
       url="https://github.com/firecat53/bitwarden-menu",
-      download_url="https://github.com/firecat53/bitwarden-menu/tarball/v0.4.0",
+      download_url="https://github.com/firecat53/bitwarden-menu/tarball/v0.4.1",
       packages=['bwm'],
       entry_points={
           'console_scripts': ['bwm=bwm.__main__:main']

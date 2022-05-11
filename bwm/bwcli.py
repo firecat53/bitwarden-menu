@@ -133,9 +133,8 @@ def get_entries(session, org_name=''):
 
     Args: session: bytes
           org_name: name of organization. If given, only return items for that org
-    1. since the URL is buried in:
+    1. the URL is buried in:
         'login'->'uris'->[{match: xxx, uri: http...}, {match2: xxx, uri2: httpxxx}]
-        copy the first uri to 'login'->'url' for ease of access later.
     2. Also adjust 'path' to be just the dirname, not including the 'name'
     3. Add the 'autotype' field so it can be edited if necessary
 

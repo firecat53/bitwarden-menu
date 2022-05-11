@@ -99,7 +99,8 @@ def token_command(token):
 PLACEHOLDER_AUTOTYPE_TOKENS = {
     "{TITLE}"   : lambda e: e['name'],
     "{USERNAME}": lambda e: e['login']['username'],
-    "{URL}"     : lambda e: e['login']['url'],
+    "{URL}"     : lambda e: e.get("login", "").get("uris", [])[0].get("uri", "")
+                            if e.get("login", "") and e.get("login", "").get("uris", []) else "",
     "{PASSWORD}": lambda e: e['login']['password'],
     "{NOTES}"   : lambda e: e['notes'],
     "{CARDNUM}" : lambda e: e['card']['number'],

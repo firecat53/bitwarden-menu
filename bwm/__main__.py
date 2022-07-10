@@ -151,6 +151,14 @@ def main():
     )
 
     parser.add_argument(
+        "-k",
+        "--lock",
+        required=False,
+        action='store_true',
+        help="Lock vault",
+    )
+
+    parser.add_argument(
         "-l",
         "--login",
         type=str,

@@ -13,7 +13,7 @@ managing of Bitwarden/Vaultwarden vaults.
 
 # SYNOPSIS
 
-**bitwarden-menu** [**--vault** URL] [**--login** email] [**--autotype** pattern]
+**bitwarden-menu** [**--vault** URL] [**--login** email] [**--lock**] [**--autotype** pattern]
 
 # DESCRIPTION
 
@@ -25,6 +25,8 @@ manage most aspects of Bitwarden/Vaultwarden vaults.
 **-v**, **--vault** Vault URL
 
 **-l**, **--login**  Login email address
+
+**-k**, **--lock**  Lock vault
 
 **-a**, **--autotype**  Autotype sequence from
 https://keepass.info/help/base/autotype.html#autoseq . Overrides global default

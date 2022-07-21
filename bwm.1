@@ -9,19 +9,21 @@ bitwarden-menu - Fully featured Dmenu/Rofi/Bemenu frontend for autotype
 and managing of Bitwarden/Vaultwarden vaults.
 .SH SYNOPSIS
 .PP
-\f[B]bitwarden-menu\f[R] [\f[B]\[en]vault\f[R] URL]
-[\f[B]\[en]login\f[R] email] [\f[B]\[en]autotype\f[R] pattern]
+\f[B]bitwarden-menu\f[R] [\f[B]--vault\f[R] URL]
+[\f[B]--login\f[R] email] [\f[B]--lock\f[R]] [\f[B]\[en]autotype\f[R] pattern]
 .SH DESCRIPTION
 .PP
 \f[B]Bitwarden-menu\f[R] is a fast and minimal application to facilitate
 password entry and manage most aspects of Bitwarden/Vaultwarden vaults.
 .SH OPTIONS
 .PP
-\f[B]-v\f[R], \f[B]\[en]vault\f[R] Vault URL
+\f[B]-v\f[R], \f[B]--vault\f[R] Vault URL
 .PP
-\f[B]-l\f[R], \f[B]\[en]login\f[R] Login email address
+\f[B]-l\f[R], \f[B]--login\f[R] Login email address
 .PP
-\f[B]-a\f[R], \f[B]\[en]autotype\f[R] Autotype sequence from
+\f[B]-k\f[R], \f[B]--lock\f[R] Lock vault
+.PP
+\f[B]-a\f[R], \f[B]--autotype\f[R] Autotype sequence from
 https://keepass.info/help/base/autotype.html#autoseq .
 Overrides global default from config.ini for current vault.
 .SH EXAMPLES

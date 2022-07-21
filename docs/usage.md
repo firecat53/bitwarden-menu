@@ -13,13 +13,15 @@
 
 ## CLI Options
 
-`bwm [-h] [-v VAULT] [-l LOGIN] [-a AUTOTYPE] `
+`bwm [-h] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE] `
 
 --help, -h Output a usage message and exit.
 
 -v VAULT, --vault URL Vault URL to open, skipping the selection menu
 
 -l LOGIN, --login LOGIN email for vault
+
+-k, --lock Locks vault
 
 -a AUTOTYPE, --autotype AUTOTYPE Override autotype sequence in config.ini
 

@@ -403,7 +403,6 @@ class DmenuRunner(multiprocessing.Process):
 
     def run(self):
         at_saved = ""
-        lock = False
         while True:
             self.server.start_flag.wait()
             if self.server.kill_flag.is_set():
@@ -418,14 +417,11 @@ class DmenuRunner(multiprocessing.Process):
                 dargs = self.server.get_args()
                 self.server.args_flag.clear()
             self.vault.autotype = dargs.get('autotype', "") or bwm.SEQUENCE
-            if dargs.get('lock', False):
-                lock = True
             if dargs.get('vault', ""):
                 res = Run.SWITCH
                 at_saved = self.vault.autotype
-            elif lock:
+            elif dargs.get('lock', False):
                 bwcli.lock()
-                lock = False
                 res = Run.LOCK
             else:
                 self.vault.autotype = at_saved if at_saved else self.vault.autotype

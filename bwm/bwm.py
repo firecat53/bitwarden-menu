@@ -420,6 +420,9 @@ class DmenuRunner(multiprocessing.Process):
             if dargs.get('vault', ""):
                 res = Run.SWITCH
                 at_saved = self.vault.autotype
+            elif dargs.get('lock', False):
+                bwcli.lock()
+                res = Run.LOCK
             else:
                 self.vault.autotype = at_saved if at_saved else self.vault.autotype
                 at_saved = ""

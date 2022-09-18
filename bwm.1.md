@@ -84,7 +84,7 @@ for additional options.
 
 # AUTHOR
 
-Scott Hansen - <firecat4153@gmail.com>
+Scott Hansen - <tech@firecat53.net>
 
 # COPYRIGHT  
 

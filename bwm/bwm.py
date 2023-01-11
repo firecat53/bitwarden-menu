@@ -143,6 +143,8 @@ def set_vault(vaults):
     makedirs(vault_dir, exist_ok=True)
     environ["BITWARDENCLI_APPDATA_DIR"] = vault_dir
     status = bwcli.status()
+    if status is False:
+        vault.session = False
     if status['status'] == 'unauthenticated':
         if status['serverUrl'] is None:
             if bwcli.set_server(vault.url) is False:
@@ -160,8 +162,6 @@ def set_vault(vaults):
         vault.session, err = bwcli.unlock(vault.passw)
     elif status['status'] == 'unlocked':
         pass
-    else:
-        vault.session = False
     if vault.session is False:
         vault.passw = ""
         dmenu_err(err)

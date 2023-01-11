@@ -111,7 +111,7 @@ def get_vault(vaults=None, **kwargs):
     if not vaults or (not vaults[0].url or not vaults[0].email):
         sel = get_initial_vault(vault_cli, login_cli)
         if sel:
-            vaults[0] = sel
+            vaults.insert(0, sel)
         else:
             return None
     if len(vaults) > 1 and not vault_cli:

@@ -221,7 +221,6 @@ def type_entry_ydotool(entry, tokens):
     """Auto-type entry entry using ydotool
 
     """
-    enter_idx = True
     from .tokens_ydotool import AUTOTYPE_TOKENS
     for token, special in tokens:
         if special:
@@ -231,24 +230,18 @@ def type_entry_ydotool(entry, tokens):
             elif token in PLACEHOLDER_AUTOTYPE_TOKENS:
                 to_type = PLACEHOLDER_AUTOTYPE_TOKENS[token](entry)
                 if to_type:
-                    call(['ydotool', 'type', to_type])
+                    call(['ydotool', 'type', '-e', '0', to_type])
             elif token in STRING_AUTOTYPE_TOKENS:
                 to_type = STRING_AUTOTYPE_TOKENS[token]
-                call(['ydotool', 'type', to_type])
+                call(['ydotool', 'type', '-e', '0', to_type])
             elif token in AUTOTYPE_TOKENS:
                 cmd = ['ydotool'] + AUTOTYPE_TOKENS[token]
                 call(cmd)
-                # Add extra {ENTER} key tap for first instance of {ENTER}. It
-                # doesn't get recognized for some reason.
-                if enter_idx is True and token in ("{ENTER}", "~"):
-                    cmd = ['ydotool'] + AUTOTYPE_TOKENS[token]
-                    call(cmd)
-                    enter_idx = False
             else:
                 dmenu_err(f"Unsupported auto-type token (ydotool): {token}")
                 return
         else:
-            call(['ydotool', 'type', token])
+            call(['ydotool', 'type', '-e', '0', token])
 
 
 def type_entry_wtype(entry, tokens):
@@ -324,7 +317,7 @@ def type_text(data):
     if library == 'xdotool':
         call(['xdotool', 'type', data])
     elif library == 'ydotool':
-        call(['ydotool', 'type', data])
+        call(['ydotool', 'type', '-e', '0', data])
     elif library == 'wtype':
         call(['wtype', '--', data])
     else:

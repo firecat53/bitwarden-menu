@@ -23,7 +23,6 @@ logging.basicConfig(filename=join(XDG_CACHE_HOME, "bwm.log"), level=logging.ERRO
 LOGGER = logging.getLogger("bwm")
 
 ENV = os.environ.copy()
-ENV['LC_ALL'] = 'C'
 ENC = locale.getpreferredencoding()
 SESSION_TIMEOUT_DEFAULT_MIN = 360
 SEQUENCE = "{USERNAME}{TAB}{PASSWORD}{ENTER}"

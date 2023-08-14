@@ -11,6 +11,7 @@ import random
 import socket
 import string
 from subprocess import call
+import sys
 
 import bwm
 from bwm.bwm import DmenuRunner
@@ -26,6 +27,14 @@ def find_free_port():
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
         sock.bind(('127.0.0.1', 0))  # pylint:disable=no-member
         return sock.getsockname()[1]  # pylint:disable=no-member
+
+
+def port_in_use(port):
+    """Return Boolean
+
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
 
 
 def random_str():
@@ -66,12 +75,11 @@ def get_auth():
     return int(port), authkey
 
 
-def client():
+def client(port, auth):
     """Define client connection to server BaseManager
 
     Returns: BaseManager object
     """
-    port, auth = get_auth()
     mgr = BaseManager(address=('', port), authkey=auth)
     mgr.register('set_event')
     mgr.register('get_pipe')
@@ -97,7 +105,10 @@ class Server(multiprocessing.Process):  # pylint: disable=too-many-instance-attr
 
     def run(self):
         _ = self.server()
-        self.kill_flag.wait()
+        try:
+            self.kill_flag.wait()
+        except KeyboardInterrupt:
+            self.kill_flag.set()
 
     def _get_pipe(self):
         return self._child_conn
@@ -130,9 +141,13 @@ def run(**kwargs):
     dmenu.daemon = True
     server.start()
     dmenu.start()
-    server.join()
-    if exists(expanduser(bwm.AUTH_FILE)):
-        os.remove(expanduser(bwm.AUTH_FILE))
+    try:
+        server.join()
+    except KeyboardInterrupt:
+        sys.exit()
+    finally:
+        if exists(expanduser(bwm.AUTH_FILE)):
+            os.remove(expanduser(bwm.AUTH_FILE))
 
 
 def main():
@@ -178,15 +193,19 @@ def main():
 
     args = args if any(args.values()) else {}
 
+    port, auth = get_auth()
+    if port_in_use(port) is False:
+        run(**args)
     try:
-        manager = client()
+        manager = client(port, auth)
         conn = manager.get_pipe()  # pylint: disable=no-member
         if args:
             conn.send(args)
             manager.read_args_from_pipe()  # pylint: disable=no-member
         manager.set_event()  # pylint: disable=no-member
     except ConnectionRefusedError:
-        run(**args)
+        # Don't print the ConnectionRefusedError if any other exceptions are raised.
+        pass
 
 
 if __name__ == '__main__':

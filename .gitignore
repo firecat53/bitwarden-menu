@@ -3,4 +3,5 @@
 *.un~
 *.egg-info/
 build/
+bwm/_version.py
 dist/

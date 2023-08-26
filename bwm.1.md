@@ -3,7 +3,7 @@ title: Bitwarden-menu
 section: 1
 header: User Manual
 footer: Bitwarden-menu v0.4.1
-date: 2022-05-10
+date: 2023-08-25
 ---
 
 # NAME
@@ -34,7 +34,7 @@ from config.ini for current vault.
 
 # EXAMPLES
 
-	bwm
+    bwm
     bwm -v https://vault.mydomain.net -l user@domain.com -a '{TOTP}{ENTER}'
 
 # CONFIGURATION  

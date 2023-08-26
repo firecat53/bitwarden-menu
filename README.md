@@ -87,6 +87,9 @@ To run tests in a venv: `make test` (not implemented yet)
 
 - To install bitwarden-menu in a venv: `make`
 - Build man page from Markdown source: `make man`
+- Using `hatch`:
+    - `hatch shell`: provies venv with editable installation.
+    - `hatch build` && `hatch publish`: build and publish to Pypi.
 
 ## Planned features
 
@@ -101,8 +104,3 @@ To run tests in a venv: `make test` (not implemented yet)
 [5]: https://github.com/dani-garcia/vaultwarden "Vaultwarden"
 [6]: https://pypi.org/project/xdg/ "Xdg"
 [7]: https://hg.sr.ht/~scoopta/wofi "Wofi"
-
-
-
-
-

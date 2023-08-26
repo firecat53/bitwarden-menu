@@ -4,11 +4,12 @@
 # flake8: noqa
 import re
 import time
-from subprocess import call
+from subprocess import call, run
+from threading import Timer
 
-from bwm import CONF, SEQUENCE
 from bwm.menu import dmenu_err
 from bwm.totp import gen_otp
+import bwm
 
 
 def autotype_seq(entry):
@@ -283,6 +284,16 @@ def type_entry(entry, atype=""):
     if entry['type'] not in (1, 3):
         dmenu_err("Autotype currently disabled for this type of entry")
         return
+    if bwm.CLIPBOARD is True:
+        # Only copy password or card number to clipboard
+        typs = {1: entry.get('login', {}).get('password', ''),
+                3: entry.get('card', {}).get('number', '')}
+        if entry['type'] in (1, 3):
+            if typs[entry['type']]:
+                type_clipboard(typs[entry['type']])
+        else:
+            dmenu_err("Clipboard is active. 'View/Type Individual entries' and select field to copy")
+        return
     # Autotype for entry > CLI --autotype > config.ini autotype
     sequence = autotype_seq(entry)
     if sequence == 'False':
@@ -295,8 +306,8 @@ def type_entry(entry, atype=""):
     tokens = tokenize_autotype(sequence)
 
     library = 'pynput'
-    if CONF.has_option('vault', 'type_library'):
-        library = CONF.get('vault', 'type_library')
+    if bwm.CONF.has_option('vault', 'type_library'):
+        library = bwm.CONF.get('vault', 'type_library')
     if library == 'xdotool':
         type_entry_xdotool(entry, tokens)
     elif library == 'ydotool':
@@ -311,9 +322,12 @@ def type_text(data):
     """Type the given text data
 
     """
+    if bwm.CLIPBOARD is True:
+        type_clipboard(data)
+        return
     library = 'pynput'
-    if CONF.has_option('vault', 'type_library'):
-        library = CONF.get('vault', 'type_library')
+    if bwm.CONF.has_option('vault', 'type_library'):
+        library = bwm.CONF.get('vault', 'type_library')
     if library == 'xdotool':
         call(['xdotool', 'type', data])
     elif library == 'ydotool':
@@ -331,5 +345,17 @@ def type_text(data):
         except kbd.InvalidCharacterException:
             dmenu_err("Unable to type string...bad character.\n"
                       "Try setting `type_library = xdotool` in config.ini")
+
+
+def type_clipboard(text):
+    """Copy text to clipboard and clear clipboard after 30 seconds
+
+    Args: text - str
+
+    """
+    text = text or ""  # Handle None type
+    run([bwm.CLIPBOARD_CMD], input=text.encode(bwm.ENC))
+    clear = Timer(30, lambda: run([bwm.CLIPBOARD_CMD, "--clear"]))
+    clear.start()
 
 # vim: set et ts=4 sw=4 :

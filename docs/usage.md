@@ -13,7 +13,7 @@
 
 ## CLI Options
 
-`bwm [-h] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE] `
+`bwm [-h] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE] [-C]`
 
 --help, -h Output a usage message and exit.
 
@@ -24,6 +24,8 @@
 -k, --lock Locks vault
 
 -a AUTOTYPE, --autotype AUTOTYPE Override autotype sequence in config.ini
+
+--clipboard -C, type to clipboard
 
 ## Features
 
@@ -36,9 +38,13 @@
     - Add, edit and type TOTP codes. RFC 6238, Steam and custom settings are
       supported.
 - *Type entries*
-    - Auto-type username and/or password on selection. No clipboard copy/paste
-      involved. Use xdotool, ydotool, or wtype for non-U.S. English keyboard layout.
-    - Use a custom [Keepass 2.x style auto-type sequence][1] if you have one defined
+    - Auto-type username and/or password on selection. Use xdotool, ydotool, or
+      wtype for non-U.S. English keyboard layout.
+    - Select to clipboard if desired (clears clipboard after 30s). If `view/type
+      individual entries` isn't selected first, it will copy the password field
+      to the clipboard if it exists, otherwise will raise an error.
+    - Use a custom [Keepass 2.x style auto-type sequence][1] if you have one
+      defined
       (except for character repetition and the 'special commands'). Set it per entry
       or set a global default. Disable autotype for an entry, if desired.
     - Select any single field and have it typed into the active window. Notes fields

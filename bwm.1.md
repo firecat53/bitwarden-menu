@@ -2,8 +2,8 @@
 title: Bitwarden-menu
 section: 1
 header: User Manual
-footer: Bitwarden-menu v0.4.1
-date: 2023-08-25
+footer: Bitwarden-menu v0.4.2
+date: 2023-08-26
 ---
 
 # NAME
@@ -13,7 +13,7 @@ managing of Bitwarden/Vaultwarden vaults.
 
 # SYNOPSIS
 
-**bitwarden-menu** [**--vault** URL] [**--login** email] [**--lock**] [**--autotype** pattern]
+**bitwarden-menu** [**--vault** URL] [**--login** email] [**--lock**] [**--autotype** pattern] [**--clipboard]
 
 # DESCRIPTION
 
@@ -31,6 +31,8 @@ manage most aspects of Bitwarden/Vaultwarden vaults.
 **-a**, **--autotype**  Autotype sequence from
 https://keepass.info/help/base/autotype.html#autoseq . Overrides global default
 from config.ini for current vault.
+
+**-C**, **--clipboard** Select to clipboard
 
 # EXAMPLES
 

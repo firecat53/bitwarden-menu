@@ -308,6 +308,14 @@ def dmenu_sync(session):
         dmenu_err("Sync error. Check logs.")
 
 
+def dmenu_clipboard():
+    """Process menu entry - Toggle clipboard entry
+
+    """
+    bwm.CLIPBOARD = not bwm.CLIPBOARD
+    return Run.CONTINUE
+
+
 class Run(Enum):
     """Enum for dmenu_run return values
 
@@ -315,6 +323,7 @@ class Run(Enum):
     LOCK = auto()
     CONTINUE = auto()
     RELOAD = auto()
+    STOP = auto()
     SWITCH = auto()
 
 
@@ -324,7 +333,7 @@ def dmenu_run(vault):
     If 'hide_folders' is defined in config.ini, hide those from main and
     view/type all views.
 
-    Returns: Run Enum (LOCK, CONTINUE, RELOAD or SWITCH)
+    Returns: Run Enum (LOCK, CONTINUE, RELOAD, STOP or SWITCH)
 
     """
     if bwm.CONF.has_option("vault", "hide_folders"):
@@ -346,10 +355,11 @@ def dmenu_run(vault):
                'Manage collections': partial(dmenu_collections, vault.collections, vault.session),
                'Sync vault': partial(dmenu_sync, vault.session),
                'Switch vaults': None,
+               "[Clipboard]/Type" if bwm.CLIPBOARD is True else "Clipboard/[Type]": dmenu_clipboard,
                'Lock vault': bwcli.lock}
     sel = view_all_entries(options, entries_hid, vault.folders)
     if not sel:
-        return Run.CONTINUE
+        return Run.STOP
     if sel == "Lock vault":  # Kill bwm daemon
         options[sel]()
         return Run.LOCK
@@ -363,9 +373,9 @@ def dmenu_run(vault):
         try:
             entry = vault.entries[int(sel.split('(', 1)[0])]
         except (ValueError, TypeError):
-            return Run.CONTINUE
+            return Run.STOP
         type_entry(entry, vault.autotype)
-        return Run.CONTINUE
+        return Run.STOP
     return options[sel]()
 
 
@@ -379,6 +389,7 @@ class DmenuRunner(multiprocessing.Process):
     def __init__(self, server, **kwargs):
         multiprocessing.Process.__init__(self)
         self.server = server
+        bwm.CLIPBOARD = kwargs.get('clipboard')
         self.vaults = get_vault(**kwargs)
         if self.vaults is None:
             self.server.kill_flag.set()
@@ -416,6 +427,7 @@ class DmenuRunner(multiprocessing.Process):
             if self.server.args_flag.is_set():
                 dargs = self.server.get_args()
                 self.server.args_flag.clear()
+            bwm.CLIPBOARD = dargs.get('clipboard') or bwm.CLIPBOARD
             self.vault.autotype = dargs.get('autotype', "") or bwm.SEQUENCE
             if dargs.get('vault', ""):
                 res = Run.SWITCH
@@ -451,6 +463,8 @@ class DmenuRunner(multiprocessing.Process):
                 if not all(i for i in (self.vault.entries, self.vault.folders,
                            self.vault.collections, self.vault.orgs) if i is False):
                     dmenu_err("Error loading entries. See logs.")
+                continue
+            if res == Run.CONTINUE:
                 continue
             if str(res) not in repr(Run.__members__):
                 self.vault.prev_entry = res or self.vault.prev_entry

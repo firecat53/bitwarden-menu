@@ -18,6 +18,11 @@ AUTH_FILE = join(XDG_CACHE_HOME, ".bwm-auth")
 CONF_FILE = join(XDG_CONFIG_HOME, "bwm/config.ini")
 DATA_HOME = join(XDG_DATA_HOME, "bwm")
 SECRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+CLIPBOARD = False
+if os.environ.get('WAYLAND_DISPLAY'):
+    CLIPBOARD_CMD = 'wl-copy'
+else:
+    CLIPBOARD_CMD = 'xsel'
 
 logging.basicConfig(filename=join(XDG_CACHE_HOME, "bwm.log"), level=logging.ERROR)
 LOGGER = logging.getLogger("bwm")

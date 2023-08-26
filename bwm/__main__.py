@@ -166,6 +166,15 @@ def main():
     )
 
     parser.add_argument(
+        "-C",
+        "--clipboard",
+        action="store_true",
+        default=False,
+        required=False,
+        help="Copy values to clipboard instead of typing.",
+    )
+
+    parser.add_argument(
         "-k",
         "--lock",
         required=False,

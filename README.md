@@ -34,15 +34,16 @@ For full installation documention see the [installation docs][docs/install.md].
 2. [Bitwarden CLI][2]. Ensure the `bw` command is in `$PATH`
 3. [Pynput][1] and [Xdg][6]
 4. Dmenu, [Rofi][3], [Wofi][7] or [Bemenu][4]
-5. (optional) Pinentry.
-6. (optional) xdotool, ydotool(>= 1.0.0)/wtype (for Wayland).
+5. xsel or wl-copy
+6. (optional) Pinentry.
+7. (optional) xdotool, ydotool(>= 1.0.0)/wtype (for Wayland).
 
 ## Features
 
 - Supports multiple [bitwarden.com](https://bitwarden.com) and self-hosted
   [Vaultwarden][5] accounts. Accounts can be switched on the fly.
-- Auto-type username and/or password on selection. No clipboard copy/paste
-  involved.
+- Auto-type username and/or password on selection. Select to clipboard if
+  desired (clipboard clears after 30 sec).
 - Supports login with 2FA code from Authenticator(TOTP), Email, or Yubikey.
 - Background process allows selectable time-out for locking the database.
 - Use a custom [Keepass 2.x style auto-type sequence][6].
@@ -68,7 +69,7 @@ For full installation documention see the [installation docs][docs/install.md].
 
 ## Usage
 
-`bwm [-h] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE]`
+`bwm [-h] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE] [-C]`
 
 - Run `bwm` or bind to keystroke combination.
 - Enter account URL on first run.
@@ -98,7 +99,6 @@ To run tests in a venv: `make test` (not implemented yet)
 
 - Unit tests
 - Notifications for syncing status (e.g. when a sync is complete)
-- Clipboard support
 
 [1]: https://github.com/moses-palmer/pynput "Pynput"
 [2]: https://github.com/bitwarden/cli "Bitwarden CLI"

@@ -57,7 +57,7 @@ Link to the executable `/path/to/venv/bin/bwm` when assigning a keyboard shortcu
     $ pip install --user . OR
     $ pip install --user -e . (for editable install)
 
-### Available in [Archlinux AUR][5]
+### Available in [Archlinux AUR][5] and Nix packages
 
 
 ## Wayland (wlroots - Sway)

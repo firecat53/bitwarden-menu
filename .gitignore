@@ -5,3 +5,4 @@
 build/
 bwm/_version.py
 dist/
+result/

@@ -28,7 +28,7 @@ def get_passphrase(secret="Password"):
         Returns: string
 
     """
-    pin_prompt = f"setdesc Enter {secret}\ngetpin\n"
+    pin_prompt = f"SETDESC Enter {secret}\nGETPIN\n"
     pinentry = bwm.CONF.get("dmenu", "pinentry", fallback=None)
     if pinentry:
         password = ""

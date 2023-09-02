@@ -3,8 +3,9 @@
 """
 # flake8: noqa
 import re
-import time
+from shlex import split
 from subprocess import call, run
+import time
 from threading import Timer
 
 from bwm.menu import dmenu_err
@@ -354,8 +355,8 @@ def type_clipboard(text):
 
     """
     text = text or ""  # Handle None type
-    run([bwm.CLIPBOARD_CMD], input=text.encode(bwm.ENC))
-    clear = Timer(30, lambda: run([bwm.CLIPBOARD_CMD, "--clear"]))
+    run(split(bwm.CLIPBOARD_CMD), check=True, input=text.encode(bwm.ENC))
+    clear = Timer(30, lambda: run(split(bwm.CLIPBOARD_CMD), check=False, input=""))
     clear.start()
 
 # vim: set et ts=4 sw=4 :

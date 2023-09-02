@@ -19,10 +19,20 @@ CONF_FILE = join(XDG_CONFIG_HOME, "bwm/config.ini")
 DATA_HOME = join(XDG_DATA_HOME, "bwm")
 SECRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 CLIPBOARD = False
+CLIPBOARD_CMD = "true"
 if os.environ.get('WAYLAND_DISPLAY'):
-    CLIPBOARD_CMD = 'wl-copy'
+    clips = ['wl-copy']
 else:
-    CLIPBOARD_CMD = 'xsel'
+    clips = ["xsel -b", "xclip -selection clip"]
+for clip in clips:
+    try:
+        _ = run(shlex.split(clip), check=False, stdout=DEVNULL, stderr=DEVNULL, input="")
+        CLIPBOARD_CMD = clip
+        break
+    except OSError:
+        continue
+if CLIPBOARD_CMD == "true":
+    dmenu_err(f"{' or '.join([shlex.split(i)[0] for i in clips])} needed for clipboard support")
 
 logging.basicConfig(filename=join(XDG_CACHE_HOME, "bwm.log"), level=logging.ERROR)
 LOGGER = logging.getLogger("bwm")

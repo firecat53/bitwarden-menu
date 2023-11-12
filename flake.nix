@@ -2,7 +2,7 @@
   description = "Dmenu/Rofi/Wofi frontend for managing Bitwarden vaults.";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   };
 
   outputs = {

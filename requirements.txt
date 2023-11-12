@@ -1,2 +1,2 @@
 pynput
-xdg
+xdg-base-dirs

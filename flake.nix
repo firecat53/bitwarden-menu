@@ -19,7 +19,7 @@
               (pkgs.python3Packages)
               python
               pynput
-              xdg
+              xdg-base-dirs
               ;
           };
         });

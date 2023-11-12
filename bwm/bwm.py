@@ -139,7 +139,7 @@ def set_vault(vaults):
         return passw or None
 
     vault = vaults[0]
-    vault_dir = join(bwm.XDG_DATA_HOME, "bwm", urlsplit(vault.url).netloc)
+    vault_dir = join(bwm.DATA_HOME, urlsplit(vault.url).netloc)
     makedirs(vault_dir, exist_ok=True)
     environ["BITWARDENCLI_APPDATA_DIR"] = vault_dir
     status = bwcli.status()

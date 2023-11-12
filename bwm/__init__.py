@@ -12,11 +12,11 @@ from os.path import exists, join
 from subprocess import run, DEVNULL
 
 from bwm.menu import dmenu_err
-from xdg import XDG_CACHE_HOME, XDG_CONFIG_HOME, XDG_DATA_HOME
+from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_data_home
 
-AUTH_FILE = join(XDG_CACHE_HOME, ".bwm-auth")
-CONF_FILE = join(XDG_CONFIG_HOME, "bwm/config.ini")
-DATA_HOME = join(XDG_DATA_HOME, "bwm")
+AUTH_FILE = join(xdg_cache_home(), ".bwm-auth")
+CONF_FILE = join(xdg_config_home(), "bwm/config.ini")
+DATA_HOME = join(xdg_data_home(), "bwm")
 SECRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 CLIPBOARD = False
 CLIPBOARD_CMD = "true"
@@ -34,7 +34,7 @@ for clip in clips:
 if CLIPBOARD_CMD == "true":
     dmenu_err(f"{' or '.join([shlex.split(i)[0] for i in clips])} needed for clipboard support")
 
-logging.basicConfig(filename=join(XDG_CACHE_HOME, "bwm.log"), level=logging.ERROR)
+logging.basicConfig(filename=join(xdg_cache_home(), "bwm.log"), level=logging.ERROR)
 LOGGER = logging.getLogger("bwm")
 
 ENV = os.environ.copy()

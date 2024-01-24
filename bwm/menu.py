@@ -20,7 +20,7 @@ def dmenu_cmd(num_lines, prompt):
     commands = {"bemenu": ["-p", str(prompt), "-l", str(num_lines)],
                 "dmenu": ["-p", str(prompt), "-l", str(num_lines)],
                 "rofi": ["-dmenu", "-p", str(prompt), "-l", str(num_lines)],
-                "wofi": ["-p", str(prompt), "-L", str(num_lines)]}
+                "wofi": ["--dmenu", "-p", str(prompt), "-L", str(num_lines + 1)]}
     command = shlex.split(bwm.CONF.get('dmenu', 'dmenu_command', fallback='dmenu'))
     command.extend(commands.get(command[0], []))
     pwprompts = ("Password", "password", "client_secret", "Verify password", "Enter Password")
@@ -72,9 +72,6 @@ def dmenu_select(num_lines, prompt="Entries", inp=""):
               input=inp,
               encoding=bwm.ENC,
               env=bwm.ENV)
-    if res.stderr:
-        print(res.stderr)
-        sys.exit()
     return res.stdout.rstrip('\n') if res.stdout is not None else None
 
 

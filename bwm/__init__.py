@@ -70,6 +70,8 @@ if CONF.has_option('dmenu', 'dmenu_command'):
     command = shlex.split(CONF.get('dmenu', 'dmenu_command'))
 if "-l" in command:
     MAX_LEN = int(command[command.index("-l") + 1])
+elif "-L" in command:
+    MAX_LEN = int(command[command.index("-L") + 1])
 else:
     MAX_LEN = 24
 if CONF.has_option("vault", "session_timeout_min"):

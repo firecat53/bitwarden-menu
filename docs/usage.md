@@ -40,9 +40,10 @@
 - *Type entries*
     - Auto-type username and/or password on selection. Use xdotool, ydotool, or
       wtype for non-U.S. English keyboard layout.
-    - Select to clipboard if desired (clears clipboard after 30s). If `view/type
-      individual entries` isn't selected first, it will copy the password field
-      to the clipboard if it exists, otherwise will raise an error.
+    - Select to clipboard if desired (clears clipboard after 30s on X11 or after
+      one paste on Wayland). If `view/type individual entries` isn't selected
+      first, it will copy the password field to the clipboard if it exists,
+      otherwise will raise an error.
     - Use a custom [Keepass 2.x style auto-type sequence][1] if you have one
       defined
       (except for character repetition and the 'special commands'). Set it per entry

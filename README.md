@@ -43,7 +43,7 @@ For full installation documention see the [installation docs][docs/install.md].
 - Supports multiple [bitwarden.com](https://bitwarden.com) and self-hosted
   [Vaultwarden][5] accounts. Accounts can be switched on the fly.
 - Auto-type username and/or password on selection. Select to clipboard if
-  desired (clipboard clears after 30 sec).
+  desired (clipboard clears after 30 sec on X11 or after 1 paste on Wayland).
 - Supports login with 2FA code from Authenticator(TOTP), Email, or Yubikey.
 - Background process allows selectable time-out for locking the database.
 - Use a custom [Keepass 2.x style auto-type sequence][6].

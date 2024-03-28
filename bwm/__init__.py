@@ -21,7 +21,7 @@ SECRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 CLIPBOARD = False
 CLIPBOARD_CMD = "true"
 if os.environ.get('WAYLAND_DISPLAY'):
-    clips = ['wl-copy']
+    clips = ['wl-copy -o']
 else:
     clips = ["xsel -b", "xclip -selection clip"]
 for clip in clips:

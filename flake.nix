@@ -31,6 +31,8 @@
         postVenvCreation = ''
           uv pip install hatch
           uv pip install -e .
+          # Prevent venv uv from overriding nixpkgs uv
+          [ -f $(pwd)/.venv/bin/uv ] && rm $(pwd)/.venv/bin/uv*
         '';
         C_INCLUDE_PATH = "${pkgs.linuxHeaders}/include";
         HATCH_ENV_TYPE_VIRTUAL_UV_PATH = "${pkgs.uv}/bin/uv"; # use Nix uv instead of hatch downloaded binary

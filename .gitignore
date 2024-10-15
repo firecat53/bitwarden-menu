@@ -1,8 +1,11 @@
 .coverage
+.envrc
+.direnv/
+.venv/
+*.egg-info/
 *.pyc
 *.un~
-*.egg-info/
 build/
-bwm/_version.py
 dist/
+bwm/_version.py
 result/

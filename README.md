@@ -93,7 +93,7 @@ To run tests in a venv: `make test` (not implemented yet)
     - `hatch build` && `hatch publish`: build and publish to Pypi.
 - Using `nix`:
     - `nix develop`: Provides development shell with all dependencies.
-      Edit and run similar to `pip install -e .` or `hatch shell`.
+    - `make test` and `hatch build/publish` work as usual.
 
 ## Planned features
 

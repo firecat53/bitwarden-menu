@@ -16,13 +16,13 @@ def status(session=b''):
                  userEmail: <email>,
                  userId: userId,
                  status: <'locked', 'unlocked' or 'unauthenticated'>}
-            False on error
+            Empty dict {} on error
 
     """
     res = run(["bw", "--session", session, "status"], capture_output=True, check=False)
     if not res.stdout:
         logging.error(res)
-        return False
+        return {}
     return dict(json.loads(res.stdout.split(b'\n')[-1]))
 
 

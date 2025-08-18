@@ -4,6 +4,7 @@
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import partial
+import logging
 import multiprocessing
 from os import environ, makedirs
 from os.path import join
@@ -95,7 +96,8 @@ def get_vault(vaults=None, **kwargs):
                                      encoding=bwm.ENC)
                 if res.stderr:
                     dmenu_err(f"Password command error: {res.stderr}")
-                    sys.exit()
+                    logging.error(f"Password command error: {res.stderr}")
+                    sys.exit(1)
                 else:
                     passw = res.stdout.rstrip('\n') if res.stdout else passw
             except KeyError:
@@ -143,9 +145,10 @@ def set_vault(vaults):
     makedirs(vault_dir, exist_ok=True)
     environ["BITWARDENCLI_APPDATA_DIR"] = vault_dir
     status = bwcli.status()
-    if status is False:
+    err = ""
+    if not status:
         vault.session = False
-    if status['status'] == 'unauthenticated':
+    elif status['status'] == 'unauthenticated':
         if status['serverUrl'] is None:
             if bwcli.set_server(vault.url) is False:
                 if len(vaults) > 1:
@@ -401,7 +404,7 @@ class DmenuRunner(multiprocessing.Process):
                    self.vault.collections, self.vault.orgs) if i is False):
             dmenu_err("Error loading vault entries.")
             self.server.kill_flag.set()
-            sys.exit()
+            sys.exit(1)
 
     def _set_timer(self):
         """Set inactivity timer

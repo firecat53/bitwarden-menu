@@ -66,14 +66,15 @@ try:
 except configparser.ParsingError as err:
     dmenu_err(f"Config file error: {err}")
     sys.exit()
+
+MAX_LEN = 24
 if CONF.has_option('dmenu', 'dmenu_command'):
     command = shlex.split(CONF.get('dmenu', 'dmenu_command'))
-if "-l" in command:
-    MAX_LEN = int(command[command.index("-l") + 1])
-elif "-L" in command:
-    MAX_LEN = int(command[command.index("-L") + 1])
-else:
-    MAX_LEN = 24
+    if "-l" in command:
+        MAX_LEN = int(command[command.index("-l") + 1])
+    elif "-L" in command:
+        MAX_LEN = int(command[command.index("-L") + 1])
+
 if CONF.has_option("vault", "session_timeout_min"):
     SESSION_TIMEOUT_MIN = int(CONF.get("vault", "session_timeout_min"))
 else:

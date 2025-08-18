@@ -11,15 +11,16 @@ import sys
 from os.path import exists, join
 from subprocess import run, DEVNULL
 
-from bwm.menu import dmenu_err
 from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_data_home
+
+logger = logging.getLogger("bwm")
+logging.basicConfig(filename=join(xdg_cache_home(), "bwm.log"), level=logging.WARNING)
 
 AUTH_FILE = join(xdg_cache_home(), ".bwm-auth")
 CONF_FILE = join(xdg_config_home(), "bwm/config.ini")
 DATA_HOME = join(xdg_data_home(), "bwm")
 SECRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 CLIPBOARD = False
-CLIPBOARD_CMD = "true"
 if os.environ.get('WAYLAND_DISPLAY'):
     clips = ['wl-copy -o']
 else:
@@ -29,13 +30,9 @@ for clip in clips:
         _ = run(shlex.split(clip), check=False, stdout=DEVNULL, stderr=DEVNULL, input="")
         CLIPBOARD_CMD = clip
         break
-    except OSError:
-        continue
-if CLIPBOARD_CMD == "true":
-    dmenu_err(f"{' or '.join([shlex.split(i)[0] for i in clips])} needed for clipboard support")
-
-logging.basicConfig(filename=join(xdg_cache_home(), "bwm.log"), level=logging.ERROR)
-LOGGER = logging.getLogger("bwm")
+    except (OSError, FileNotFoundError):
+        CLIPBOARD_CMD = ""
+        logger.warning("Clipboard support disabled. Need wl-clipboard, xsel or xclip installed")
 
 ENV = os.environ.copy()
 ENC = locale.getpreferredencoding()
@@ -64,8 +61,8 @@ CONF = configparser.ConfigParser()
 try:
     CONF.read(CONF_FILE)
 except configparser.ParsingError as err:
-    dmenu_err(f"Config file error: {err}")
-    sys.exit()
+    logger.warning(f"Config file error: {err}")
+    sys.exit(1)
 
 MAX_LEN = 24
 if CONF.has_option('dmenu', 'dmenu_command'):
@@ -82,27 +79,16 @@ else:
 if CONF.has_option('vault', 'autotype_default'):
     SEQUENCE = CONF.get("vault", "autotype_default")
 if CONF.has_option("vault", "type_library"):
-    if CONF.get("vault", "type_library") == "xdotool":
+    type_library = CONF.get("vault", "type_library")
+    for lib in (['xdotool', 'version'], ['ydotool'], ['wtype']):
+        if lib[0] != type_library:
+            continue
         try:
-            run(['xdotool', 'version'], check=False, stdout=DEVNULL)
+            run(lib, check=False, stdout=DEVNULL, stderr=DEVNULL)
         except OSError:
-            dmenu_err("Xdotool not installed.\n"
-                      "Please install or remove that option from config.ini")
-            sys.exit()
-    elif CONF.get("vault", "type_library") == "ydotool":
-        try:
-            run(['ydotool'], check=False, stdout=DEVNULL)
-        except OSError:
-            dmenu_err("Ydotool not installed.\n"
-                      "Please install or remove that option from config.ini")
-            sys.exit()
-    elif CONF.get("vault", "type_library") == "wtype":
-        try:
-            run(['wtype'], check=False, stdout=DEVNULL, stderr=DEVNULL)
-        except OSError:
-            dmenu_err("Wtype not installed.\n"
-                      "Please install or remove that option from config.ini")
-            sys.exit()
+            logger.warning(
+                f"{lib[0]} not installed. Please install {lib[0]} or update config.ini"
+            )
 
 LOGIN = {"Username": "username",
          "Password": "password",

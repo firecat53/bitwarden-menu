@@ -142,12 +142,26 @@ def get_entries(session, org_name=''):
                 False on error
 
     """
+    logging.debug(f"get_entries: session type={type(session)}, value (first 20 chars)={str(session)[:20]}")
+
     res = run(["bw", "--session", session, "list", "items"],
               capture_output=True,
               check=False)
+
+    logging.debug(f"get_entries: returncode={res.returncode}")
+    logging.debug(f"get_entries: stdout (first 200 chars)={res.stdout[:200]}")
+    logging.debug(f"get_entries: stderr={res.stderr.decode('utf-8') if res.stderr else 'None'}")
+
     if not res.stdout:
         logging.error(res)
         return False
+
+    if res.returncode != 0:
+        logging.error(f"get_entries failed with return code {res.returncode}")
+        logging.error(f"stdout: {res.stdout.decode('utf-8')}")
+        logging.error(f"stderr: {res.stderr.decode('utf-8') if res.stderr else 'None'}")
+        return False
+
     items = [Item(i) for i in json.loads(res.stdout)]
     folders = get_folders(session)
     collections = get_collections(session, org_name)

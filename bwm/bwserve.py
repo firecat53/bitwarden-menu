@@ -530,24 +530,32 @@ class BWCLIServer:
 
             if body:
                 encoded_body = json.dumps(body).encode('utf-8')
-                headers = {
-                    'Content-Type': 'application/json',
-                    'Content-Length': str(len(encoded_body))
-                }
+                headers['Content-Type'] = 'application/json'
+                headers['Content-Length'] = str(len(encoded_body))
 
-            # Add session token to query parameters if we have one
-            if params is None:
-                params = {}
+            # Add session token as query parameter if we have one
             if self.session:
+                if params is None:
+                    params = {}
                 params['session'] = self.session
 
             if params:
                 url = f'{url}?{urlencode(params)}'
 
+            # Debug logging
+            logging.debug(f"BW Serve Request: {method} {url}")
+            logging.debug(f"Session token present: {bool(self.session)}")
+            if self.session:
+                logging.debug(f"Session token (first 10 chars): {str(self.session)[:10]}...")
+
             conn.request(method, url, encoded_body, headers)
 
             response = conn.getresponse()
             response_body = response.read().decode('utf-8')
+
+            # Debug logging
+            logging.debug(f"Response status: {response.status}")
+            logging.debug(f"Response body (first 200 chars): {response_body[:200]}")
 
             if not response_body:
                 return False, "Empty response from server"

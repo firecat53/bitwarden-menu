@@ -303,9 +303,7 @@ def dmenu_edit(entries, folders, collections, vault):
         entry = entries[int(sel.split('(', 1)[0])]
     except (ValueError, TypeError):
         return None
-    # Use session for now - edit_entry will use CLI methods
-    # TODO: Update edit_entry to support bwcliserver
-    return edit_entry(entry, entries, folders, collections, vault.session)
+    return edit_entry(entry, entries, folders, collections, vault)
 
 
 def dmenu_add(entries, folders, collections, vault):
@@ -318,9 +316,7 @@ def dmenu_add(entries, folders, collections, vault):
         Returns: None or entry (Item)
 
     """
-    # Use session for now - add_entry will use CLI methods
-    # TODO: Update add_entry to support bwcliserver
-    return add_entry(entries, folders, collections, vault.session)
+    return add_entry(entries, folders, collections, vault)
 
 
 def dmenu_folders(folders, vault):
@@ -331,9 +327,7 @@ def dmenu_folders(folders, vault):
         Returns: dict {err: <Bool>, reload: <Bool>}
 
     """
-    # Use session for now - manage_folders will use CLI methods
-    # TODO: Update manage_folders to support bwcliserver
-    manage_folders(folders, vault.session)
+    manage_folders(folders, vault)
     return Run.CONTINUE
 
 
@@ -345,9 +339,7 @@ def dmenu_collections(collections, vault):
         Returns: dict {err: <Bool>, reload: <Bool>}
 
     """
-    # Use session for now - manage_collections will use CLI methods
-    # TODO: Update manage_collections to support bwcliserver
-    manage_collections(collections, vault.session)
+    manage_collections(collections, vault)
     return Run.CONTINUE
 
 

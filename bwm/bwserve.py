@@ -62,14 +62,38 @@ class BWCLIServer:
                 logging.error("bw serve process failed to start")
                 return False
 
-            # Give bw serve a moment to initialize
-            # This is especially important when the vault is unauthenticated
-            logging.debug("BWCLIServer.start: Waiting 0.5s for bw serve to initialize")
-            time.sleep(0.5)
+            # Wait for bw serve to be ready to accept connections
+            # Try multiple times with increasing delays
+            max_retries = 5
+            for attempt in range(max_retries):
+                wait_time = 0.2 * (attempt + 1)  # 0.2s, 0.4s, 0.6s, 0.8s, 1.0s
+                logging.debug(f"BWCLIServer.start: Waiting {wait_time}s for bw serve to initialize (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
 
-            self._initialized = True
-            logging.debug("BWCLIServer.start: Initialization complete")
-            return True
+                # Check if process is still alive
+                if self.process.poll() is not None:
+                    logging.error("bw serve process died during initialization")
+                    return False
+
+                # Try a simple request to see if it's ready
+                try:
+                    conn = BWHTTPConnection(self.client_sock)
+                    conn.request('GET', '/status')
+                    response = conn.getresponse()
+                    response.read()  # Consume the response
+
+                    # If we got here without exception, it's ready
+                    logging.debug(f"BWCLIServer.start: bw serve ready after {wait_time}s")
+                    self._initialized = True
+                    return True
+                except (ConnectionResetError, ConnectionRefusedError, BrokenPipeError) as e:
+                    logging.debug(f"BWCLIServer.start: Not ready yet (attempt {attempt + 1}): {e}")
+                    if attempt == max_retries - 1:
+                        logging.error(f"BWCLIServer.start: Failed to connect after {max_retries} attempts")
+                        return False
+                    continue
+
+            return False
 
         except FileNotFoundError:
             logging.error("bw command not found. Is Bitwarden CLI installed?")

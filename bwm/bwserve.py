@@ -374,15 +374,11 @@ class BWCLIServer:
         logging.debug(f"Entry organizationId value: {entry.get('organizationId')}")
         logging.debug(f"Entry collectionIds value: {entry.get('collectionIds')}")
 
-        # Check if item belongs to an organization
-        params = {}
-        if entry.get('organizationId'):
-            params['organizationId'] = entry['organizationId']
-            logging.debug(f"Deleting org item {entry['id']} from org {entry['organizationId']}")
-        else:
-            logging.debug(f"Deleting personal item {entry['id']}")
+        # Unlike add/edit, delete doesn't need organizationId parameter
+        # The session token provides sufficient authentication
+        logging.debug(f"Deleting item {entry['id']}")
 
-        successful, data = self.request('DELETE', f'/object/item/{entry["id"]}', params=params)
+        successful, data = self.request('DELETE', f'/object/item/{entry["id"]}')
         if not successful:
             error_msg = data if isinstance(data, str) else "Failed to delete entry"
             logging.error(f"Delete entry error: {error_msg}")

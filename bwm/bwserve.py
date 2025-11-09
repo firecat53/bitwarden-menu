@@ -374,11 +374,10 @@ class BWCLIServer:
         logging.debug(f"Entry organizationId value: {entry.get('organizationId')}")
         logging.debug(f"Entry collectionIds value: {entry.get('collectionIds')}")
 
-        # Try DELETE with the full item object in the body
-        # Some REST APIs require the object to confirm deletion
+        # DELETE without body - most REST APIs don't accept body for DELETE
         logging.debug(f"Deleting item {entry['id']}")
 
-        successful, data = self.request('DELETE', f'/object/item/{entry["id"]}', entry)
+        successful, data = self.request('DELETE', f'/object/item/{entry["id"]}')
         if not successful:
             error_msg = data if isinstance(data, str) else "Failed to delete entry"
             logging.error(f"Delete entry error: {error_msg}")

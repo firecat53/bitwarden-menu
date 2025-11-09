@@ -36,11 +36,14 @@ class BWCLIServer:
     def start(self):
         """Start the bw serve process with socket communication"""
         if self._initialized:
+            logging.debug("BWCLIServer.start: Already initialized")
             return True
 
+        logging.debug("BWCLIServer.start: Starting bw serve process")
         try:
             # Create socket pair for communication
             self.client_sock, server_sock = socket.socketpair()
+            logging.debug(f"BWCLIServer.start: Created socket pair, server_fd={server_sock.fileno()}")
 
             # Start bw serve with the socket
             self.process = Popen(
@@ -49,6 +52,7 @@ class BWCLIServer:
                 stdout=PIPE,
                 stderr=PIPE
             )
+            logging.debug(f"BWCLIServer.start: Started bw serve process, pid={self.process.pid}")
 
             # Close server socket in parent process
             server_sock.close()
@@ -60,9 +64,11 @@ class BWCLIServer:
 
             # Give bw serve a moment to initialize
             # This is especially important when the vault is unauthenticated
+            logging.debug("BWCLIServer.start: Waiting 0.5s for bw serve to initialize")
             time.sleep(0.5)
 
             self._initialized = True
+            logging.debug("BWCLIServer.start: Initialization complete")
             return True
 
         except FileNotFoundError:
@@ -161,6 +167,9 @@ class BWCLIServer:
 
         Returns: session (string) or False on error, Error message
         """
+        logging.debug(f"BWCLIServer.login: Starting login for {email}")
+        logging.debug(f"BWCLIServer.login: initialized={self._initialized}, process={self.process is not None}")
+
         body = {
             'email': email,
             'password': password
@@ -168,8 +177,12 @@ class BWCLIServer:
         if method is not None and code:
             body['method'] = method
             body['code'] = code
+            logging.debug(f"BWCLIServer.login: Using 2FA method {method}")
 
+        logging.debug("BWCLIServer.login: Sending POST /login request")
         successful, data = self.request('POST', '/login', body)
+        logging.debug(f"BWCLIServer.login: Request completed, successful={successful}")
+
         if not successful:
             error_msg = data if isinstance(data, str) else "Login failed"
             logging.error(f"Login error: {error_msg}")
@@ -177,7 +190,10 @@ class BWCLIServer:
 
         if 'raw' in data:
             self.session = data['raw']
+            logging.debug(f"BWCLIServer.login: Login successful, session token received")
             return data['raw'], None
+
+        logging.error("BWCLIServer.login: No session token in response")
         return False, "No session token received"
 
     def unlock(self, password: str) -> tuple[str | bool, str]:
@@ -186,11 +202,17 @@ class BWCLIServer:
         Args: password - string
         Returns: session (string) or False on error, Error message
         """
+        logging.debug("BWCLIServer.unlock: Starting unlock")
+        logging.debug(f"BWCLIServer.unlock: initialized={self._initialized}, process={self.process is not None}")
+
         if not password:
             logging.error("No password provided")
             return False, "No password provided"
 
+        logging.debug("BWCLIServer.unlock: Sending POST /unlock request")
         successful, data = self.request('POST', '/unlock', {'password': password})
+        logging.debug(f"BWCLIServer.unlock: Request completed, successful={successful}")
+
         if not successful:
             error_msg = data if isinstance(data, str) else "Failed to unlock"
             logging.error(f"Unlock error: {error_msg}")
@@ -198,7 +220,10 @@ class BWCLIServer:
 
         if 'raw' in data:
             self.session = data['raw']
+            logging.debug("BWCLIServer.unlock: Unlock successful, session token received")
             return data['raw'], ""
+
+        logging.error("BWCLIServer.unlock: No session token in response")
         return False, "No session token received"
 
     def lock(self):

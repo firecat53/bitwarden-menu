@@ -186,17 +186,23 @@ def set_vault(vaults):
 
         # Login using server or CLI
         if vault.bwcliserver:
+            logging.debug("set_vault: Attempting login via bw serve")
             vault.session, err = vault.bwcliserver.login(vault.email, vault.passw,
                                                          vault.twofactor, code)
+            logging.debug(f"set_vault: bw serve login result - session={vault.session is not False}, err={err}")
             # If bw serve fails with connection error, fall back to CLI
             if vault.session is False and err and "Connection reset" in str(err):
                 logging.info("bw serve connection failed during login, falling back to CLI")
                 vault.bwcliserver.stop()
                 vault.bwcliserver = None
                 vault.use_serve = False
+                logging.debug("set_vault: Retrying login via CLI")
                 vault.session, err = bwcli.login(vault.email, vault.passw, vault.twofactor, code)
+                logging.debug(f"set_vault: CLI login result - session={vault.session is not False}, err={err}")
         else:
+            logging.debug("set_vault: Attempting login via CLI (no bw serve)")
             vault.session, err = bwcli.login(vault.email, vault.passw, vault.twofactor, code)
+            logging.debug(f"set_vault: CLI login result - session={vault.session is not False}, err={err}")
 
         del environ['BW_CLIENTSECRET']
 
@@ -205,16 +211,22 @@ def set_vault(vaults):
 
         # Unlock using server or CLI
         if vault.bwcliserver:
+            logging.debug("set_vault: Attempting unlock via bw serve")
             vault.session, err = vault.bwcliserver.unlock(vault.passw)
+            logging.debug(f"set_vault: bw serve unlock result - session={vault.session is not False}, err={err}")
             # If bw serve fails with connection error, fall back to CLI
             if vault.session is False and err and "Connection reset" in str(err):
                 logging.info("bw serve connection failed during unlock, falling back to CLI")
                 vault.bwcliserver.stop()
                 vault.bwcliserver = None
                 vault.use_serve = False
+                logging.debug("set_vault: Retrying unlock via CLI")
                 vault.session, err = bwcli.unlock(vault.passw)
+                logging.debug(f"set_vault: CLI unlock result - session={vault.session is not False}, err={err}")
         else:
+            logging.debug("set_vault: Attempting unlock via CLI (no bw serve)")
             vault.session, err = bwcli.unlock(vault.passw)
+            logging.debug(f"set_vault: CLI unlock result - session={vault.session is not False}, err={err}")
 
     elif status['status'] == 'unlocked':
         # Already unlocked, get session from status if using CLI

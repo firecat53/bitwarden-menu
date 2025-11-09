@@ -52,15 +52,12 @@ def _edit_entry_backend(entry, vault, update_coll='NO'):
 
 
 def _delete_entry_backend(entry, vault):
-    """Delete entry using CLI (bw serve DELETE endpoint has known bugs)
-
-    NOTE: The bw serve API has a bug where DELETE operations fail with
-    permission errors even for items the user owns. We always use CLI
-    for delete operations while keeping bw serve for other operations.
-    """
+    """Delete entry using server or CLI"""
     import logging
-    # Always use CLI for delete due to bw serve API bug
-    logging.debug(f"_delete_entry_backend: Using CLI for item {entry.get('id', 'unknown')} (bw serve DELETE has known bugs)")
+    if vault.bwcliserver:
+        logging.debug(f"_delete_entry_backend: Using bw serve for item {entry.get('id', 'unknown')}")
+        return vault.bwcliserver.delete_entry(entry)
+    logging.debug(f"_delete_entry_backend: Using CLI for item {entry.get('id', 'unknown')}")
     return bwcli.delete_entry(entry, vault.session)
 
 
@@ -72,12 +69,9 @@ def _add_folder_backend(name, vault):
 
 
 def _delete_folder_backend(folder, vault):
-    """Delete folder using CLI (bw serve DELETE endpoint has known bugs)
-
-    NOTE: The bw serve API has a bug where DELETE operations fail with
-    permission errors. We always use CLI for delete operations.
-    """
-    # Always use CLI for delete due to bw serve API bug
+    """Delete folder using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.delete_folder(folder)
     return bwcli.delete_folder(folder, vault.session)
 
 
@@ -96,12 +90,9 @@ def _add_collection_backend(name, org_id, vault):
 
 
 def _delete_collection_backend(collection, vault):
-    """Delete collection using CLI (bw serve DELETE endpoint has known bugs)
-
-    NOTE: The bw serve API has a bug where DELETE operations fail with
-    permission errors. We always use CLI for delete operations.
-    """
-    # Always use CLI for delete due to bw serve API bug
+    """Delete collection using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.delete_collection(collection)
     return bwcli.delete_collection(collection, vault.session)
 
 

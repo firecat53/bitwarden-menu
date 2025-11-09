@@ -330,7 +330,9 @@ class BWCLIServer:
             logging.error(f"Add entry error: {error_msg}")
             return False
 
-        return data.get('data', False)
+        # data is already the item object, not wrapped in another 'data' key
+        logging.debug(f"Add entry successful, item id: {data.get('id', 'unknown')}")
+        return data
 
     def edit_entry(self, entry):
         """Modify existing vault entry
@@ -353,7 +355,9 @@ class BWCLIServer:
             logging.error(f"Edit entry error: {error_msg}")
             return False
 
-        return data.get('data', False)
+        # data is already the item object, not wrapped in another 'data' key
+        logging.debug(f"Edit entry successful, item id: {data.get('id', 'unknown')}")
+        return data
 
     def delete_entry(self, entry):
         """Delete existing vault entry
@@ -369,6 +373,9 @@ class BWCLIServer:
         params = {}
         if entry.get('organizationId'):
             params['organizationId'] = entry['organizationId']
+            logging.debug(f"Deleting org item {entry['id']} from org {entry['organizationId']}")
+        else:
+            logging.debug(f"Deleting personal item {entry['id']}")
 
         successful, data = self.request('DELETE', f'/object/item/{entry["id"]}', params=params)
         if not successful:
@@ -376,6 +383,7 @@ class BWCLIServer:
             logging.error(f"Delete entry error: {error_msg}")
             return False
 
+        logging.debug(f"Delete entry successful for item {entry['id']}")
         return entry
 
     def move_entry(self, entry):

@@ -369,6 +369,11 @@ class BWCLIServer:
             logging.error("Entry missing 'id' field")
             return False
 
+        # Debug: log what's in the entry
+        logging.debug(f"Delete entry object keys: {list(entry.keys())}")
+        logging.debug(f"Entry organizationId value: {entry.get('organizationId')}")
+        logging.debug(f"Entry collectionIds value: {entry.get('collectionIds')}")
+
         # Check if item belongs to an organization
         params = {}
         if entry.get('organizationId'):

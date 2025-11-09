@@ -535,6 +535,12 @@ class BWCLIServer:
                     'Content-Length': str(len(encoded_body))
                 }
 
+            # Add session token to query parameters if we have one
+            if params is None:
+                params = {}
+            if self.session:
+                params['session'] = self.session
+
             if params:
                 url = f'{url}?{urlencode(params)}'
 

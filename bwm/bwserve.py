@@ -72,7 +72,12 @@ class BWCLIServer:
 
                 # Check if process is still alive
                 if self.process.poll() is not None:
-                    logging.error("bw serve process died during initialization")
+                    # Process died - capture stderr for debugging
+                    stderr_output = self.process.stderr.read().decode('utf-8') if self.process.stderr else "No stderr"
+                    stdout_output = self.process.stdout.read().decode('utf-8') if self.process.stdout else "No stdout"
+                    logging.error(f"bw serve process died during initialization")
+                    logging.error(f"bw serve stderr: {stderr_output}")
+                    logging.error(f"bw serve stdout: {stdout_output}")
                     return False
 
                 # Try a simple request to see if it's ready

@@ -53,8 +53,11 @@ def _edit_entry_backend(entry, vault, update_coll='NO'):
 
 def _delete_entry_backend(entry, vault):
     """Delete entry using server or CLI"""
+    import logging
     if vault.bwcliserver:
+        logging.debug(f"_delete_entry_backend: Using bw serve for item {entry.get('id', 'unknown')}")
         return vault.bwcliserver.delete_entry(entry)
+    logging.debug(f"_delete_entry_backend: Using CLI for item {entry.get('id', 'unknown')}")
     return bwcli.delete_entry(entry, vault.session)
 
 

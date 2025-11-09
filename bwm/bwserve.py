@@ -33,30 +33,38 @@ class BWCLIServer:
         self.session = None
         self._initialized = False
 
-    def start(self):
+    def start(self, session=None):
         """Start the bw serve process with socket communication
 
-        Note: bw serve will start in the current vault state (locked/unlocked/unauthenticated).
-        Use login() or unlock() API methods to authenticate after starting.
+        Args: session - session token (string or bytes) from CLI login/unlock
+                       Required for bw serve to work
         """
         if self._initialized:
             logging.debug("BWCLIServer.start: Already initialized")
             return True
 
-        logging.debug("BWCLIServer.start: Starting bw serve process")
+        if not session:
+            logging.error("BWCLIServer.start: Session token required to start bw serve")
+            return False
+
+        logging.debug("BWCLIServer.start: Starting bw serve process with session")
         try:
             # Create socket pair for communication
             self.client_sock, server_sock = socket.socketpair()
             logging.debug(f"BWCLIServer.start: Created socket pair, server_fd={server_sock.fileno()}")
 
-            # Start bw serve with the socket (no session needed)
+            # Convert session to string if needed
+            session_str = session.decode('utf-8') if isinstance(session, bytes) else session
+
+            # Start bw serve with session as command-line argument
             self.process = Popen(
-                ["bw", "serve", "--hostname", f"fd+connected://{server_sock.fileno()}"],
+                ["bw", "serve", "--session", session_str,
+                 "--hostname", f"fd+connected://{server_sock.fileno()}"],
                 pass_fds=(server_sock.fileno(),),
                 stdout=PIPE,
                 stderr=PIPE
             )
-            logging.debug(f"BWCLIServer.start: Started bw serve process, pid={self.process.pid}")
+            logging.debug(f"BWCLIServer.start: Started bw serve process with --session, pid={self.process.pid}")
 
 
             # Close server socket in parent process
@@ -150,10 +158,13 @@ class BWCLIServer:
         self.stop()
         return False
 
-    def is_available(self):
-        """Check if bw serve is available and working"""
+    def is_available(self, session=None):
+        """Check if bw serve is available and working
+
+        Args: session - session token required to start bw serve
+        """
         if not self._initialized:
-            if not self.start():
+            if not self.start(session=session):
                 return False
 
         # Try a simple status check

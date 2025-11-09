@@ -183,19 +183,11 @@ def set_vault(vaults):
             if not bwcli.sync(vault.session):
                 logging.warning("set_vault: Vault sync failed")
 
-            # Now that vault is authenticated, start bw serve for subsequent operations
-            if vault.use_serve and vault.bwcliserver is None:
-                logging.debug("set_vault: Starting bw serve after successful login")
-                vault.bwcliserver = BWCLIServer()
-                if not vault.bwcliserver.is_available():
-                    logging.info("bw serve not available, falling back to CLI")
-                    vault.bwcliserver.stop()
-                    vault.bwcliserver = None
-                    vault.use_serve = False
-                else:
-                    # Set session token for bw serve
-                    vault.bwcliserver.session = vault.session.decode('utf-8') if isinstance(vault.session, bytes) else vault.session
-                    logging.debug("set_vault: bw serve started successfully")
+            # Note: We don't start bw serve after unauthenticated login because
+            # bw serve has independent session state from CLI. The CLI session token
+            # cannot be used to authenticate bw serve. Use CLI for this session,
+            # and bw serve will be available on next run when vault is locked/unlocked.
+            logging.debug("set_vault: Using CLI for this session (logged in from unauthenticated state)")
 
     elif status['status'] == 'locked':
         # Vault is locked but authenticated, safe to start bw serve
@@ -230,23 +222,13 @@ def set_vault(vaults):
             logging.debug(f"set_vault: CLI unlock result - session={vault.session is not False}, err={err}")
 
     elif status['status'] == 'unlocked':
-        # Vault is unlocked and authenticated, safe to start bw serve
-        if vault.use_serve and vault.bwcliserver is None:
-            logging.debug("set_vault: Starting bw serve for unlocked vault")
-            vault.bwcliserver = BWCLIServer()
-            if not vault.bwcliserver.is_available():
-                logging.info("bw serve not available, falling back to CLI")
-                vault.bwcliserver.stop()
-                vault.bwcliserver = None
-                vault.use_serve = False
-            else:
-                # Get session from status and set it for bw serve
-                vault.session = status.get('session', b'')
-                vault.bwcliserver.session = vault.session.decode('utf-8') if isinstance(vault.session, bytes) else vault.session
-                logging.debug("set_vault: bw serve started successfully for unlocked vault")
-        elif not vault.bwcliserver:
-            # Get session from status if using CLI
-            vault.session = status.get('session', b'')
+        # Vault is already unlocked via CLI
+        # Note: We don't start bw serve here because it has independent session state.
+        # If we start bw serve now, it won't recognize the existing unlock.
+        # Use CLI for this session. On next run when vault is locked, bw serve can
+        # be used to unlock and will work for that session.
+        vault.session = status.get('session', b'')
+        logging.debug("set_vault: Using CLI for this session (vault already unlocked via CLI)")
 
     if vault.session is False:
         vault.passw = ""

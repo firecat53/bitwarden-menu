@@ -328,11 +328,17 @@ def delete_entry(entry, entries, vault):
           vault - Vault object
 
     """
+    import logging
+    logging.debug(f"delete_entry called for item: {entry.get('name', 'unknown')} (id: {entry.get('id', 'unknown')})")
     inp = "NO\nYes - confirm delete\n"
     delete = dmenu_select(2, f"Confirm delete of {entry['name']}", inp=inp)
+    logging.debug(f"User selection for delete: {delete}")
     if delete != "Yes - confirm delete":
+        logging.debug("Delete cancelled by user")
         return
+    logging.debug("Calling _delete_entry_backend")
     res = _delete_entry_backend(entry, vault)
+    logging.debug(f"_delete_entry_backend returned: {res}")
     if res is False:
         dmenu_err("Item not deleted. Check logs.")
         return

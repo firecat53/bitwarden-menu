@@ -33,8 +33,11 @@ class BWCLIServer:
         self.session = None
         self._initialized = False
 
-    def start(self):
-        """Start the bw serve process with socket communication"""
+    def start(self, session=None):
+        """Start the bw serve process with socket communication
+
+        Args: session - optional session token (string or bytes) to set BW_SESSION env var
+        """
         if self._initialized:
             logging.debug("BWCLIServer.start: Already initialized")
             return True
@@ -45,14 +48,25 @@ class BWCLIServer:
             self.client_sock, server_sock = socket.socketpair()
             logging.debug(f"BWCLIServer.start: Created socket pair, server_fd={server_sock.fileno()}")
 
+            # Prepare environment with session token
+            import os
+            env = os.environ.copy()
+            if session:
+                # Convert bytes to string if needed
+                session_str = session.decode('utf-8') if isinstance(session, bytes) else session
+                env['BW_SESSION'] = session_str
+                logging.debug(f"BWCLIServer.start: Set BW_SESSION environment variable")
+
             # Start bw serve with the socket
             self.process = Popen(
                 ["bw", "serve", "--hostname", f"fd+connected://{server_sock.fileno()}"],
                 pass_fds=(server_sock.fileno(),),
                 stdout=PIPE,
-                stderr=PIPE
+                stderr=PIPE,
+                env=env
             )
             logging.debug(f"BWCLIServer.start: Started bw serve process, pid={self.process.pid}")
+
 
             # Close server socket in parent process
             server_sock.close()
@@ -145,10 +159,13 @@ class BWCLIServer:
         self.stop()
         return False
 
-    def is_available(self):
-        """Check if bw serve is available and working"""
+    def is_available(self, session=None):
+        """Check if bw serve is available and working
+
+        Args: session - optional session token for starting bw serve
+        """
         if not self._initialized:
-            if not self.start():
+            if not self.start(session=session):
                 return False
 
         # Try a simple status check
@@ -163,8 +180,8 @@ class BWCLIServer:
                  or False on error
         """
         if not self._initialized:
-            if not self.start():
-                return False
+            logging.error("BWCLIServer not initialized, call start() first")
+            return False
 
         successful, data = self.request('GET', '/status')
         if not successful:
@@ -594,8 +611,8 @@ class BWCLIServer:
         Returns: tuple (success: bool, data: dict or error message)
         """
         if not self._initialized:
-            if not self.start():
-                return False, "bw serve not initialized"
+            logging.error("BWCLIServer not initialized, call start() with session first")
+            return False, "bw serve not initialized"
 
         try:
             conn = BWHTTPConnection(self.client_sock)
@@ -607,20 +624,12 @@ class BWCLIServer:
                 headers['Content-Type'] = 'application/json'
                 headers['Content-Length'] = str(len(encoded_body))
 
-            # Add session token as query parameter if we have one
-            if self.session:
-                if params is None:
-                    params = {}
-                params['session'] = self.session
-
+            # Add any query parameters (session is handled via BW_SESSION env var)
             if params:
                 url = f'{url}?{urlencode(params)}'
 
             # Debug logging
             logging.debug(f"BW Serve Request: {method} {url}")
-            logging.debug(f"Session token present: {bool(self.session)}")
-            if self.session:
-                logging.debug(f"Session token (first 10 chars): {str(self.session)[:10]}...")
 
             conn.request(method, url, encoded_body, headers)
 

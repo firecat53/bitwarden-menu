@@ -19,6 +19,94 @@ from bwm.totp import gen_otp
 import bwm
 
 
+# Wrapper functions to route operations to bw serve or CLI
+def _add_entry_backend(entry, vault):
+    """Add entry using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.add_entry(entry)
+    return bwcli.add_entry(entry, vault.session)
+
+
+def _edit_entry_backend(entry, vault, update_coll='NO'):
+    """Edit entry using server or CLI with collection handling"""
+    if vault.bwcliserver:
+        # Handle special collection update cases
+        if update_coll == 'MOVE':
+            return vault.bwcliserver.move_entry(entry)
+        elif update_coll == 'REMOVE':
+            # Delete and recreate without org
+            if not vault.bwcliserver.delete_entry(entry):
+                return False
+            entry['id'] = None
+            entry['collectionIds'] = []
+            entry['organizationId'] = None
+            return vault.bwcliserver.add_entry(entry)
+        elif update_coll == 'YES':
+            # For bw serve, we just edit the entry with updated collectionIds
+            # The API should handle collection updates automatically
+            return vault.bwcliserver.edit_entry(entry)
+        else:
+            # Normal edit
+            return vault.bwcliserver.edit_entry(entry)
+    return bwcli.edit_entry(entry, vault.session, update_coll)
+
+
+def _delete_entry_backend(entry, vault):
+    """Delete entry using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.delete_entry(entry)
+    return bwcli.delete_entry(entry, vault.session)
+
+
+def _add_folder_backend(name, vault):
+    """Add folder using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.add_folder(name)
+    return bwcli.add_folder(name, vault.session)
+
+
+def _delete_folder_backend(folder, vault):
+    """Delete folder using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.delete_folder(folder)
+    return bwcli.delete_folder(folder, vault.session)
+
+
+def _move_folder_backend(folder, newpath, vault):
+    """Move/rename folder using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.move_folder(folder, newpath)
+    return bwcli.move_folder(folder, newpath, vault.session)
+
+
+def _add_collection_backend(name, org_id, vault):
+    """Add collection using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.add_collection(name, org_id)
+    return bwcli.add_collection(name, org_id, vault.session)
+
+
+def _delete_collection_backend(collection, vault):
+    """Delete collection using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.delete_collection(collection)
+    return bwcli.delete_collection(collection, vault.session)
+
+
+def _move_collection_backend(collection, newpath, vault):
+    """Move/rename collection using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.move_collection(collection, newpath)
+    return bwcli.move_collection(collection, newpath, vault.session)
+
+
+def _get_orgs_backend(vault):
+    """Get organizations using server or CLI"""
+    if vault.bwcliserver:
+        return vault.bwcliserver.get_orgs()
+    return bwcli.get_orgs(vault.session)
+
+
 def obj_name(obj, oid):
     """Return name of folder/collection object based on id
 
@@ -29,7 +117,7 @@ def obj_name(obj, oid):
     return obj[oid]['name']
 
 
-def edit_entry(entry, entries, folders, collections, session):
+def edit_entry(entry, entries, folders, collections, vault):
     # pylint: disable=too-many-branches,too-many-statements,too-many-locals
     """Edit an entry.
 
@@ -37,7 +125,7 @@ def edit_entry(entry, entries, folders, collections, session):
           entries - list of dicts
           folders - dict of dicts {'id': {xxx,yyy}, ... }
           collections - dict of dicts {'id': {xxx,yyy}, ... }
-          session - bytes
+          vault - Vault object
     Returns: None or entry (Item)
 
     """
@@ -70,17 +158,17 @@ def edit_entry(entry, entries, folders, collections, session):
             return entry
         field = sel.split(": ", 1)[0]
         if field == 'Delete entry':
-            delete_entry(entry, entries, session)
+            delete_entry(entry, entries, vault)
             return None
         if field == 'Save entry':
             if not item.get('id'):
-                res = bwcli.add_entry(item, session)
+                res = _add_entry_backend(item, vault)
                 if res is False:
                     dmenu_err("Entry not added. Check logs.")
                     return None
                 entries.append(bwcli.Item(res))
             else:
-                res = bwcli.edit_entry(item, session, update_colls)
+                res = _edit_entry_backend(item, vault, update_colls)
                 if res is False:
                     dmenu_err("Error saving entry. Changes not saved.")
                     continue
@@ -94,7 +182,7 @@ def edit_entry(entry, entries, folders, collections, session):
         if field == 'Collections':
             orig = item['collectionIds']
             coll_list = [collections[i] for i in collections if i in item['collectionIds']]
-            collection = select_collection(collections, session, coll_list=coll_list)
+            collection = select_collection(collections, vault, coll_list=coll_list)
             if collection is False:
                 continue
             item['collectionIds'] = [*collection]
@@ -161,13 +249,13 @@ def _handle_login(item, field):
     return item
 
 
-def add_entry(entries, folders, collections, session):
+def add_entry(entries, folders, collections, vault):
     """Add vault entry
 
     Args: entries - list of dicts
           folders - dict of folder objects
           collections - dict of collections objects
-          session - bytes
+          vault - Vault object
     Returns: None or entry (Item)
 
     """
@@ -178,7 +266,7 @@ def add_entry(entries, folders, collections, session):
     folder = select_folder(folders)
     colls = []
     if collections:
-        colls = select_collection(collections, session, coll_list=[]) or []
+        colls = select_collection(collections, vault, coll_list=[]) or []
     if folder is False:
         return None
     entry = {"organizationId": next(iter(colls.values()))['organizationId'] if colls else None,
@@ -226,22 +314,22 @@ def add_entry(entries, folders, collections, session):
                              "username": "",
                              "passportNumber": "",
                              "licenseNumber": ""}
-    return edit_entry(entry, entries, folders, collections, session)
+    return edit_entry(entry, entries, folders, collections, vault)
 
 
-def delete_entry(entry, entries, session):
+def delete_entry(entry, entries, vault):
     """Delete an entry
 
     Args: entry - dict
           entries - list of dicts
-          session - bytes
+          vault - Vault object
 
     """
     inp = "NO\nYes - confirm delete\n"
     delete = dmenu_select(2, f"Confirm delete of {entry['name']}", inp=inp)
     if delete != "Yes - confirm delete":
         return
-    res = bwcli.delete_entry(entry, session)
+    res = _delete_entry_backend(entry, vault)
     if res is False:
         dmenu_err("Item not deleted. Check logs.")
         return
@@ -538,11 +626,11 @@ def select_folder(folders, prompt="Folders"):
         return False
 
 
-def manage_folders(folders, session):
+def manage_folders(folders, vault):
     """Rename, create, move or delete folders
 
     Args: folders - dict of folder objects {'id': dict, ...}
-          session - bytes
+          vault - Vault object
 
     """
     options = ['Create',
@@ -556,21 +644,22 @@ def manage_folders(folders, session):
         if not sel:
             break
         if sel == 'Create':
-            create_folder(folders, session)
+            create_folder(folders, vault)
         elif sel == 'Move':
-            move_folder(folders, session)
+            move_folder(folders, vault)
         elif sel == 'Rename':
-            rename_folder(folders, session)
+            rename_folder(folders, vault)
         elif sel == 'Delete':
-            delete_folder(folders, session)
+            delete_folder(folders, vault)
         else:
             break
 
 
-def create_folder(folders, session):
+def create_folder(folders, vault):
     """Create new folder
 
     Args: folders - dict of folder objects
+          vault - Vault object
 
     """
     parentfolder = select_folder(folders, prompt="Select parent folder")
@@ -583,18 +672,18 @@ def create_folder(folders, session):
     if not name:
         return
     name = join(pfname, name)
-    folder = bwcli.add_folder(name, session)
+    folder = _add_folder_backend(name, vault)
     if folder is False:
         dmenu_err("Folder not added. Check logs.")
         return
     folders[folder['id']] = folder
 
 
-def delete_folder(folders, session):
+def delete_folder(folders, vault):
     """Delete a folder
 
     Args: folder - folder dict obj
-          session - bytes
+          vault - Vault object
 
     """
     folder = select_folder(folders, prompt="Delete Folder:")
@@ -604,17 +693,18 @@ def delete_folder(folders, session):
     delete = dmenu_select(2, "Confirm delete", inp=inp)
     if delete != "Yes - confirm delete":
         return
-    res = bwcli.delete_folder(folder, session)
+    res = _delete_folder_backend(folder, vault)
     if res is False:
         dmenu_err("Folder not deleted. Check logs.")
         return
     del folders[folder['id']]
 
 
-def move_folder(folders, session):
+def move_folder(folders, vault):
     """Move folder
 
     Args: folders - dict {'name': folder dict, ...}
+          vault - Vault object
 
     """
     folder = select_folder(folders, prompt="Select folder to move")
@@ -627,17 +717,18 @@ def move_folder(folders, session):
     dname = ""
     if destfolder['name'] != "No Folder":
         dname = destfolder['name']
-    folder = bwcli.move_folder(folder, join(dname, basename(folder['name'])), session)
+    folder = _move_folder_backend(folder, join(dname, basename(folder['name'])), vault)
     if folder is False:
         dmenu_err("Folder not added. Check logs.")
         return
     folders[folder['id']] = folder
 
 
-def rename_folder(folders, session):
+def rename_folder(folders, vault):
     """Rename folder
 
     Args: folders - dict {'name': folder dict, ...}
+          vault - Vault object
 
     """
     folder = select_folder(folders, prompt="Select folder to rename")
@@ -647,19 +738,20 @@ def rename_folder(folders, session):
     if not name:
         return
     new = join(dirname(folder['name']), name)
-    folder = bwcli.move_folder(folder, new, session)
+    folder = _move_folder_backend(folder, new, vault)
     if folder is False:
         dmenu_err("Folder not renamed. Check logs.")
         return
     folders[folder['id']] = folder
 
 
-def select_collection(collections, session,
+def select_collection(collections, vault,
                       prompt="Collections - Organization (ESC for no selection)",
                       coll_list=False):
     """Select which collection for an entry
 
     Args: collections - dict of collection dicts {'id': {'id', 'name',...}, ...}
+          vault - Vault object
           options - list of menu options for collections
           prompt - displayed prompt
           coll_list - list of collection objects or False if only one collection
@@ -671,7 +763,7 @@ def select_collection(collections, session,
     if coll_list is not False:
         # When multiple collections will be selected, they have to come from the
         # same organization.
-        org = select_org(session)
+        org = select_org(vault)
         if org is False:
             return False
         orgs = {org['id']: org}
@@ -680,7 +772,7 @@ def select_collection(collections, session,
         colls = {i: j for i, j in enumerate(collections.values()) if
                  j['organizationId'] == org['id']}
     else:
-        orgs = bwcli.get_orgs(session)
+        orgs = _get_orgs_backend(vault)
         colls = dict(enumerate(collections.values()))
     num_align = len(str(len(colls)))
     pattern = str("{:>{na}} - {} - {}")
@@ -722,11 +814,11 @@ def select_collection(collections, session,
     return {i['id']: i for i in coll_list}
 
 
-def manage_collections(collections, session):
+def manage_collections(collections, vault):
     """Rename, create, move or delete collections
 
     Args: collections - dict of collection objects {'name': dict, ...}
-          session - bytes
+          vault - Vault object
 
     """
     options = ['Create',
@@ -740,27 +832,28 @@ def manage_collections(collections, session):
         if not sel:
             break
         if sel == 'Create':
-            create_collection(collections, session)
+            create_collection(collections, vault)
         elif sel == 'Move':
-            move_collection(collections, session)
+            move_collection(collections, vault)
         elif sel == 'Rename':
-            rename_collection(collections, session)
+            rename_collection(collections, vault)
         elif sel == 'Delete':
-            delete_collection(collections, session)
+            delete_collection(collections, vault)
         else:
             break
 
 
-def create_collection(collections, session):
+def create_collection(collections, vault):
     """Create new collection
 
     Args: collections - dict of collection objects
+          vault - Vault object
 
     """
-    org_id = select_org(session)
+    org_id = select_org(vault)
     if org_id is False:
         return
-    parentcollection = select_collection(collections, session,
+    parentcollection = select_collection(collections, vault,
                                          prompt="Select parent collection (Esc for no parent)")
     pname = ""
     if parentcollection:
@@ -769,18 +862,18 @@ def create_collection(collections, session):
     if not name:
         return
     name = join(pname, name)
-    collection = bwcli.add_collection(name, org_id['id'], session)
+    collection = _add_collection_backend(name, org_id['id'], vault)
     collections[collection['id']] = collection
 
 
-def delete_collection(collections, session):
+def delete_collection(collections, vault):
     """Delete a collection
 
     Args: collections- dict of all collection objects
-          session - bytes
+          vault - Vault object
 
     """
-    collection = select_collection(collections, session, prompt="Delete collection:")
+    collection = select_collection(collections, vault, prompt="Delete collection:")
     if not collection:
         return
     collection = next(iter(collection.values()))
@@ -788,46 +881,48 @@ def delete_collection(collections, session):
     delete = dmenu_select(2, f"Confirm delete of {collection['name']}", inp=inp)
     if delete != "Yes - confirm delete":
         return
-    res = bwcli.delete_collection(collection, session)
+    res = _delete_collection_backend(collection, vault)
     if res is False:
         dmenu_err("Collection not deleted. Check logs.")
         return
     del collections[collection['id']]
 
 
-def move_collection(collections, session):
+def move_collection(collections, vault):
     """Move collection
 
     Args: collections - dict {'name': collection dict, ...}
+          vault - Vault object
 
     """
-    collection = select_collection(collections, session, prompt="Select collection to move")
+    collection = select_collection(collections, vault, prompt="Select collection to move")
     if not collection:
         return
     collection = next(iter(collection.values()))
-    destcollection = select_collection(collections, session,
+    destcollection = select_collection(collections, vault,
                                        prompt="Select destination collection "
                                               "(Esc to move to root directory)")
     if not destcollection:
         destcollection = {'name': ""}
     else:
         destcollection = next(iter(destcollection.values()))
-    res = bwcli.move_collection(collection,
-                                join(destcollection['name'], basename(collection['name'])),
-                                session)
+    res = _move_collection_backend(collection,
+                                   join(destcollection['name'], basename(collection['name'])),
+                                   vault)
     if res is False:
         dmenu_err("Collection not moved. Check logs.")
         return
     collections[collection['id']] = res
 
 
-def rename_collection(collections, session):
+def rename_collection(collections, vault):
     """Rename collection
 
     Args: collections - dict {'name': collection dict, ...}
+          vault - Vault object
 
     """
-    collection = select_collection(collections, session, prompt="Select collection to rename")
+    collection = select_collection(collections, vault, prompt="Select collection to rename")
     if not collection:
         return
     collection = next(iter(collection.values()))
@@ -835,23 +930,23 @@ def rename_collection(collections, session):
     if not name:
         return
     new = join(dirname(collection['name']), name)
-    res = bwcli.move_collection(collection, new, session)
+    res = _move_collection_backend(collection, new, vault)
     if res is False:
         dmenu_err("Collection not deleted. Check logs.")
         return
     collections[collection['id']] = res
 
 
-def select_org(session):
+def select_org(vault):
     """Select organization
 
-    Args: session - bytes
+    Args: vault - Vault object
 
     Returns: False for no entry
              org - dict
 
     """
-    orgs = bwcli.get_orgs(session)
+    orgs = _get_orgs_backend(vault)
     orgs_ids = dict(enumerate(orgs.values()))
     num_align = len(str(len(orgs)))
     pattern = str("{:>{na}} - {}")

@@ -374,11 +374,11 @@ class BWCLIServer:
         logging.debug(f"Entry organizationId value: {entry.get('organizationId')}")
         logging.debug(f"Entry collectionIds value: {entry.get('collectionIds')}")
 
-        # Unlike add/edit, delete uses a different endpoint path
-        # Try /delete/item/{id} instead of /object/item/{id}
+        # Try DELETE with the full item object in the body
+        # Some REST APIs require the object to confirm deletion
         logging.debug(f"Deleting item {entry['id']}")
 
-        successful, data = self.request('POST', f'/delete/item/{entry["id"]}')
+        successful, data = self.request('DELETE', f'/object/item/{entry["id"]}', entry)
         if not successful:
             error_msg = data if isinstance(data, str) else "Failed to delete entry"
             logging.error(f"Delete entry error: {error_msg}")

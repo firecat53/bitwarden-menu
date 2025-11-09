@@ -33,10 +33,11 @@ class BWCLIServer:
         self.session = None
         self._initialized = False
 
-    def start(self, session=None):
+    def start(self):
         """Start the bw serve process with socket communication
 
-        Args: session - optional session token (string or bytes) to set BW_SESSION env var
+        Note: bw serve will start in the current vault state (locked/unlocked/unauthenticated).
+        Use login() or unlock() API methods to authenticate after starting.
         """
         if self._initialized:
             logging.debug("BWCLIServer.start: Already initialized")
@@ -48,22 +49,12 @@ class BWCLIServer:
             self.client_sock, server_sock = socket.socketpair()
             logging.debug(f"BWCLIServer.start: Created socket pair, server_fd={server_sock.fileno()}")
 
-            # Prepare environment with session token
-            import os
-            env = os.environ.copy()
-            if session:
-                # Convert bytes to string if needed
-                session_str = session.decode('utf-8') if isinstance(session, bytes) else session
-                env['BW_SESSION'] = session_str
-                logging.debug(f"BWCLIServer.start: Set BW_SESSION environment variable")
-
-            # Start bw serve with the socket
+            # Start bw serve with the socket (no session needed)
             self.process = Popen(
                 ["bw", "serve", "--hostname", f"fd+connected://{server_sock.fileno()}"],
                 pass_fds=(server_sock.fileno(),),
                 stdout=PIPE,
-                stderr=PIPE,
-                env=env
+                stderr=PIPE
             )
             logging.debug(f"BWCLIServer.start: Started bw serve process, pid={self.process.pid}")
 
@@ -159,13 +150,10 @@ class BWCLIServer:
         self.stop()
         return False
 
-    def is_available(self, session=None):
-        """Check if bw serve is available and working
-
-        Args: session - optional session token for starting bw serve
-        """
+    def is_available(self):
+        """Check if bw serve is available and working"""
         if not self._initialized:
-            if not self.start(session=session):
+            if not self.start():
                 return False
 
         # Try a simple status check

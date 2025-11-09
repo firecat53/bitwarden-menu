@@ -319,7 +319,12 @@ class BWCLIServer:
         Args: entry - dict with entry fields
         Returns: new item dict or False on error
         """
-        successful, data = self.request('POST', '/object/item', entry)
+        # Check if item belongs to an organization
+        params = {}
+        if entry.get('organizationId'):
+            params['organizationId'] = entry['organizationId']
+
+        successful, data = self.request('POST', '/object/item', entry, params=params)
         if not successful:
             error_msg = data if isinstance(data, str) else "Failed to add entry"
             logging.error(f"Add entry error: {error_msg}")
@@ -337,7 +342,12 @@ class BWCLIServer:
             logging.error("Entry missing 'id' field")
             return False
 
-        successful, data = self.request('PUT', f'/object/item/{entry["id"]}', entry)
+        # Check if item belongs to an organization
+        params = {}
+        if entry.get('organizationId'):
+            params['organizationId'] = entry['organizationId']
+
+        successful, data = self.request('PUT', f'/object/item/{entry["id"]}', entry, params=params)
         if not successful:
             error_msg = data if isinstance(data, str) else "Failed to edit entry"
             logging.error(f"Edit entry error: {error_msg}")
@@ -355,7 +365,12 @@ class BWCLIServer:
             logging.error("Entry missing 'id' field")
             return False
 
-        successful, data = self.request('DELETE', f'/object/item/{entry["id"]}')
+        # Check if item belongs to an organization
+        params = {}
+        if entry.get('organizationId'):
+            params['organizationId'] = entry['organizationId']
+
+        successful, data = self.request('DELETE', f'/object/item/{entry["id"]}', params=params)
         if not successful:
             error_msg = data if isinstance(data, str) else "Failed to delete entry"
             logging.error(f"Delete entry error: {error_msg}")

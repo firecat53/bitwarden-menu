@@ -369,14 +369,6 @@ class BWCLIServer:
             logging.error("Entry missing 'id' field")
             return False
 
-        # Debug: log what's in the entry
-        logging.debug(f"Delete entry object keys: {list(entry.keys())}")
-        logging.debug(f"Entry organizationId value: {entry.get('organizationId')}")
-        logging.debug(f"Entry collectionIds value: {entry.get('collectionIds')}")
-
-        # DELETE without body - most REST APIs don't accept body for DELETE
-        logging.debug(f"Deleting item {entry['id']}")
-
         successful, data = self.request('DELETE', f'/object/item/{entry["id"]}')
         if not successful:
             error_msg = data if isinstance(data, str) else "Failed to delete entry"

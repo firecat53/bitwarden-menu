@@ -2,13 +2,16 @@
 
 # Test script for bw serve API
 
-echo "Starting bw serve on port 8087..."
-bw serve --hostname localhost:8087 &
+echo "Starting bw serve..."
+bw serve &
 BW_PID=$!
 sleep 2
 
+# Default port is 8087
+PORT=8087
+
 echo -e "\n=== 1. Check status ==="
-curl -s http://localhost:8087/status | jq '.'
+curl -s http://localhost:$PORT/status | jq '.'
 
 echo -e "\n=== 2. Unlock vault ==="
 echo "Enter your master password:"

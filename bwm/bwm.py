@@ -188,6 +188,13 @@ def set_vault(vaults):
         if vault.bwcliserver:
             vault.session, err = vault.bwcliserver.login(vault.email, vault.passw,
                                                          vault.twofactor, code)
+            # If bw serve fails with connection error, fall back to CLI
+            if vault.session is False and err and "Connection reset" in str(err):
+                logging.info("bw serve connection failed during login, falling back to CLI")
+                vault.bwcliserver.stop()
+                vault.bwcliserver = None
+                vault.use_serve = False
+                vault.session, err = bwcli.login(vault.email, vault.passw, vault.twofactor, code)
         else:
             vault.session, err = bwcli.login(vault.email, vault.passw, vault.twofactor, code)
 
@@ -199,6 +206,13 @@ def set_vault(vaults):
         # Unlock using server or CLI
         if vault.bwcliserver:
             vault.session, err = vault.bwcliserver.unlock(vault.passw)
+            # If bw serve fails with connection error, fall back to CLI
+            if vault.session is False and err and "Connection reset" in str(err):
+                logging.info("bw serve connection failed during unlock, falling back to CLI")
+                vault.bwcliserver.stop()
+                vault.bwcliserver = None
+                vault.use_serve = False
+                vault.session, err = bwcli.unlock(vault.passw)
         else:
             vault.session, err = bwcli.unlock(vault.passw)
 

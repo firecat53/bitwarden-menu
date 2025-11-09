@@ -7,6 +7,7 @@ import json
 import logging
 from subprocess import Popen, run, PIPE
 import socket
+import time
 from urllib.parse import urlencode
 from bwm.bwcli import Item
 
@@ -56,6 +57,10 @@ class BWCLIServer:
             if self.process.poll() is not None:
                 logging.error("bw serve process failed to start")
                 return False
+
+            # Give bw serve a moment to initialize
+            # This is especially important when the vault is unauthenticated
+            time.sleep(0.5)
 
             self._initialized = True
             return True

@@ -37,13 +37,14 @@ if [ -n "$ITEM_ID" ]; then
     ITEM=$(curl -s "http://localhost:8087/object/item/$ITEM_ID?session=$SESSION")
     echo "$ITEM" | jq '.'
 
-    echo -e "\n=== 6. Try DELETE without body ==="
+    echo -e "\n=== 6. Try DELETE without body (standard REST) ==="
     curl -s -X DELETE "http://localhost:8087/object/item/$ITEM_ID?session=$SESSION" | jq '.'
 
-    echo -e "\n=== 7. Try DELETE with item in body ==="
-    curl -s -X DELETE "http://localhost:8087/object/item/$ITEM_ID?session=$SESSION" \
-      -H "Content-Type: application/json" \
-      -d "$ITEM" | jq '.'
+    echo -e "\n=== 7. Try DELETE with permanent flag ==="
+    curl -s -X DELETE "http://localhost:8087/object/item/$ITEM_ID?session=$SESSION&permanent=true" | jq '.'
+
+    echo -e "\n=== 8. Check if item still exists ==="
+    curl -s "http://localhost:8087/object/item/$ITEM_ID?session=$SESSION" | jq '.'
 fi
 
 echo -e "\n=== Stopping bw serve ==="

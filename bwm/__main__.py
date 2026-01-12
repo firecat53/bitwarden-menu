@@ -17,6 +17,9 @@ import bwm
 from bwm.bwm import DmenuRunner
 from bwm.menu import dmenu_err
 
+# Python 3.14 default is 'forkserver'. Set to 'fork' for backwards compatibility
+multiprocessing.set_start_method('fork')
+
 
 def find_free_port():
     """Find random free port to use for BaseManager server

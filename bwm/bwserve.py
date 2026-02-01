@@ -5,7 +5,7 @@ primarily via the `serve` command
 from http.client import HTTPConnection
 import json
 import logging
-from subprocess import Popen, run, PIPE
+from subprocess import Popen, PIPE
 import socket
 import time
 from urllib.parse import urlencode
@@ -88,7 +88,7 @@ class BWCLIServer:
                     # Process died - capture stderr for debugging
                     stderr_output = self.process.stderr.read().decode('utf-8') if self.process.stderr else "No stderr"
                     stdout_output = self.process.stdout.read().decode('utf-8') if self.process.stdout else "No stdout"
-                    logging.error(f"bw serve process died during initialization")
+                    logging.error("bw serve process died during initialization")
                     logging.error(f"bw serve stderr: {stderr_output}")
                     logging.error(f"bw serve stdout: {stdout_output}")
                     return False
@@ -235,7 +235,7 @@ class BWCLIServer:
 
         if 'raw' in data:
             self.session = data['raw']
-            logging.debug(f"BWCLIServer.login: Login successful, session token received")
+            logging.debug("BWCLIServer.login: Login successful, session token received")
             return data['raw'], None
 
         logging.error("BWCLIServer.login: No session token in response")

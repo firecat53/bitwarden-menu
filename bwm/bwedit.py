@@ -31,8 +31,18 @@ def _edit_entry_backend(entry, vault, update_coll="NO"):
     if vault.bwcliserver:
         # Handle special collection update cases
         if update_coll == "MOVE":
-            # bw serve doesn't have a share/move endpoint, fall back to CLI
-            return bwcli.edit_entry(entry, vault.session, update_coll)
+            # Move to organization, then edit to apply other changes (e.g. folder)
+            res = vault.bwcliserver.move_entry(entry)
+            if not res:
+                # Move failed - item might already be in org, try edit instead
+                return vault.bwcliserver.edit_entry(entry)
+            # Merge user's changes into server response to avoid stale data
+            res["folderId"] = entry.get("folderId")
+            res["name"] = entry.get("name")
+            res["notes"] = entry.get("notes")
+            res["favorite"] = entry.get("favorite")
+            res["collectionIds"] = entry.get("collectionIds", [])
+            return vault.bwcliserver.edit_entry(res)
         elif update_coll == "REMOVE":
             # Delete and recreate without org
             if not vault.bwcliserver.delete_entry(entry):
@@ -42,9 +52,12 @@ def _edit_entry_backend(entry, vault, update_coll="NO"):
             entry["organizationId"] = None
             return vault.bwcliserver.add_entry(entry)
         elif update_coll == "YES":
-            # For bw serve, we just edit the entry with updated collectionIds
-            # The API should handle collection updates automatically
-            return vault.bwcliserver.edit_entry(entry)
+            # No REST endpoint for item-collections, use delete+add
+            if not vault.bwcliserver.delete_entry(entry):
+                return False
+            entry["id"] = None
+            # organizationId and collectionIds are already updated on entry
+            return vault.bwcliserver.add_entry(entry)
         else:
             # Normal edit
             return vault.bwcliserver.edit_entry(entry)
@@ -122,7 +135,9 @@ def obj_name(obj, oid):
           oid - string
 
     """
-    return obj[oid]["name"]
+    if oid in obj:
+        return obj[oid]["name"]
+    return "Unassigned"
 
 
 def edit_entry(entry, entries, folders, collections, vault):

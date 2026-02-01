@@ -453,20 +453,12 @@ class BWCLIServer:
         Args: entry - dict with entry fields
         Returns: new item dict or False on error
         """
-        # Check if item belongs to an organization
-        params = {}
-        if entry.get("organizationId"):
-            params["organizationId"] = entry["organizationId"]
-
-        successful, data = self.request(
-            "POST", "/object/item", entry, params=params
-        )
+        successful, data = self.request("POST", "/object/item", entry)
         if not successful:
             error_msg = data if isinstance(data, str) else "Failed to add entry"
             logging.error(f"Add entry error: {error_msg}")
             return False
 
-        # data is already the item object, not wrapped in another 'data' key
         logging.debug(
             f"Add entry successful, item id: {data.get('id', 'unknown')}"
         )
@@ -525,22 +517,19 @@ class BWCLIServer:
         return entry
 
     def move_entry(self, entry):
-        """Move entry to an organization
+        """Move entry to an organization collection
 
-        Args: entry - entry dict object with organizationId and collectionIds
+        Args: entry - entry dict object with id, organizationId, and collectionIds
         Returns: updated entry object (dict) on success, False on failure
         """
         if "id" not in entry or "organizationId" not in entry:
             logging.error("Entry missing required fields for move")
             return False
 
-        body = {"collectionIds": entry.get("collectionIds", [])}
-
         successful, data = self.request(
             "POST",
-            f"/object/item/{entry['id']}/share",
-            body,
-            params={"organizationId": entry["organizationId"]},
+            f"/move/{entry['id']}/{entry['organizationId']}",
+            entry.get("collectionIds", []),
         )
         if not successful:
             error_msg = (

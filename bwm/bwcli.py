@@ -303,35 +303,27 @@ def edit_entry(entry, session, update_coll="NO"):
     """
     item = deepcopy(entry)
     if update_coll == "YES":
-        enc = run(
-            ["bw", "encode"],
-            input=json.dumps(item["collectionIds"]).encode(),
-            capture_output=True,
-            check=False,
-        )
-        if not enc.stdout:
-            logging.error(enc)
-            return False
-        res = run(
-            [
-                "bw",
-                "edit",
-                "--session",
-                session,
-                "item-collections",
-                item["id"],
-                enc.stdout,
-            ],
-            capture_output=True,
-            check=False,
-        )
-        if not res.stdout:
-            logging.error(res)
-            return False
-    elif update_coll == "MOVE":
-        res = move_entry(entry, session)
+        # bw edit item-collections is unreliable, use delete+add instead
+        res = delete_entry(entry, session)
         if res is False:
             return False
+        item["id"] = None
+        # organizationId and collectionIds are already set on item
+        res = add_entry(item, session)
+        if res is False:
+            return False
+        return res
+    elif update_coll == "MOVE":
+        # bw move command is unreliable, use delete+add instead
+        res = delete_entry(entry, session)
+        if res is False:
+            return False
+        item["id"] = None
+        # organizationId and collectionIds are already set on item
+        res = add_entry(item, session)
+        if res is False:
+            return False
+        return res
     elif update_coll == "REMOVE":
         res = delete_entry(entry, session)
         if res is False:
@@ -354,45 +346,6 @@ def edit_entry(entry, session, update_coll="NO"):
         return False
     res = run(
         ["bw", "edit", "--session", session, "item", item["id"], enc.stdout],
-        capture_output=True,
-        check=False,
-    )
-    if not res.stdout:
-        logging.error(res)
-        return False
-    return json.loads(res.stdout)
-
-
-def move_entry(entry, session):
-    """Move entry to an organization (if it currently belongs to personal vault)
-
-    Assumes entry already has the organizationId and collectionIds updated.
-
-    Args: entry - entry dict object
-          session - session id
-    Returns: updated entry object (dict) on success, False on failure
-
-    """
-    item = deepcopy(entry)
-    enc = run(
-        ["bw", "encode"],
-        input=json.dumps(item["collectionIds"]).encode(),
-        capture_output=True,
-        check=False,
-    )
-    if not enc.stdout:
-        logging.error(enc)
-        return False
-    res = run(
-        [
-            "bw",
-            "move",
-            "--session",
-            session,
-            item["id"],
-            item["organizationId"].encode(),
-            enc.stdout,
-        ],
         capture_output=True,
         check=False,
     )

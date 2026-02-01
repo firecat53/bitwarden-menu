@@ -805,8 +805,10 @@ def move_folder(folders, vault):
     folder = select_folder(folders, prompt="Select folder to move")
     if folder is False or folder["name"] == "No Folder":
         return
+    # Exclude the folder being moved from destination options
+    dest_folders = {k: v for k, v in folders.items() if k != folder["id"]}
     destfolder = select_folder(
-        folders, prompt="Select destination folder. 'No Folder' is root."
+        dest_folders, prompt="Select destination folder. 'No Folder' is root."
     )
     if destfolder is False:
         return
@@ -1019,8 +1021,10 @@ def move_collection(collections, vault):
     if not collection:
         return
     collection = next(iter(collection.values()))
+    # Exclude the collection being moved from destination options
+    dest_collections = {k: v for k, v in collections.items() if k != collection["id"]}
     destcollection = select_collection(
-        collections,
+        dest_collections,
         vault,
         prompt="Select destination collection (Esc to move to root directory)",
     )

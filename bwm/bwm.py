@@ -1,6 +1,5 @@
-"""Bitwarden-menu main module
+"""Bitwarden-menu main module"""
 
-"""
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import partial
@@ -26,19 +25,21 @@ import bwm
 def get_passphrase(secret="Password"):
     """Get a vault password from dmenu or pinentry
 
-        Args: secret - string ('Password' or '2FA Code' or 'client_secret')
-        Returns: string
+    Args: secret - string ('Password' or '2FA Code' or 'client_secret')
+    Returns: string
 
     """
     pin_prompt = f"SETDESC Enter {secret}\nGETPIN\n"
     pinentry = bwm.CONF.get("dmenu", "pinentry", fallback=None)
     if pinentry:
         password = ""
-        out = subprocess.run(pinentry,
-                             capture_output=True,
-                             check=False,
-                             encoding=bwm.ENC,
-                             input=pin_prompt).stdout
+        out = subprocess.run(
+            pinentry,
+            capture_output=True,
+            check=False,
+            encoding=bwm.ENC,
+            input=pin_prompt,
+        ).stdout
         if out:
             res = out.split("\n")[2]
             if res.startswith("D "):
@@ -50,9 +51,8 @@ def get_passphrase(secret="Password"):
 
 @dataclass
 class Vault:  # pylint: disable=too-many-instance-attributes
-    """Definition for a Vault object
+    """Definition for a Vault object"""
 
-    """
     url: str
     email: str
     passw: str
@@ -79,40 +79,45 @@ def get_vault(vaults=None, **kwargs):
 
     """
     vaults = [] if vaults is None else vaults
-    vault_cli = kwargs.get('vault', "")
-    login_cli = kwargs.get('login', "")
+    vault_cli = kwargs.get("vault", "")
+    login_cli = kwargs.get("login", "")
     if not vaults:
-        args = dict(bwm.CONF.items('vault'))
-        servers = [i for i in args if i.startswith('server')]
+        args = dict(bwm.CONF.items("vault"))
+        servers = [i for i in args if i.startswith("server")]
         for srv in servers:
-            idx = srv.rsplit('_', 1)[-1]
-            email = args.get(f'email_{idx}', "")
-            passw = args.get(f'password_{idx}', "")
-            twofactor = args.get(f'twofactor_{idx}', "")
+            idx = srv.rsplit("_", 1)[-1]
+            email = args.get(f"email_{idx}", "")
+            passw = args.get(f"password_{idx}", "")
+            twofactor = args.get(f"twofactor_{idx}", "")
             if not args[srv] or not email:
                 continue
             try:
-                cmd = args[f'password_cmd_{idx}']
-                res = subprocess.run(shlex.split(cmd),
-                                     check=False,
-                                     capture_output=True,
-                                     encoding=bwm.ENC)
+                cmd = args[f"password_cmd_{idx}"]
+                res = subprocess.run(
+                    shlex.split(cmd),
+                    check=False,
+                    capture_output=True,
+                    encoding=bwm.ENC,
+                )
                 if res.stderr:
                     dmenu_err(f"Password command error: {res.stderr}")
                     logging.error(f"Password command error: {res.stderr}")
                     sys.exit(1)
                 else:
-                    passw = res.stdout.rstrip('\n') if res.stdout else passw
+                    passw = res.stdout.rstrip("\n") if res.stdout else passw
             except KeyError:
                 pass
             vaults.append(Vault(args[srv], email, passw, twofactor))
     if vault_cli:
-        va_ = [i for i in vaults if i.url == vault_cli
-               and (i.email == login_cli or not login_cli)]
+        va_ = [
+            i
+            for i in vaults
+            if i.url == vault_cli and (i.email == login_cli or not login_cli)
+        ]
         if va_:
             vaults.insert(0, vaults.pop(vaults.index(va_[0])))
         else:
-            vaults.insert(0, Vault(vault_cli, login_cli, '', ''))
+            vaults.insert(0, Vault(vault_cli, login_cli, "", ""))
     if not vaults or (not vaults[0].url or not vaults[0].email):
         sel = get_initial_vault(vault_cli, login_cli)
         if sel:
@@ -128,7 +133,9 @@ def get_vault(vaults=None, **kwargs):
                 return None
             return vaults
         # First vault is the active one
-        vaults.insert(0, vaults.pop(vaults.index([i for i in vaults if i.url == sel][0])))
+        vaults.insert(
+            0, vaults.pop(vaults.index([i for i in vaults if i.url == sel][0]))
+        )
     return set_vault(vaults)
 
 
@@ -139,6 +146,7 @@ def set_vault(vaults):
     Returns: vaults - list of Vault objects (with session added for active vault)
 
     """
+
     def password():
         passw = get_passphrase()
         return passw or None
@@ -151,13 +159,15 @@ def set_vault(vaults):
     # Get status first to determine vault state
     # NOTE: Don't start bw serve yet - it requires vault to be authenticated
     status = bwcli.status()
-    logging.debug(f"set_vault: Initial status check - {status.get('status') if status else 'error'}")
+    logging.debug(
+        f"set_vault: Initial status check - {status.get('status') if status else 'error'}"
+    )
 
     err = ""
     if not status:
         vault.session = False
-    elif status['status'] == 'unauthenticated':
-        if status['serverUrl'] is None:
+    elif status["status"] == "unauthenticated":
+        if status["serverUrl"] is None:
             # Set server URL using CLI (bw serve not available when unauthenticated)
             success = bwcli.set_server(vault.url)
             if success is False:
@@ -168,14 +178,20 @@ def set_vault(vaults):
 
         vault.passw = vault.passw or password()
         code = get_passphrase("2FA Code") if vault.twofactor else ""
-        environ['BW_CLIENTSECRET'] = get_passphrase("client_secret (if required)")
+        environ["BW_CLIENTSECRET"] = get_passphrase(
+            "client_secret (if required)"
+        )
 
         # Step 1: Login via CLI to get session token
         logging.debug("set_vault: Logging in via CLI")
-        vault.session, err = bwcli.login(vault.email, vault.passw, vault.twofactor, code)
-        logging.debug(f"set_vault: CLI login result - session={vault.session is not False}, err={err}")
+        vault.session, err = bwcli.login(
+            vault.email, vault.passw, vault.twofactor, code
+        )
+        logging.debug(
+            f"set_vault: CLI login result - session={vault.session is not False}, err={err}"
+        )
 
-        del environ['BW_CLIENTSECRET']
+        del environ["BW_CLIENTSECRET"]
 
         # Sync and start bw serve with session token
         if vault.session is not False:
@@ -185,28 +201,40 @@ def set_vault(vaults):
 
             # Step 2: Start bw serve with --session from login
             if vault.use_serve and vault.bwcliserver is None:
-                logging.debug("set_vault: Starting bw serve with session from login")
+                logging.debug(
+                    "set_vault: Starting bw serve with session from login"
+                )
                 vault.bwcliserver = BWCLIServer()
                 if not vault.bwcliserver.start(session=vault.session):
-                    logging.info("bw serve failed to start, falling back to CLI")
+                    logging.info(
+                        "bw serve failed to start, falling back to CLI"
+                    )
                     vault.bwcliserver.stop()
                     vault.bwcliserver = None
                     vault.use_serve = False
                 else:
                     logging.debug("set_vault: bw serve started successfully")
 
-    elif status['status'] == 'locked':
+    elif status["status"] == "locked":
         vault.passw = vault.passw or password()
 
         # Step 1: Unlock via CLI to get session token
         logging.debug("set_vault: Unlocking via CLI")
         vault.session, err = bwcli.unlock(vault.passw)
-        logging.debug(f"set_vault: CLI unlock result - session={vault.session is not False}, err={err}")
+        logging.debug(
+            f"set_vault: CLI unlock result - session={vault.session is not False}, err={err}"
+        )
 
         # Step 2: Start bw serve with --session from unlock
         # Step 3: Call /unlock API endpoint to unlock the vault in bw serve
-        if vault.session is not False and vault.use_serve and vault.bwcliserver is None:
-            logging.debug("set_vault: Starting bw serve with session from unlock")
+        if (
+            vault.session is not False
+            and vault.use_serve
+            and vault.bwcliserver is None
+        ):
+            logging.debug(
+                "set_vault: Starting bw serve with session from unlock"
+            )
             vault.bwcliserver = BWCLIServer()
             if not vault.bwcliserver.start(session=vault.session):
                 logging.info("bw serve failed to start, falling back to CLI")
@@ -216,15 +244,19 @@ def set_vault(vaults):
             else:
                 # Step 3: Call unlock API endpoint on bw serve
                 logging.debug("set_vault: Calling unlock API on bw serve")
-                unlock_session, unlock_err = vault.bwcliserver.unlock(vault.passw)
+                unlock_session, unlock_err = vault.bwcliserver.unlock(
+                    vault.passw
+                )
                 if unlock_session is False:
-                    logging.warning(f"bw serve unlock API failed: {unlock_err}, but continuing with CLI session")
+                    logging.warning(
+                        f"bw serve unlock API failed: {unlock_err}, but continuing with CLI session"
+                    )
                 else:
                     logging.debug("set_vault: bw serve unlock API successful")
 
-    elif status['status'] == 'unlocked':
+    elif status["status"] == "unlocked":
         # Vault is already unlocked via CLI, get the session token
-        vault.session = status.get('session', b'')
+        vault.session = status.get("session", b"")
         logging.debug("set_vault: Vault already unlocked via CLI")
 
         # Start bw serve with the existing session token
@@ -252,16 +284,18 @@ def set_vault(vaults):
 
 def get_initial_vault(url=None, email=None):
     """Ask for initial server URL and email if not entered in config file or
-       passed on the CLI.
+    passed on the CLI.
 
-        Args: url - string
-              login - string
+     Args: url - string
+           login - string
 
-        Returns: Vault object
+     Returns: Vault object
 
     """
     if not url:
-        url = dmenu_select(0, "Enter server URL.", "https://vault.bitwarden.com")
+        url = dmenu_select(
+            0, "Enter server URL.", "https://vault.bitwarden.com"
+        )
         if not url:
             dmenu_err("No URL entered. Try again.")
             return False
@@ -270,35 +304,43 @@ def get_initial_vault(url=None, email=None):
         if not email:
             dmenu_err("No login email address entered. Try again.")
             return False
-    twofa = {'None': '', 'TOTP': 0, 'Email': 1, 'Yubikey': 3}
-    method = dmenu_select(len(twofa), "Select Two Factor Auth type.", "\n".join(twofa))
-    idx = max((i.rsplit('_', 1)[-1] for i in dict(bwm.CONF.items('vault'))
-               if i.startswith('server')), default='1')
+    twofa = {"None": "", "TOTP": 0, "Email": 1, "Yubikey": 3}
+    method = dmenu_select(
+        len(twofa), "Select Two Factor Auth type.", "\n".join(twofa)
+    )
+    idx = max(
+        (
+            i.rsplit("_", 1)[-1]
+            for i in dict(bwm.CONF.items("vault"))
+            if i.startswith("server")
+        ),
+        default="1",
+    )
     # Overwrite blank initial values instead of adding new values (server_2)
-    if int(idx) == 1 and not bwm.CONF.get('vault', 'server_1', fallback=''):
+    if int(idx) == 1 and not bwm.CONF.get("vault", "server_1", fallback=""):
         idx = 0
-    bwm.CONF.set('vault', f'server_{int(idx) + 1}', url)
+    bwm.CONF.set("vault", f"server_{int(idx) + 1}", url)
     if email:
-        bwm.CONF.set('vault', f'email_{int(idx) + 1}', email)
+        bwm.CONF.set("vault", f"email_{int(idx) + 1}", email)
     if method:
-        bwm.CONF.set('vault', f'twofactor_{int(idx) + 1}', str(twofa[method]))
-    with open(bwm.CONF_FILE, 'w', encoding=bwm.ENC) as conf_file:
+        bwm.CONF.set("vault", f"twofactor_{int(idx) + 1}", str(twofa[method]))
+    with open(bwm.CONF_FILE, "w", encoding=bwm.ENC) as conf_file:
         bwm.CONF.write(conf_file)
-    return Vault(url, email, '', twofa[method])
+    return Vault(url, email, "", twofa[method])
 
 
 def dmenu_view(entries, folders):
     """View/type individual entries (called from dmenu_run)
 
-        Args: entries (list of dicts)
-              folders (dict of dicts)
+    Args: entries (list of dicts)
+          folders (dict of dicts)
 
-        Returns: None or entry (Item)
+    Returns: None or entry (Item)
 
     """
     sel = view_all_entries([], entries, folders)
     try:
-        entry = entries[int(sel.split('(', 1)[0])]
+        entry = entries[int(sel.split("(", 1)[0])]
     except (ValueError, TypeError):
         return None
     text = view_entry(entry, folders)
@@ -309,8 +351,8 @@ def dmenu_view(entries, folders):
 def dmenu_view_previous_entry(entry, folders):
     """View previous entry
 
-        Args: entry (Item)
-        Returns: entry (Item)
+    Args: entry (Item)
+    Returns: entry (Item)
 
     """
     if entry is not None:
@@ -322,16 +364,16 @@ def dmenu_view_previous_entry(entry, folders):
 def dmenu_edit(entries, folders, collections, vault):
     """Select items to edit (called from dmenu_run)
 
-        Args: entries (list of dicts)
-              folders (dict of dict objects)
-              collections (dict of dict objects)
-              vault (Vault object)
-        Returns: None or entry (Item)
+    Args: entries (list of dicts)
+          folders (dict of dict objects)
+          collections (dict of dict objects)
+          vault (Vault object)
+    Returns: None or entry (Item)
 
     """
     sel = view_all_entries([], entries, folders)
     try:
-        entry = entries[int(sel.split('(', 1)[0])]
+        entry = entries[int(sel.split("(", 1)[0])]
     except (ValueError, TypeError):
         return None
     return edit_entry(entry, entries, folders, collections, vault)
@@ -340,11 +382,11 @@ def dmenu_edit(entries, folders, collections, vault):
 def dmenu_add(entries, folders, collections, vault):
     """Call add item option (called from dmenu_run)
 
-        Args: entries (list of dicts)
-              folders (dict of dict objects)
-              collections (dict of dict objects)
-              vault (Vault object)
-        Returns: None or entry (Item)
+    Args: entries (list of dicts)
+          folders (dict of dict objects)
+          collections (dict of dict objects)
+          vault (Vault object)
+    Returns: None or entry (Item)
 
     """
     return add_entry(entries, folders, collections, vault)
@@ -353,9 +395,9 @@ def dmenu_add(entries, folders, collections, vault):
 def dmenu_folders(folders, vault):
     """Call manage folders option (called from dmenu_run)
 
-        Args: folders (dict of dict objects)
-              vault (Vault object)
-        Returns: dict {err: <Bool>, reload: <Bool>}
+    Args: folders (dict of dict objects)
+          vault (Vault object)
+    Returns: dict {err: <Bool>, reload: <Bool>}
 
     """
     manage_folders(folders, vault)
@@ -365,9 +407,9 @@ def dmenu_folders(folders, vault):
 def dmenu_collections(collections, vault):
     """Call manage collections option (called from dmenu_run)
 
-        Args: collections (dict of dict objects)
-              vault (Vault object)
-        Returns: dict {err: <Bool>, reload: <Bool>}
+    Args: collections (dict of dict objects)
+          vault (Vault object)
+    Returns: dict {err: <Bool>, reload: <Bool>}
 
     """
     manage_collections(collections, vault)
@@ -377,7 +419,7 @@ def dmenu_collections(collections, vault):
 def dmenu_sync(vault):
     """Call vault sync option (called from dmenu_run)
 
-        Args: vault - Vault object
+    Args: vault - Vault object
 
     """
     if vault.bwcliserver:
@@ -392,8 +434,8 @@ def dmenu_sync(vault):
 def lock_vault(vault):
     """Lock vault using server or CLI
 
-        Args: vault - Vault object
-        Returns: True on success, False on error
+    Args: vault - Vault object
+    Returns: True on success, False on error
     """
     if vault.bwcliserver:
         return vault.bwcliserver.lock()
@@ -402,17 +444,14 @@ def lock_vault(vault):
 
 
 def dmenu_clipboard():
-    """Process menu entry - Toggle clipboard entry
-
-    """
+    """Process menu entry - Toggle clipboard entry"""
     bwm.CLIPBOARD = not bwm.CLIPBOARD
     return Run.CONTINUE
 
 
 class Run(Enum):
-    """Enum for dmenu_run return values
+    """Enum for dmenu_run return values"""
 
-    """
     LOCK = auto()
     CONTINUE = auto()
     RELOAD = auto()
@@ -432,24 +471,38 @@ def dmenu_run(vault):
     if bwm.CONF.has_option("vault", "hide_folders"):
         hid_fold = bwm.CONF.get("vault", "hide_folders").split("\n")
         # Validate ignored folder names in config.ini
-        hid_fold = [i for i in hid_fold if i in
-                    [j['name'] for j in vault.folders.values()]]
-        entries_hid = [i for i in vault.entries if i['folder'] not in hid_fold]
+        hid_fold = [
+            i
+            for i in hid_fold
+            if i in [j["name"] for j in vault.folders.values()]
+        ]
+        entries_hid = [i for i in vault.entries if i["folder"] not in hid_fold]
     else:
         entries_hid = vault.entries
-    options = {'View/Type Individual entries': partial(dmenu_view, entries_hid, vault.folders),
-               'View previous entry': partial(dmenu_view_previous_entry,
-                                              vault.prev_entry, vault.folders),
-               'Edit entries': partial(dmenu_edit, vault.entries, vault.folders,
-                                       vault.collections, vault),
-               'Add entry': partial(dmenu_add, vault.entries, vault.folders,
-                                    vault.collections, vault),
-               'Manage folders': partial(dmenu_folders, vault.folders, vault),
-               'Manage collections': partial(dmenu_collections, vault.collections, vault),
-               'Sync vault': partial(dmenu_sync, vault),
-               'Switch vaults': None,
-               "[Clipboard]/Type" if bwm.CLIPBOARD is True else "Clipboard/[Type]": dmenu_clipboard,
-               'Lock vault': partial(lock_vault, vault)}
+    options = {
+        "View/Type Individual entries": partial(
+            dmenu_view, entries_hid, vault.folders
+        ),
+        "View previous entry": partial(
+            dmenu_view_previous_entry, vault.prev_entry, vault.folders
+        ),
+        "Edit entries": partial(
+            dmenu_edit, vault.entries, vault.folders, vault.collections, vault
+        ),
+        "Add entry": partial(
+            dmenu_add, vault.entries, vault.folders, vault.collections, vault
+        ),
+        "Manage folders": partial(dmenu_folders, vault.folders, vault),
+        "Manage collections": partial(
+            dmenu_collections, vault.collections, vault
+        ),
+        "Sync vault": partial(dmenu_sync, vault),
+        "Switch vaults": None,
+        "[Clipboard]/Type"
+        if bwm.CLIPBOARD is True
+        else "Clipboard/[Type]": dmenu_clipboard,
+        "Lock vault": partial(lock_vault, vault),
+    }
     sel = view_all_entries(options, entries_hid, vault.folders)
     if not sel:
         return Run.STOP
@@ -464,7 +517,7 @@ def dmenu_run(vault):
     if sel not in options:
         # Autotype selected entry
         try:
-            entry = vault.entries[int(sel.split('(', 1)[0])]
+            entry = vault.entries[int(sel.split("(", 1)[0])]
         except (ValueError, TypeError):
             return Run.STOP
         type_entry(entry, vault.autotype)
@@ -479,10 +532,11 @@ class DmenuRunner(multiprocessing.Process):
     Args: server - Server object
 
     """
+
     def __init__(self, server, **kwargs):
         multiprocessing.Process.__init__(self)
         self.server = server
-        bwm.CLIPBOARD = kwargs.get('clipboard')
+        bwm.CLIPBOARD = kwargs.get("clipboard")
         self.vaults = get_vault(**kwargs)
         if self.vaults is None:
             self.server.kill_flag.set()
@@ -491,22 +545,36 @@ class DmenuRunner(multiprocessing.Process):
 
         # Get entries using server or CLI
         if self.vault.bwcliserver:
-            self.vault.entries, self.vault.folders, self.vault.collections, self.vault.orgs = \
-                self.vault.bwcliserver.get_entries()
+            (
+                self.vault.entries,
+                self.vault.folders,
+                self.vault.collections,
+                self.vault.orgs,
+            ) = self.vault.bwcliserver.get_entries()
         else:
-            self.vault.entries, self.vault.folders, self.vault.collections, self.vault.orgs = \
-                bwcli.get_entries(self.vault.session)
+            (
+                self.vault.entries,
+                self.vault.folders,
+                self.vault.collections,
+                self.vault.orgs,
+            ) = bwcli.get_entries(self.vault.session)
 
-        if not all(i for i in (self.vault.entries, self.vault.folders,
-                   self.vault.collections, self.vault.orgs) if i is False):
+        if not all(
+            i
+            for i in (
+                self.vault.entries,
+                self.vault.folders,
+                self.vault.collections,
+                self.vault.orgs,
+            )
+            if i is False
+        ):
             dmenu_err("Error loading vault entries.")
             self.server.kill_flag.set()
             sys.exit(1)
 
     def _set_timer(self):
-        """Set inactivity timer
-
-        """
+        """Set inactivity timer"""
         # pylint: disable=attribute-defined-outside-init
         self.cache_timer = Timer(bwm.SESSION_TIMEOUT_MIN * 60, self.cache_time)
         self.cache_timer.daemon = True
@@ -527,16 +595,18 @@ class DmenuRunner(multiprocessing.Process):
             if self.server.args_flag.is_set():
                 dargs = self.server.get_args()
                 self.server.args_flag.clear()
-            bwm.CLIPBOARD = dargs.get('clipboard') or bwm.CLIPBOARD
-            self.vault.autotype = dargs.get('autotype', "") or bwm.SEQUENCE
-            if dargs.get('vault', ""):
+            bwm.CLIPBOARD = dargs.get("clipboard") or bwm.CLIPBOARD
+            self.vault.autotype = dargs.get("autotype", "") or bwm.SEQUENCE
+            if dargs.get("vault", ""):
                 res = Run.SWITCH
                 at_saved = self.vault.autotype
-            elif dargs.get('lock', False):
+            elif dargs.get("lock", False):
                 bwcli.lock()
                 res = Run.LOCK
             else:
-                self.vault.autotype = at_saved if at_saved else self.vault.autotype
+                self.vault.autotype = (
+                    at_saved if at_saved else self.vault.autotype
+                )
                 at_saved = ""
                 res = dmenu_run(self.vault)
             if res == Run.LOCK:
@@ -547,15 +617,30 @@ class DmenuRunner(multiprocessing.Process):
             if res == Run.RELOAD:
                 # Reload entries using server or CLI
                 if self.vault.bwcliserver:
-                    self.vault.entries, self.vault.folders, self.vault.collections, self.vault.orgs = \
-                        self.vault.bwcliserver.get_entries()
+                    (
+                        self.vault.entries,
+                        self.vault.folders,
+                        self.vault.collections,
+                        self.vault.orgs,
+                    ) = self.vault.bwcliserver.get_entries()
                 else:
-                    self.vault.entries, self.vault.folders, self.vault.collections, self.vault.orgs = \
-                        bwcli.get_entries(self.vault.session)
+                    (
+                        self.vault.entries,
+                        self.vault.folders,
+                        self.vault.collections,
+                        self.vault.orgs,
+                    ) = bwcli.get_entries(self.vault.session)
 
-                if not all(i for i in (self.vault.entries, self.vault.folders,
-                                       self.vault.collections, self.vault.orgs)
-                           if i is False):
+                if not all(
+                    i
+                    for i in (
+                        self.vault.entries,
+                        self.vault.folders,
+                        self.vault.collections,
+                        self.vault.orgs,
+                    )
+                    if i is False
+                ):
                     dmenu_err("Error loading entries. See logs.")
                 continue
             if res == Run.SWITCH:
@@ -565,14 +650,30 @@ class DmenuRunner(multiprocessing.Process):
                     # Check if folders exist because there will always be the
                     # root folder if entries have been previously retrieved
                     if self.vault.bwcliserver:
-                        self.vault.entries, self.vault.folders, self.vault.collections, \
-                            self.vault.orgs = self.vault.bwcliserver.get_entries()
+                        (
+                            self.vault.entries,
+                            self.vault.folders,
+                            self.vault.collections,
+                            self.vault.orgs,
+                        ) = self.vault.bwcliserver.get_entries()
                     else:
-                        self.vault.entries, self.vault.folders, self.vault.collections, \
-                            self.vault.orgs = bwcli.get_entries(self.vault.session)
+                        (
+                            self.vault.entries,
+                            self.vault.folders,
+                            self.vault.collections,
+                            self.vault.orgs,
+                        ) = bwcli.get_entries(self.vault.session)
 
-                if not all(i for i in (self.vault.entries, self.vault.folders,
-                           self.vault.collections, self.vault.orgs) if i is False):
+                if not all(
+                    i
+                    for i in (
+                        self.vault.entries,
+                        self.vault.folders,
+                        self.vault.collections,
+                        self.vault.orgs,
+                    )
+                    if i is False
+                ):
                     dmenu_err("Error loading entries. See logs.")
                 continue
             if res == Run.CONTINUE:
@@ -586,12 +687,11 @@ class DmenuRunner(multiprocessing.Process):
             self.server.start_flag.clear()
 
     def cache_time(self):
-        """Kill bwm daemon when cache timer expires
-
-        """
+        """Kill bwm daemon when cache timer expires"""
         self.server.cache_time_expired.set()
         if not self.server.start_flag.is_set():
             self.server.kill_flag.set()
             self.server.start_flag.set()
+
 
 # vim: set et ts=4 sw=4 :

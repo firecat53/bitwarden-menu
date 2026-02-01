@@ -1,6 +1,5 @@
-"""Editing functions for bitwarden-menu
+"""Editing functions for bitwarden-menu"""
 
-"""
 from copy import deepcopy
 import os
 from os.path import basename, dirname, join
@@ -27,22 +26,22 @@ def _add_entry_backend(entry, vault):
     return bwcli.add_entry(entry, vault.session)
 
 
-def _edit_entry_backend(entry, vault, update_coll='NO'):
+def _edit_entry_backend(entry, vault, update_coll="NO"):
     """Edit entry using server or CLI with collection handling"""
     if vault.bwcliserver:
         # Handle special collection update cases
-        if update_coll == 'MOVE':
+        if update_coll == "MOVE":
             # bw serve doesn't have a share/move endpoint, fall back to CLI
             return bwcli.edit_entry(entry, vault.session, update_coll)
-        elif update_coll == 'REMOVE':
+        elif update_coll == "REMOVE":
             # Delete and recreate without org
             if not vault.bwcliserver.delete_entry(entry):
                 return False
-            entry['id'] = None
-            entry['collectionIds'] = []
-            entry['organizationId'] = None
+            entry["id"] = None
+            entry["collectionIds"] = []
+            entry["organizationId"] = None
             return vault.bwcliserver.add_entry(entry)
-        elif update_coll == 'YES':
+        elif update_coll == "YES":
             # For bw serve, we just edit the entry with updated collectionIds
             # The API should handle collection updates automatically
             return vault.bwcliserver.edit_entry(entry)
@@ -55,10 +54,15 @@ def _edit_entry_backend(entry, vault, update_coll='NO'):
 def _delete_entry_backend(entry, vault):
     """Delete entry using server or CLI"""
     import logging
+
     if vault.bwcliserver:
-        logging.debug(f"_delete_entry_backend: Using bw serve for item {entry.get('id', 'unknown')}")
+        logging.debug(
+            f"_delete_entry_backend: Using bw serve for item {entry.get('id', 'unknown')}"
+        )
         return vault.bwcliserver.delete_entry(entry)
-    logging.debug(f"_delete_entry_backend: Using CLI for item {entry.get('id', 'unknown')}")
+    logging.debug(
+        f"_delete_entry_backend: Using CLI for item {entry.get('id', 'unknown')}"
+    )
     return bwcli.delete_entry(entry, vault.session)
 
 
@@ -114,11 +118,11 @@ def _get_orgs_backend(vault):
 def obj_name(obj, oid):
     """Return name of folder/collection object based on id
 
-        Args: obj - dict
-              oid - string
+    Args: obj - dict
+          oid - string
 
     """
-    return obj[oid]['name']
+    return obj[oid]["name"]
 
 
 def edit_entry(entry, entries, folders, collections, vault):
@@ -136,36 +140,47 @@ def edit_entry(entry, entries, folders, collections, vault):
     item = deepcopy(entry)
     update_colls = "NO"
     while True:
-        colls = ", ".join(obj_name(collections, i) for i in item['collectionIds'])
-        fields = [f"Name: {item['name']}",
-                  f"Folder: {obj_name(folders, item['folderId'])}",
-                  f"Collections: {colls}",
-                  f"Autotype: {autotype_seq(item)}",
-                  "Notes: <Enter to Edit>" if item['notes'] else "Notes: None",
-                  "Delete entry",
-                  "Save entry"]
+        colls = ", ".join(
+            obj_name(collections, i) for i in item["collectionIds"]
+        )
+        fields = [
+            f"Name: {item['name']}",
+            f"Folder: {obj_name(folders, item['folderId'])}",
+            f"Collections: {colls}",
+            f"Autotype: {autotype_seq(item)}",
+            "Notes: <Enter to Edit>" if item["notes"] else "Notes: None",
+            "Delete entry",
+            "Save entry",
+        ]
         add_f = []
-        if int(item['type']) == 1:
-            add_f = [f"Username: {item['login']['username']}",
-                     "Password: **********" if item['login']['password'] else "Password: None",
-                     "TOTP: ******" if item['login']['totp'] else "TOTP: None",
-                     "URLs: <Enter to Edit>" if item.get('login', {}).get('uris', [])
-                     else "URLs: None"]
-        elif int(item['type']) == 3:
+        if int(item["type"]) == 1:
+            add_f = [
+                f"Username: {item['login']['username']}",
+                "Password: **********"
+                if item["login"]["password"]
+                else "Password: None",
+                "TOTP: ******" if item["login"]["totp"] else "TOTP: None",
+                "URLs: <Enter to Edit>"
+                if item.get("login", {}).get("uris", [])
+                else "URLs: None",
+            ]
+        elif int(item["type"]) == 3:
             add_f = [f"{i}: {item['card'][j]}" for i, j in bwm.CARD.items()]
-        elif int(item['type']) == 4:
-            add_f = [f"{i}: {item['identity'][j]}" for i, j in bwm.IDENTITY.items()]
+        elif int(item["type"]) == 4:
+            add_f = [
+                f"{i}: {item['identity'][j]}" for i, j in bwm.IDENTITY.items()
+            ]
         fields[-4:-4] = add_f
         inp = "\n".join(fields)
         sel = dmenu_select(len(fields), inp=inp)
         if not [i for i in fields if sel and sel in i]:
             return entry
         field = sel.split(": ", 1)[0]
-        if field == 'Delete entry':
+        if field == "Delete entry":
             delete_entry(entry, entries, vault)
             return None
-        if field == 'Save entry':
-            if not item.get('id'):
+        if field == "Save entry":
+            if not item.get("id"):
                 res = _add_entry_backend(item, vault)
                 if res is False:
                     dmenu_err("Entry not added. Check logs.")
@@ -178,78 +193,96 @@ def edit_entry(entry, entries, folders, collections, vault):
                     continue
                 entries[entries.index(entry)] = bwcli.Item(res)
             return bwcli.Item(res)
-        if field == 'Folder':
+        if field == "Folder":
             folder = select_folder(folders)
             if folder is not False:
-                item['folderId'] = folder['id']
+                item["folderId"] = folder["id"]
             continue
-        if field == 'Collections':
-            orig = item['collectionIds']
-            coll_list = [collections[i] for i in collections if i in item['collectionIds']]
-            collection = select_collection(collections, vault, coll_list=coll_list)
+        if field == "Collections":
+            orig = item["collectionIds"]
+            coll_list = [
+                collections[i]
+                for i in collections
+                if i in item["collectionIds"]
+            ]
+            collection = select_collection(
+                collections, vault, coll_list=coll_list
+            )
             if collection is False:
                 continue
-            item['collectionIds'] = [*collection]
+            item["collectionIds"] = [*collection]
             if collection:
-                item['organizationId'] = next(iter(collection.values()))['organizationId']
-            if item['collectionIds'] and item['collectionIds'] != orig and orig:
+                item["organizationId"] = next(iter(collection.values()))[
+                    "organizationId"
+                ]
+            if item["collectionIds"] and item["collectionIds"] != orig and orig:
                 update_colls = "YES"
-            elif item['collectionIds'] != orig and not orig:
+            elif item["collectionIds"] != orig and not orig:
                 update_colls = "MOVE"
-            elif not item['collectionIds'] and orig:
+            elif not item["collectionIds"] and orig:
                 update_colls = "REMOVE"
             continue
-        if field == 'Notes':
-            item['notes'] = edit_notes(item['notes'])
+        if field == "Notes":
+            item["notes"] = edit_notes(item["notes"])
             continue
-        if field == 'Autotype':
-            edit = f"{item['fields'][autotype_index(item)]['value']}\n" \
-                    if item['fields'][autotype_index(item)]['value'] is not None else "\n"
+        if field == "Autotype":
+            edit = (
+                f"{item['fields'][autotype_index(item)]['value']}\n"
+                if item["fields"][autotype_index(item)]["value"] is not None
+                else "\n"
+            )
             sel = dmenu_select(1, field, inp=edit)
             if sel:
-                item['fields'][autotype_index(item)]['value'] = sel
+                item["fields"][autotype_index(item)]["value"] = sel
             continue
-        if field == 'Name':
-            edit = f"{item['name']}\n" if item['name'] is not None else "\n"
+        if field == "Name":
+            edit = f"{item['name']}\n" if item["name"] is not None else "\n"
             sel = dmenu_select(1, field, inp=edit)
             if sel:
-                item['name'] = sel
+                item["name"] = sel
             continue
-        if item['type'] == 1:
+        if item["type"] == 1:
             item = _handle_login(item, field)
             continue
-        if item['type'] == 3:
-            edit = f"{item['card'][bwm.CARD[field]]}\n" if \
-                item['card'][bwm.CARD[field]] is not None else "\n"
-        if item['type'] == 4:
-            edit = f"{item['identity'][bwm.IDENTITY[field]]}\n" if \
-                item['identity'][bwm.IDENTITY[field]] is not None else "\n"
+        if item["type"] == 3:
+            edit = (
+                f"{item['card'][bwm.CARD[field]]}\n"
+                if item["card"][bwm.CARD[field]] is not None
+                else "\n"
+            )
+        if item["type"] == 4:
+            edit = (
+                f"{item['identity'][bwm.IDENTITY[field]]}\n"
+                if item["identity"][bwm.IDENTITY[field]] is not None
+                else "\n"
+            )
         sel = dmenu_select(1, field, inp=edit)
         if sel is not None:
-            if item['type'] == 3:
-                item['card'][bwm.CARD[field]] = sel
-            if item['type'] == 4:
-                item['identity'][bwm.IDENTITY[field]] = sel
+            if item["type"] == 3:
+                item["card"][bwm.CARD[field]] = sel
+            if item["type"] == 4:
+                item["identity"][bwm.IDENTITY[field]] = sel
 
 
 def _handle_login(item, field):
-    """Handle editing for login type entries
-
-    """
-    if field == 'Password':
+    """Handle editing for login type entries"""
+    if field == "Password":
         item = edit_password(item) or item
         return item
-    if field == 'TOTP':
+    if field == "TOTP":
         item = edit_totp(item) or item
         return item
-    if field.startswith('URLs'):
+    if field.startswith("URLs"):
         item = edit_urls(item)
         return item
-    edit = f"{item['login'][bwm.LOGIN[field]]}\n" if \
-        item['login'][bwm.LOGIN[field]] is not None else "\n"
+    edit = (
+        f"{item['login'][bwm.LOGIN[field]]}\n"
+        if item["login"][bwm.LOGIN[field]] is not None
+        else "\n"
+    )
     sel = dmenu_select(1, field, inp=edit)
     if sel:
-        item['login'][bwm.LOGIN[field]] = sel
+        item["login"][bwm.LOGIN[field]] = sel
     return item
 
 
@@ -273,51 +306,61 @@ def add_entry(entries, folders, collections, vault):
         colls = select_collection(collections, vault, coll_list=[]) or []
     if folder is False:
         return None
-    entry = {"organizationId": next(iter(colls.values()))['organizationId'] if colls else None,
-             "folderId": folder['id'],
-             "type": itypes[itype],
-             "name": "",
-             "notes": "",
-             "favorite": False,
-             "fields": [{"name": "autotype", "value": "", "type": 0}],
-             "login": "",
-             "collectionIds": [*colls],
-             "secureNote": "",
-             "card": "",
-             "identity": ""}
+    entry = {
+        "organizationId": next(iter(colls.values()))["organizationId"]
+        if colls
+        else None,
+        "folderId": folder["id"],
+        "type": itypes[itype],
+        "name": "",
+        "notes": "",
+        "favorite": False,
+        "fields": [{"name": "autotype", "value": "", "type": 0}],
+        "login": "",
+        "collectionIds": [*colls],
+        "secureNote": "",
+        "card": "",
+        "identity": "",
+    }
     if itype == "Login":
-        entry["login"] = {"username": "",
-                          "password": "",
-                          "totp": "",
-                          "uris": []}
+        entry["login"] = {
+            "username": "",
+            "password": "",
+            "totp": "",
+            "uris": [],
+        }
     elif itype == "Secure Note":
         entry["secureNote"] = {"type": 0}
     elif itype == "Card":
-        entry["card"] = {"cardholderName": "",
-                         "brand": "",
-                         "number": "",
-                         "expMonth": "",
-                         "expYear": "",
-                         "code": ""}
+        entry["card"] = {
+            "cardholderName": "",
+            "brand": "",
+            "number": "",
+            "expMonth": "",
+            "expYear": "",
+            "code": "",
+        }
     elif itype == "Identity":
-        entry["identity"] = {"title": "",
-                             "firstName": "",
-                             "middleName": "",
-                             "lastName": "",
-                             "address1": "",
-                             "address2": "",
-                             "address3": "",
-                             "city": "",
-                             "state": "",
-                             "postalCode": "",
-                             "country": "",
-                             "company": "",
-                             "email": "",
-                             "phone": "",
-                             "ssn": "",
-                             "username": "",
-                             "passportNumber": "",
-                             "licenseNumber": ""}
+        entry["identity"] = {
+            "title": "",
+            "firstName": "",
+            "middleName": "",
+            "lastName": "",
+            "address1": "",
+            "address2": "",
+            "address3": "",
+            "city": "",
+            "state": "",
+            "postalCode": "",
+            "country": "",
+            "company": "",
+            "email": "",
+            "phone": "",
+            "ssn": "",
+            "username": "",
+            "passportNumber": "",
+            "licenseNumber": "",
+        }
     return edit_entry(entry, entries, folders, collections, vault)
 
 
@@ -330,7 +373,10 @@ def delete_entry(entry, entries, vault):
 
     """
     import logging
-    logging.debug(f"delete_entry called for item: {entry.get('name', 'unknown')} (id: {entry.get('id', 'unknown')})")
+
+    logging.debug(
+        f"delete_entry called for item: {entry.get('name', 'unknown')} (id: {entry.get('id', 'unknown')})"
+    )
     inp = "NO\nYes - confirm delete\n"
     delete = dmenu_select(2, f"Confirm delete of {entry['name']}", inp=inp)
     logging.debug(f"User selection for delete: {delete}")
@@ -365,7 +411,7 @@ def edit_notes(note):
         if bwm.CONF.has_option("vault", "editor"):
             editor = bwm.CONF.get("vault", "editor")
         else:
-            editor = os.environ.get('EDITOR', 'vim')
+            editor = os.environ.get("EDITOR", "vim")
         if bwm.CONF.has_option("vault", "terminal"):
             terminal = bwm.CONF.get("vault", "terminal")
         else:
@@ -373,7 +419,7 @@ def edit_notes(note):
         terminal = shlex.split(terminal)
         editor = shlex.split(editor)
         editor = terminal + ["-e"] + editor
-    note = b'' if note is None else note.encode(bwm.ENC)
+    note = b"" if note is None else note.encode(bwm.ENC)
     with tempfile.NamedTemporaryFile(suffix=".tmp") as fname:
         fname.write(note)
         fname.flush()
@@ -384,7 +430,7 @@ def edit_notes(note):
             note = fname.read()
         except FileNotFoundError:
             dmenu_err("Terminal not found. Please update config.ini.")
-    note = '' if not note else note.decode(bwm.ENC)
+    note = "" if not note else note.decode(bwm.ENC)
     return note
 
 
@@ -395,24 +441,26 @@ def edit_urls(entry):
     Returns: entry object with updated URLs
 
     """
-    uris = entry.get('login', {}).get('uris')
-    urls = [i['uri'] for i in uris] if uris else []
-    sel = dmenu_select(len(urls) or 1, "URL (Type to add new)", inp="\n".join(urls))
+    uris = entry.get("login", {}).get("uris")
+    urls = [i["uri"] for i in uris] if uris else []
+    sel = dmenu_select(
+        len(urls) or 1, "URL (Type to add new)", inp="\n".join(urls)
+    )
     if not sel:
         return entry
     if sel not in urls:
-        entry.setdefault('login', {})
-        entry['login'].setdefault('uris', [])
-        entry['login']['uris'].append({'uri': sel, 'match': None})
+        entry.setdefault("login", {})
+        entry["login"].setdefault("uris", [])
+        entry["login"]["uris"].append({"uri": sel, "match": None})
     else:
         idx = urls.index(sel)
         sel = dmenu_select(1, "URL", inp=f"{sel}\nDelete URL")
         if not sel:
             return entry
         if sel == "Delete URL":
-            del entry['login']['uris'][idx]
+            del entry["login"]["uris"][idx]
         else:
-            entry['login']['uris'][idx]['uri'] = sel
+            entry["login"]["uris"][idx]["uri"] = sel
     return entry
 
 
@@ -424,7 +472,7 @@ def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches
     Returns: entry - Entry object or False
 
     """
-    otp_url = entry['login']['totp']
+    otp_url = entry["login"]["totp"]
 
     if otp_url is not None:
         inputs = [
@@ -448,22 +496,26 @@ def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches
         if secret_key is None:
             return False
         if not secret_key:
-            entry['login']['totp'] = ""
+            entry["login"]["totp"] = ""
             return entry
 
         for char in secret_key:
             if char.upper() not in bwm.SECRET_VALID_CHARS:
-                dmenu_err("Invaild character in secret key, "
-                          f"valid characters are {bwm.SECRET_VALID_CHARS}")
+                dmenu_err(
+                    "Invaild character in secret key, "
+                    f"valid characters are {bwm.SECRET_VALID_CHARS}"
+                )
                 return False
 
         inputs = [
             "Defaut RFC 6238 token settings",
             "Steam token settings",
-            "Use cusom settings"
+            "Use cusom settings",
         ]
 
-        otp_settings_choice = dmenu_select(len(inputs), "Settings", inp="\n".join(inputs))
+        otp_settings_choice = dmenu_select(
+            len(inputs), "Settings", inp="\n".join(inputs)
+        )
 
         if otp_settings_choice == "Defaut RFC 6238 token settings":
             algorithm_choice = "sha1"
@@ -475,7 +527,9 @@ def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches
             code_size_choice = 5
         elif otp_settings_choice == "Use custom settings":
             inputs = ["SHA-1", "SHA-256", "SHA-512"]
-            algorithm_choice = dmenu_select(len(inputs), "Algorithm", inp="\n".join(inputs))
+            algorithm_choice = dmenu_select(
+                len(inputs), "Algorithm", inp="\n".join(inputs)
+            )
             if not algorithm_choice:
                 return False
             algorithm_choice = algorithm_choice.replace("-", "").lower()
@@ -496,13 +550,15 @@ def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches
             except ValueError:
                 code_size_choice = 6
 
-        otp_url = (f"otpauth://totp/Main:none?secret={secret_key}&period={time_step_choice}"
-                   f"&digits={code_size_choice}&issuer=Main")
+        otp_url = (
+            f"otpauth://totp/Main:none?secret={secret_key}&period={time_step_choice}"
+            f"&digits={code_size_choice}&issuer=Main"
+        )
         if algorithm_choice != "sha1":
             otp_url += "&algorithm=" + algorithm_choice
         if otp_settings_choice == "Steam token settings":
             otp_url += "&encoder=steam"
-        entry['login']['totp'] = otp_url
+        entry["login"]["totp"] = otp_url
         return entry
 
 
@@ -521,7 +577,9 @@ def gen_passwd(chars, length=20):
         sets = set(j for i in chars.values() for j in i.values())
     if length < len(sets) or not chars:
         return False
-    alphabet = "".join(set("".join(j for j in i.values()) for i in chars.values()))
+    alphabet = "".join(
+        set("".join(j for j in i.values()) for i in chars.values())
+    )
     # Ensure minimum of one char from each character set
     password = "".join(choice(k) for k in sets)
     password += "".join(choice(alphabet) for i in range(length - len(sets)))
@@ -537,50 +595,56 @@ def get_password_chars():
     Returns: Dict {preset_name_1: {char_set_1: string, char_set_2: string},
                    preset_name_2: ....}
     """
-    chars = {"upper": string.ascii_uppercase,
-             "lower": string.ascii_lowercase,
-             "digits": string.digits,
-             "punctuation": string.punctuation}
+    chars = {
+        "upper": string.ascii_uppercase,
+        "lower": string.ascii_lowercase,
+        "digits": string.digits,
+        "punctuation": string.punctuation,
+    }
     presets = {}
     presets["Letters+Digits+Punctuation"] = chars
-    presets["Letters+Digits"] = {k: chars[k] for k in ("upper", "lower", "digits")}
+    presets["Letters+Digits"] = {
+        k: chars[k] for k in ("upper", "lower", "digits")
+    }
     presets["Letters"] = {k: chars[k] for k in ("upper", "lower")}
     presets["Digits"] = {k: chars[k] for k in ("digits",)}
-    if bwm.CONF.has_section('password_chars'):
-        pw_chars = dict(bwm.CONF.items('password_chars'))
+    if bwm.CONF.has_section("password_chars"):
+        pw_chars = dict(bwm.CONF.items("password_chars"))
         chars.update(pw_chars)
         for key, val in pw_chars.items():
             presets[key.title()] = {k: chars[k] for k in (key,)}
-    if bwm.CONF.has_section('password_char_presets'):
-        if bwm.CONF.options('password_char_presets'):
+    if bwm.CONF.has_section("password_char_presets"):
+        if bwm.CONF.options("password_char_presets"):
             presets = {}
-        for name, val in bwm.CONF.items('password_char_presets'):
+        for name, val in bwm.CONF.items("password_char_presets"):
             try:
                 presets[name.title()] = {k: chars[k] for k in shlex.split(val)}
             except KeyError:
                 dmenu_err(f"Error: Unknown value in preset {name}. Ignoring.")
                 continue
     inp = "\n".join(presets)
-    char_sel = dmenu_select(len(presets),
-                            "Pick character set(s) to use", inp=inp)
+    char_sel = dmenu_select(
+        len(presets), "Pick character set(s) to use", inp=inp
+    )
     # This dictionary return also handles multiple select if supported by the launcher
-    return {k: presets[k] for k in char_sel.split('\n')} if char_sel else False
+    return {k: presets[k] for k in char_sel.split("\n")} if char_sel else False
 
 
 def edit_password(entry):  # pylint: disable=too-many-return-statements
     """Edit password
 
-        Args: entry dict
-        Returns: entry dict
+    Args: entry dict
+    Returns: entry dict
 
     """
-    sel = entry['login']['password']
+    sel = entry["login"]["password"]
     pw_orig = sel + "\n" if sel is not None else "\n"
-    inputs = ["Generate password",
-              "Manually enter password"]
-    if entry['login']['password']:
+    inputs = ["Generate password", "Manually enter password"]
+    if entry["login"]["password"]:
         inputs.append("Type existing password")
-    pw_choice = dmenu_select(len(inputs), "Password Options", inp="\n".join(inputs))
+    pw_choice = dmenu_select(
+        len(inputs), "Password Options", inp="\n".join(inputs)
+    )
     if pw_choice == "Manually enter password":
         sel = dmenu_select(1, "Password", inp=pw_orig)
         sel_check = dmenu_select(1, "Verify password")
@@ -601,14 +665,16 @@ def edit_password(entry):  # pylint: disable=too-many-return-statements
             return False
         sel = gen_passwd(chars, length)
         if sel is False:
-            dmenu_err("Number of char groups desired is more than requested pw length")
+            dmenu_err(
+                "Number of char groups desired is more than requested pw length"
+            )
             return False
     elif pw_choice == "Type existing password":
-        type_text(entry['login']['password'])
+        type_text(entry["login"]["password"])
         return False
     else:
         return False
-    entry['login']['password'] = sel
+    entry["login"]["password"] = sel
     return entry
 
 
@@ -625,13 +691,15 @@ def select_folder(folders, prompt="Folders"):
     num_align = len(str(len(folders)))
     pattern = str("{:>{na}} - {}")
     folder_names = dict(enumerate(folders.values()))
-    inp = str("\n").join(pattern.format(j, i['name'], na=num_align)
-                         for j, i in folder_names.items())
+    inp = str("\n").join(
+        pattern.format(j, i["name"], na=num_align)
+        for j, i in folder_names.items()
+    )
     sel = dmenu_select(min(bwm.MAX_LEN, len(folders)), prompt, inp=inp)
     if not sel:
         return False
     try:
-        return folder_names[int(sel.split(' - ', maxsplit=1)[0])]
+        return folder_names[int(sel.split(" - ", maxsplit=1)[0])]
     except (ValueError, TypeError):
         return False
 
@@ -643,23 +711,25 @@ def manage_folders(folders, vault):
           vault - Vault object
 
     """
-    options = ['Create',
-               'Move',
-               'Rename',
-               'Delete']
+    options = ["Create", "Move", "Rename", "Delete"]
     while True:
-        inp = "\n".join(i for i in options) + "\n\n" + \
-            "\n".join(i['name'] for i in folders.values())
-        sel = dmenu_select(len(options) + len(folders) + 1, "Manage Folders", inp=inp)
+        inp = (
+            "\n".join(i for i in options)
+            + "\n\n"
+            + "\n".join(i["name"] for i in folders.values())
+        )
+        sel = dmenu_select(
+            len(options) + len(folders) + 1, "Manage Folders", inp=inp
+        )
         if not sel:
             break
-        if sel == 'Create':
+        if sel == "Create":
             create_folder(folders, vault)
-        elif sel == 'Move':
+        elif sel == "Move":
             move_folder(folders, vault)
-        elif sel == 'Rename':
+        elif sel == "Rename":
             rename_folder(folders, vault)
-        elif sel == 'Delete':
+        elif sel == "Delete":
             delete_folder(folders, vault)
         else:
             break
@@ -675,7 +745,7 @@ def create_folder(folders, vault):
     parentfolder = select_folder(folders, prompt="Select parent folder")
     if parentfolder is False:
         return
-    pfname = parentfolder['name']
+    pfname = parentfolder["name"]
     if pfname == "No Folder":
         pfname = ""
     name = dmenu_select(1, "Folder name")
@@ -686,7 +756,7 @@ def create_folder(folders, vault):
     if folder is False:
         dmenu_err("Folder not added. Check logs.")
         return
-    folders[folder['id']] = folder
+    folders[folder["id"]] = folder
 
 
 def delete_folder(folders, vault):
@@ -697,7 +767,7 @@ def delete_folder(folders, vault):
 
     """
     folder = select_folder(folders, prompt="Delete Folder:")
-    if not folder or folder['name'] == "No Folder":
+    if not folder or folder["name"] == "No Folder":
         return
     inp = "NO\nYes - confirm delete\n"
     delete = dmenu_select(2, "Confirm delete", inp=inp)
@@ -707,7 +777,7 @@ def delete_folder(folders, vault):
     if res is False:
         dmenu_err("Folder not deleted. Check logs.")
         return
-    del folders[folder['id']]
+    del folders[folder["id"]]
 
 
 def move_folder(folders, vault):
@@ -718,20 +788,23 @@ def move_folder(folders, vault):
 
     """
     folder = select_folder(folders, prompt="Select folder to move")
-    if folder is False or folder['name'] == "No Folder":
+    if folder is False or folder["name"] == "No Folder":
         return
-    destfolder = select_folder(folders,
-                               prompt="Select destination folder. 'No Folder' is root.")
+    destfolder = select_folder(
+        folders, prompt="Select destination folder. 'No Folder' is root."
+    )
     if destfolder is False:
         return
     dname = ""
-    if destfolder['name'] != "No Folder":
-        dname = destfolder['name']
-    folder = _move_folder_backend(folder, join(dname, basename(folder['name'])), vault)
+    if destfolder["name"] != "No Folder":
+        dname = destfolder["name"]
+    folder = _move_folder_backend(
+        folder, join(dname, basename(folder["name"])), vault
+    )
     if folder is False:
         dmenu_err("Folder not added. Check logs.")
         return
-    folders[folder['id']] = folder
+    folders[folder["id"]] = folder
 
 
 def rename_folder(folders, vault):
@@ -742,22 +815,25 @@ def rename_folder(folders, vault):
 
     """
     folder = select_folder(folders, prompt="Select folder to rename")
-    if folder is False or folder['name'] == "No Folder":
+    if folder is False or folder["name"] == "No Folder":
         return
-    name = dmenu_select(1, "New folder name", inp=basename(folder['name']))
+    name = dmenu_select(1, "New folder name", inp=basename(folder["name"]))
     if not name:
         return
-    new = join(dirname(folder['name']), name)
+    new = join(dirname(folder["name"]), name)
     folder = _move_folder_backend(folder, new, vault)
     if folder is False:
         dmenu_err("Folder not renamed. Check logs.")
         return
-    folders[folder['id']] = folder
+    folders[folder["id"]] = folder
 
 
-def select_collection(collections, vault,
-                      prompt="Collections - Organization (ESC for no selection)",
-                      coll_list=False):
+def select_collection(
+    collections,
+    vault,
+    prompt="Collections - Organization (ESC for no selection)",
+    coll_list=False,
+):
     """Select which collection for an entry
 
     Args: collections - dict of collection dicts {'id': {'id', 'name',...}, ...}
@@ -776,11 +852,14 @@ def select_collection(collections, vault,
         org = select_org(vault)
         if org is False:
             return False
-        orgs = {org['id']: org}
-        prompt_name = org['name']
+        orgs = {org["id"]: org}
+        prompt_name = org["name"]
         prompt = f"Collections - {prompt_name} (Enter to select, ESC when done)"
-        colls = {i: j for i, j in enumerate(collections.values()) if
-                 j['organizationId'] == org['id']}
+        colls = {
+            i: j
+            for i, j in enumerate(collections.values())
+            if j["organizationId"] == org["id"]
+        }
     else:
         orgs = _get_orgs_backend(vault)
         colls = dict(enumerate(collections.values()))
@@ -791,7 +870,10 @@ def select_collection(collections, vault,
         # Check if name and org_id of cur_coll match in coll_list
         # Return num if not in list, otherwise return "*num"
         for i in coll_list:
-            if cur_coll['organizationId'] == i['organizationId'] and cur_coll['name'] == i['name']:
+            if (
+                cur_coll["organizationId"] == i["organizationId"]
+                and cur_coll["name"] == i["name"]
+            ):
                 return f"*{num}"
         return num
 
@@ -800,28 +882,32 @@ def select_collection(collections, vault,
         if coll_list is False:
             coll_list = []
             loop = False
-        inp = str("\n").join(pattern.format(check_coll(j, coll_list, i),
-                                            i['name'],
-                                            orgs[i['organizationId']]['name'],
-                                            na=num_align)
-                             for j, i in colls.items())
+        inp = str("\n").join(
+            pattern.format(
+                check_coll(j, coll_list, i),
+                i["name"],
+                orgs[i["organizationId"]]["name"],
+                na=num_align,
+            )
+            for j, i in colls.items()
+        )
         sel = dmenu_select(min(bwm.MAX_LEN, len(colls)), prompt, inp=inp)
         if not sel:
-            return {i['id']: i for i in coll_list}
-        if sel.startswith('*'):
-            sel = sel.lstrip('*')
+            return {i["id"]: i for i in coll_list}
+        if sel.startswith("*"):
+            sel = sel.lstrip("*")
             try:
-                col = colls[int(sel.split(' - ', maxsplit=1)[0])]
+                col = colls[int(sel.split(" - ", maxsplit=1)[0])]
                 coll_list.remove(col)
             except (ValueError, TypeError):
                 loop = False
         else:
             try:
-                col = colls[int(sel.split(' - ', maxsplit=1)[0])]
+                col = colls[int(sel.split(" - ", maxsplit=1)[0])]
                 coll_list.append(col)
             except (ValueError, TypeError):
                 loop = False
-    return {i['id']: i for i in coll_list}
+    return {i["id"]: i for i in coll_list}
 
 
 def manage_collections(collections, vault):
@@ -831,23 +917,25 @@ def manage_collections(collections, vault):
           vault - Vault object
 
     """
-    options = ['Create',
-               'Move',
-               'Rename',
-               'Delete']
+    options = ["Create", "Move", "Rename", "Delete"]
     while True:
-        inp = "\n".join(i for i in options) + "\n\n" + \
-                "\n".join(i['name'] for i in collections.values())
-        sel = dmenu_select(len(options) + len(collections) + 1, "Manage collections", inp=inp)
+        inp = (
+            "\n".join(i for i in options)
+            + "\n\n"
+            + "\n".join(i["name"] for i in collections.values())
+        )
+        sel = dmenu_select(
+            len(options) + len(collections) + 1, "Manage collections", inp=inp
+        )
         if not sel:
             break
-        if sel == 'Create':
+        if sel == "Create":
             create_collection(collections, vault)
-        elif sel == 'Move':
+        elif sel == "Move":
             move_collection(collections, vault)
-        elif sel == 'Rename':
+        elif sel == "Rename":
             rename_collection(collections, vault)
-        elif sel == 'Delete':
+        elif sel == "Delete":
             delete_collection(collections, vault)
         else:
             break
@@ -863,17 +951,20 @@ def create_collection(collections, vault):
     org_id = select_org(vault)
     if org_id is False:
         return
-    parentcollection = select_collection(collections, vault,
-                                         prompt="Select parent collection (Esc for no parent)")
+    parentcollection = select_collection(
+        collections,
+        vault,
+        prompt="Select parent collection (Esc for no parent)",
+    )
     pname = ""
     if parentcollection:
-        pname = next(iter(parentcollection.values()))['name']
+        pname = next(iter(parentcollection.values()))["name"]
     name = dmenu_select(1, "Collection name")
     if not name:
         return
     name = join(pname, name)
-    collection = _add_collection_backend(name, org_id['id'], vault)
-    collections[collection['id']] = collection
+    collection = _add_collection_backend(name, org_id["id"], vault)
+    collections[collection["id"]] = collection
 
 
 def delete_collection(collections, vault):
@@ -883,7 +974,9 @@ def delete_collection(collections, vault):
           vault - Vault object
 
     """
-    collection = select_collection(collections, vault, prompt="Delete collection:")
+    collection = select_collection(
+        collections, vault, prompt="Delete collection:"
+    )
     if not collection:
         return
     collection = next(iter(collection.values()))
@@ -895,7 +988,7 @@ def delete_collection(collections, vault):
     if res is False:
         dmenu_err("Collection not deleted. Check logs.")
         return
-    del collections[collection['id']]
+    del collections[collection["id"]]
 
 
 def move_collection(collections, vault):
@@ -905,24 +998,30 @@ def move_collection(collections, vault):
           vault - Vault object
 
     """
-    collection = select_collection(collections, vault, prompt="Select collection to move")
+    collection = select_collection(
+        collections, vault, prompt="Select collection to move"
+    )
     if not collection:
         return
     collection = next(iter(collection.values()))
-    destcollection = select_collection(collections, vault,
-                                       prompt="Select destination collection "
-                                              "(Esc to move to root directory)")
+    destcollection = select_collection(
+        collections,
+        vault,
+        prompt="Select destination collection (Esc to move to root directory)",
+    )
     if not destcollection:
-        destcollection = {'name': ""}
+        destcollection = {"name": ""}
     else:
         destcollection = next(iter(destcollection.values()))
-    res = _move_collection_backend(collection,
-                                   join(destcollection['name'], basename(collection['name'])),
-                                   vault)
+    res = _move_collection_backend(
+        collection,
+        join(destcollection["name"], basename(collection["name"])),
+        vault,
+    )
     if res is False:
         dmenu_err("Collection not moved. Check logs.")
         return
-    collections[collection['id']] = res
+    collections[collection["id"]] = res
 
 
 def rename_collection(collections, vault):
@@ -932,19 +1031,23 @@ def rename_collection(collections, vault):
           vault - Vault object
 
     """
-    collection = select_collection(collections, vault, prompt="Select collection to rename")
+    collection = select_collection(
+        collections, vault, prompt="Select collection to rename"
+    )
     if not collection:
         return
     collection = next(iter(collection.values()))
-    name = dmenu_select(1, "New collection name", inp=basename(collection['name']))
+    name = dmenu_select(
+        1, "New collection name", inp=basename(collection["name"])
+    )
     if not name:
         return
-    new = join(dirname(collection['name']), name)
+    new = join(dirname(collection["name"]), name)
     res = _move_collection_backend(collection, new, vault)
     if res is False:
         dmenu_err("Collection not deleted. Check logs.")
         return
-    collections[collection['id']] = res
+    collections[collection["id"]] = res
 
 
 def select_org(vault):
@@ -960,14 +1063,18 @@ def select_org(vault):
     orgs_ids = dict(enumerate(orgs.values()))
     num_align = len(str(len(orgs)))
     pattern = str("{:>{na}} - {}")
-    inp = str("\n").join(pattern.format(j, i['name'], na=num_align)
-                         for j, i in orgs_ids.items())
-    sel = dmenu_select(min(bwm.MAX_LEN, len(orgs)), "Select Organization", inp=inp)
+    inp = str("\n").join(
+        pattern.format(j, i["name"], na=num_align) for j, i in orgs_ids.items()
+    )
+    sel = dmenu_select(
+        min(bwm.MAX_LEN, len(orgs)), "Select Organization", inp=inp
+    )
     if not sel:
         return False
     try:
-        return orgs_ids[int(sel.split(' - ', 1)[0])]
+        return orgs_ids[int(sel.split(" - ", 1)[0])]
     except (ValueError, TypeError):
         return False
+
 
 # vim: set et ts=4 sw=4 :

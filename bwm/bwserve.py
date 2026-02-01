@@ -476,7 +476,7 @@ class BWCLIServer:
             logging.error(f"Move entry error: {error_msg}")
             return False
 
-        return data.get('data', False)
+        return data
 
     def add_folder(self, folder_name):
         """Add folder
@@ -491,7 +491,7 @@ class BWCLIServer:
             logging.error(f"Add folder error: {error_msg}")
             return False
 
-        return data.get('data', False)
+        return data
 
     def delete_folder(self, folder):
         """Delete folder
@@ -531,7 +531,7 @@ class BWCLIServer:
             logging.error(f"Move folder error: {error_msg}")
             return False
 
-        return data.get('data', False)
+        return data
 
     def add_collection(self, collection_name, org_id):
         """Add collection
@@ -552,7 +552,7 @@ class BWCLIServer:
             logging.error(f"Add collection error: {error_msg}")
             return False
 
-        return data.get('data', False)
+        return data
 
     def delete_collection(self, collection):
         """Delete collection
@@ -597,7 +597,7 @@ class BWCLIServer:
             logging.error(f"Move collection error: {error_msg}")
             return False
 
-        return data.get('data', False)
+        return data
 
     def request(self, method: str, url: str, body=None, params=None):
         """Make HTTP request to bw serve API

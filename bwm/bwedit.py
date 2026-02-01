@@ -32,7 +32,8 @@ def _edit_entry_backend(entry, vault, update_coll='NO'):
     if vault.bwcliserver:
         # Handle special collection update cases
         if update_coll == 'MOVE':
-            return vault.bwcliserver.move_entry(entry)
+            # bw serve doesn't have a share/move endpoint, fall back to CLI
+            return bwcli.edit_entry(entry, vault.session, update_coll)
         elif update_coll == 'REMOVE':
             # Delete and recreate without org
             if not vault.bwcliserver.delete_entry(entry):

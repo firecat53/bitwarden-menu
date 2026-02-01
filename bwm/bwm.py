@@ -213,7 +213,17 @@ def set_vault(vaults):
                     vault.bwcliserver = None
                     vault.use_serve = False
                 else:
-                    logging.debug("set_vault: bw serve started successfully")
+                    # Step 3: Call unlock API endpoint on bw serve
+                    logging.debug("set_vault: Calling unlock API on bw serve")
+                    unlock_session, unlock_err = vault.bwcliserver.unlock(
+                        vault.passw
+                    )
+                    if unlock_session is False:
+                        logging.warning(
+                            f"bw serve unlock API failed: {unlock_err}, but continuing with CLI session"
+                        )
+                    else:
+                        logging.debug("set_vault: bw serve unlock API successful")
 
     elif status["status"] == "locked":
         vault.passw = vault.passw or password()
@@ -304,7 +314,7 @@ def get_initial_vault(url=None, email=None):
         if not email:
             dmenu_err("No login email address entered. Try again.")
             return False
-    twofa = {"None": "", "TOTP": 0, "Email": 1, "Yubikey": 3}
+    twofa = {"None": "", "TOTP": "0", "Email": "1", "Yubikey": "3"}
     method = dmenu_select(
         len(twofa), "Select Two Factor Auth type.", "\n".join(twofa)
     )

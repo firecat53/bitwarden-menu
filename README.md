@@ -82,7 +82,19 @@ For full installation documention see the [installation docs][docs/install.md].
 
 ## Tests
 
-To run tests in a venv: `make test` (not implemented yet)
+Run tests using pytest:
+
+```bash
+# Using make (creates venv automatically)
+make test
+
+# With coverage report
+make test-cov
+
+# Or install and run directly
+pip install .[test]
+pytest
+```
 
 ## Development
 
@@ -105,7 +117,6 @@ To run tests in a venv: `make test` (not implemented yet)
 
 ## Planned features
 
-- Unit tests
 - Notifications for syncing status (e.g. when a sync is complete)
 
 [1]: https://github.com/moses-palmer/pynput "Pynput"

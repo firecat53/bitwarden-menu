@@ -41,6 +41,12 @@ dependencies = [
     "xdg-base-dirs",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
 [project.scripts]
 bwm = "bwm.__main__:main"
 
@@ -70,4 +76,20 @@ docs = "share/doc/bitwarden-menu/docs"
 [tool.hatch.build.targets.sdist]
 include = [
     "/bwm",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["bwm"]
+omit = ["bwm/_version.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
 ]

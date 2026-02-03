@@ -29,7 +29,7 @@
         '';
         venvDir = "./.venv";
         postVenvCreation = ''
-          uv pip install hatch
+          uv pip install hatch pytest pytest-cov
           uv pip install -e .
           # Prevent venv uv from overriding nixpkgs uv
           [ -f $(pwd)/.venv/bin/uv ] && rm $(pwd)/.venv/bin/uv*

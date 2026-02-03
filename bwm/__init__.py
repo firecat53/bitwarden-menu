@@ -9,6 +9,7 @@ import logging
 import os
 import shlex
 import sys
+import tempfile
 from os.path import exists, join
 from subprocess import run, DEVNULL
 
@@ -19,7 +20,26 @@ logging.basicConfig(
     filename=join(xdg_cache_home(), "bwm.log"), level=logging.WARNING
 )
 
-AUTH_FILE = join(xdg_cache_home(), ".bwm-auth")
+
+def get_runtime_dir():
+    """Get the runtime directory for storing authentication files.
+
+    Uses $XDG_RUNTIME_DIR/bwm/ if available otherwise falls back to $TMPDIR/bwm-<uid>/.
+
+    Returns: Path runtime directory path
+
+    """
+    xdg_runtime = os.environ.get('XDG_RUNTIME_DIR')
+    if xdg_runtime:
+        runtime_dir = join(xdg_runtime, 'bwm')
+    else:
+        runtime_dir = join(tempfile.gettempdir(), f'bwm-{os.getuid()}')
+    if not exists(runtime_dir):
+        os.makedirs(runtime_dir, mode=0o700)
+    return runtime_dir
+
+
+AUTH_FILE = join(get_runtime_dir(), ".bwm-auth")
 CONF_FILE = join(xdg_config_home(), "bwm/config.ini")
 DATA_HOME = join(xdg_data_home(), "bwm")
 SECRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"

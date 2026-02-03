@@ -48,7 +48,9 @@ def random_str():
 
 
 def get_auth():
-    """Generate and save port and authkey to ~/.cache/.bwm-auth
+    """Generate and save port and authkey to auth file.
+
+    Uses $XDG_RUNTIME_DIR/bwm/ if available otherwise falls back to $TMPDIR/bwm-<uid>/.
 
     Returns: int port, bytestring authkey
 

@@ -135,7 +135,9 @@ class TestRuntimeDir:
         """Test get_runtime_dir uses XDG_RUNTIME_DIR when available."""
         from bwm import get_runtime_dir
 
-        with patch.dict(os.environ, {"XDG_RUNTIME_DIR": str(tmp_path)}, clear=False):
+        with patch.dict(
+            os.environ, {"XDG_RUNTIME_DIR": str(tmp_path)}, clear=False
+        ):
             result = get_runtime_dir()
             assert isinstance(result, str)
             assert str(tmp_path) in result

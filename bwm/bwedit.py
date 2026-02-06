@@ -1022,7 +1022,9 @@ def move_collection(collections, vault):
         return
     collection = next(iter(collection.values()))
     # Exclude the collection being moved from destination options
-    dest_collections = {k: v for k, v in collections.items() if k != collection["id"]}
+    dest_collections = {
+        k: v for k, v in collections.items() if k != collection["id"]
+    }
     destcollection = select_collection(
         dest_collections,
         vault,

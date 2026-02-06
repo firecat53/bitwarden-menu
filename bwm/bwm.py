@@ -223,7 +223,9 @@ def set_vault(vaults):
                             f"bw serve unlock API failed: {unlock_err}, but continuing with CLI session"
                         )
                     else:
-                        logging.debug("set_vault: bw serve unlock API successful")
+                        logging.debug(
+                            "set_vault: bw serve unlock API successful"
+                        )
 
     elif status["status"] == "locked":
         vault.passw = vault.passw or password()

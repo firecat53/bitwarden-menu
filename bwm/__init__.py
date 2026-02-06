@@ -29,11 +29,11 @@ def get_runtime_dir():
     Returns: Path runtime directory path
 
     """
-    xdg_runtime = os.environ.get('XDG_RUNTIME_DIR')
+    xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
     if xdg_runtime:
-        runtime_dir = join(xdg_runtime, 'bwm')
+        runtime_dir = join(xdg_runtime, "bwm")
     else:
-        runtime_dir = join(tempfile.gettempdir(), f'bwm-{os.getuid()}')
+        runtime_dir = join(tempfile.gettempdir(), f"bwm-{os.getuid()}")
     if not exists(runtime_dir):
         os.makedirs(runtime_dir, mode=0o700)
     return runtime_dir

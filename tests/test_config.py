@@ -131,17 +131,15 @@ class TestRuntimeDir:
         assert isinstance(result, str)
         assert "bwm" in result
 
-    @patch.dict(os.environ, {"XDG_RUNTIME_DIR": "/run/user/1000"}, clear=False)
-    def test_get_runtime_dir_uses_xdg(self):
+    def test_get_runtime_dir_uses_xdg(self, tmp_path):
         """Test get_runtime_dir uses XDG_RUNTIME_DIR when available."""
-        # Need to reimport to pick up the patched environ
-        import importlib
-        import bwm
+        from bwm import get_runtime_dir
 
-        # Can't easily test this without reimporting the module
-        # Just verify the function exists and returns a path
-        result = bwm.get_runtime_dir()
-        assert isinstance(result, str)
+        with patch.dict(os.environ, {"XDG_RUNTIME_DIR": str(tmp_path)}, clear=False):
+            result = get_runtime_dir()
+            assert isinstance(result, str)
+            assert str(tmp_path) in result
+            assert "bwm" in result
 
     @patch.dict(os.environ, {}, clear=True)
     @patch("os.environ.get")

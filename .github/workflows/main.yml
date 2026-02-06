@@ -113,6 +113,7 @@ jobs:
 
   publish-to-testpypi:
     name: Publish to TestPyPI
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - build
     runs-on: ubuntu-latest
@@ -134,3 +135,4 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          skip-existing: true

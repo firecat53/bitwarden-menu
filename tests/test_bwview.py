@@ -40,6 +40,11 @@ class TestObjName:
         name = obj_name(sample_collections, "coll-id-1")
         assert name == "Team Collection"
 
+    def test_obj_name_missing_folder_id(self, sample_folders):
+        """Test that a folder ID not in the dict returns '/'."""
+        name = obj_name(sample_folders, "nonexistent-id")
+        assert name == "/"
+
 
 class TestMakeUrlEntries:
     """Tests for URL entry formatting."""
@@ -125,6 +130,27 @@ class TestViewAllEntries:
         mock_select.assert_called_once()
         call_kwargs = mock_select.call_args
         assert "(i)" in call_kwargs[1]["inp"]
+
+    @patch("bwm.bwview.dmenu_select")
+    def test_view_all_entries_login_missing_folder_id(
+        self, mock_select, sample_folders
+    ):
+        """Test viewing login entry that has no folderId key (issue #44)."""
+        entry = {
+            "type": 1,
+            "name": "No Folder Login",
+            "login": {
+                "username": "user",
+                "password": "pass",
+                "totp": None,
+                "uris": [{"uri": "https://example.com", "match": None}],
+            },
+        }
+        mock_select.return_value = "0(l) - /No Folder Login"
+        result = view_all_entries([], [entry], sample_folders)
+        mock_select.assert_called_once()
+        call_kwargs = mock_select.call_args
+        assert "(l)" in call_kwargs[1]["inp"]
 
     @patch("bwm.bwview.dmenu_select")
     def test_view_all_entries_with_options(
@@ -216,6 +242,24 @@ class TestViewLogin:
         mock_otp.assert_called_once()
 
     @patch("bwm.bwview.dmenu_select")
+    def test_view_login_missing_folder_id(self, mock_select, sample_folders):
+        """Test viewing login entry with no folderId key (issue #44)."""
+        entry = {
+            "type": 1,
+            "name": "Test Login",
+            "notes": None,
+            "login": {
+                "username": "testuser",
+                "password": "testpass",
+                "totp": None,
+                "uris": [{"uri": "https://example.com", "match": None}],
+            },
+        }
+        mock_select.return_value = "Username: testuser"
+        result = view_login(entry, sample_folders)
+        assert result == "testuser"
+
+    @patch("bwm.bwview.dmenu_select")
     def test_view_login_none_field(
         self, mock_select, sample_login_entry, sample_folders
     ):
@@ -247,6 +291,18 @@ class TestViewNote:
             "name": "My Note",
             "notes": "Note content",
             "folderId": None,
+        }
+        mock_select.return_value = "Title: My Note"
+        result = view_note(entry, sample_folders)
+        assert result == "My Note"
+
+    @patch("bwm.bwview.dmenu_select")
+    def test_view_note_missing_folder_id(self, mock_select, sample_folders):
+        """Test viewing note entry with no folderId key (issue #44)."""
+        entry = {
+            "type": 2,
+            "name": "My Note",
+            "notes": "Note content",
         }
         mock_select.return_value = "Title: My Note"
         result = view_note(entry, sample_folders)

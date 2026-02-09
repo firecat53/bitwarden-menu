@@ -15,10 +15,12 @@ def obj_name(obj, oid):
           oid - string
 
     """
-    path = obj[oid]["name"]
-    if path == "No Folder":
-        path = "/"
-    return path
+    if oid in obj:
+        path = obj[oid]["name"]
+        if path == "No Folder":
+            path = "/"
+        return path
+    return "/"
 
 
 def view_all_entries(options, vault_entries, folders):
@@ -43,7 +45,7 @@ def view_all_entries(options, vault_entries, folders):
             ven.append(
                 bw_login_pattern.format(
                     j,
-                    join(obj_name(folders, i["folderId"]), i["name"]),
+                    join(obj_name(folders, i.get("folderId")), i["name"]),
                     i["login"]["username"],
                     make_url_entries(i)[0].split(": ", 1)[1],
                     na=num_align,
@@ -53,7 +55,7 @@ def view_all_entries(options, vault_entries, folders):
             ven.append(
                 bw_note_pattern.format(
                     j,
-                    join(obj_name(folders, i["folderId"]), i["name"]),
+                    join(obj_name(folders, i.get("folderId")), i["name"]),
                     na=num_align,
                 )
             )
@@ -61,7 +63,7 @@ def view_all_entries(options, vault_entries, folders):
             ven.append(
                 bw_card_pattern.format(
                     j,
-                    join(obj_name(folders, i["folderId"]), i["name"]),
+                    join(obj_name(folders, i.get("folderId")), i["name"]),
                     i["card"]["brand"],
                     i["card"]["cardholderName"],
                     i["card"]["number"],
@@ -72,7 +74,7 @@ def view_all_entries(options, vault_entries, folders):
             ven.append(
                 bw_ident_pattern.format(
                     j,
-                    join(obj_name(folders, i["folderId"]), i["name"]),
+                    join(obj_name(folders, i.get("folderId")), i["name"]),
                     i["identity"]["lastName"],
                     i["identity"]["firstName"],
                     i["identity"]["email"],
@@ -120,7 +122,7 @@ def view_login(entry, folders):
     """
     fields = [
         f"Title: {entry['name'] or 'None'}",
-        f"Folder: {obj_name(folders, entry['folderId'])}",
+        f"Folder: {obj_name(folders, entry.get('folderId'))}",
         f"Username: {entry['login']['username'] or 'None'}",
         f"Password: {'**********' if entry['login']['password'] else 'None'}",
         f"TOTP: {'******' if entry['login']['totp'] else 'None'}",
@@ -153,7 +155,7 @@ def view_note(entry, folders):
     """
     fields = [
         f"Title: {entry['name'] or 'None'}",
-        f"Folder: {obj_name(folders, entry['folderId'])}",
+        f"Folder: {obj_name(folders, entry.get('folderId'))}",
         f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}",
     ]
     sel = dmenu_select(len(fields), inp="\n".join(fields))
@@ -174,7 +176,7 @@ def view_card(entry, folders):
     """
     fields = [
         f"Title: {entry['name'] or 'None'}",
-        f"Folder: {obj_name(folders, entry['folderId'])}",
+        f"Folder: {obj_name(folders, entry.get('folderId'))}",
         f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}",
     ]
     fields[-1:-1] = [
@@ -198,7 +200,7 @@ def view_ident(entry, folders):
     """
     fields = [
         f"Title: {entry['name'] or 'None'}",
-        f"Folder: {obj_name(folders, entry['folderId'])}",
+        f"Folder: {obj_name(folders, entry.get('folderId'))}",
         f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}",
     ]
     fields[-1:-1] = [

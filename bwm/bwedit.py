@@ -160,7 +160,7 @@ def edit_entry(entry, entries, folders, collections, vault):
         )
         fields = [
             f"Name: {item['name']}",
-            f"Folder: {obj_name(folders, item['folderId'])}",
+            f"Folder: {obj_name(folders, item.get('folderId'))}",
             f"Collections: {colls}",
             f"Autotype: {autotype_seq(item)}",
             "Notes: <Enter to Edit>" if item["notes"] else "Notes: None",

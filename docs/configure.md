@@ -21,7 +21,7 @@ reference for additional options.
 | `[dmenu_passphrase]`      | `obscure`                    | `False`                                 |                                                              |
 |                           | `obscure_color`              | `#222222`                               | Only applicable to dmenu                                     |
 | `[vault]`                 | `server_n`                   | None                                    | `n` is any integer                                           |
-|                           | `login_n`                    | None                                    |                                                              |
+|                           | `email_n`                    | None                                    |                                                              |
 |                           | `password_n`                 | None                                    |                                                              |
 |                           | `password_cmd_n`             | None                                    |                                                              |
 |                           | `twofactor_n`                | None                                    | 0 (TOTP), 1 (email), 3 (yubikey)                             |
@@ -60,9 +60,9 @@ reference for additional options.
 
     [vault]
     server_1 = https://vault.bitwarden.com
-    login_1 = joe@joe.com
+    email_1 = joe@joe.com
     server_2 = https://vault.mydomain.net
-    login_2 = joe@joe.com
+    email_2 = joe@joe.com
     twofactor_2 = 0
     autotype_default_2 = {TOTP}{ENTER}
     password_cmd_2 = gpg -qd ~/.pass.gpg
@@ -100,6 +100,17 @@ reference for additional options.
     # Custom Examples:
     Minimal Punc = upper lower digits "punc min"
     Router Site = upper digits
+
+**Multiple accounts on the same server:** If you have more than one account on the
+same server URL, each account will be shown with its email in the vault selection
+menu. Use `bwm -v <URL> -l <email>` to select a specific account from the
+command line.
+
+    [vault]
+    server_1 = https://vault.bitwarden.com
+    email_1 = personal@example.com
+    server_2 = https://vault.bitwarden.com
+    email_2 = work@example.com
 
 1. Add your vault URLs, login name and 2FA types (if applicable).
 2. Adjust `session_timeout_min` if desired. Default is 6 hours (360 min).

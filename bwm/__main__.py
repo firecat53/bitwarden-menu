@@ -187,7 +187,8 @@ def main():
         "--login",
         type=str,
         required=False,
-        help="Login email address",
+        help="Login email address. Optional when only one account exists on the "
+        "server. Required with -v when multiple accounts share the same server.",
     )
 
     parser.add_argument(
@@ -195,7 +196,8 @@ def main():
         "--vault",
         type=str,
         required=False,
-        help="Vault URL to open, skipping the database selection menu",
+        help="Vault URL to open, skipping the database selection menu. "
+        "Use -l to specify login email when multiple accounts share the same server.",
     )
 
     parser.add_argument(
@@ -208,6 +210,16 @@ def main():
     args = vars(parser.parse_args())
 
     args = args if any(args.values()) else {}
+
+    if args.get("vault") and not args.get("login"):
+        vault_args = dict(bwm.CONF.items("vault"))
+        servers = [i for i in vault_args if i.startswith("server")]
+        matches = [s for s in servers if vault_args[s] == args["vault"]]
+        if len(matches) > 1:
+            msg = ("Multiple accounts for this vault URL. "
+                   "Use -l to specify login email.")
+            print(msg, file=sys.stderr)
+            sys.exit(1)
 
     port, auth = get_auth()
     if port_in_use(port) is False:

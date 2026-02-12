@@ -13,13 +13,15 @@
 
 ## CLI Options
 
-`bwm [-h] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE] [-C]`
+`bwm [-h] [-v VAULT] [-l EMAIL] [-k] [-a AUTOTYPE] [-C]`
 
 --help, -h Output a usage message and exit.
 
--v VAULT, --vault URL Vault URL to open, skipping the selection menu
+-v VAULT, --vault URL Vault URL to open, skipping the selection menu. Use with -l
+when multiple accounts share the same server.
 
--l LOGIN, --login LOGIN email for vault
+-l LOGIN, --login LOGIN email for vault. Optional when only one account exists on
+the server. Required with -v when multiple accounts share the same server.
 
 -k, --lock Locks vault
 

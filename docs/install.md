@@ -22,7 +22,7 @@
 
 `$ sudo dnf install python3-devel dmenu`
 
-#### Ubuntu 21.10
+#### Ubuntu
 
 Ensure Universe repository is enabled.
 

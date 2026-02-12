@@ -5,8 +5,8 @@ from enum import Enum, auto
 from functools import partial
 import logging
 import multiprocessing
-from os import environ, makedirs
-from os.path import join
+from os import environ, makedirs, rename
+from os.path import exists, join
 import shlex
 import sys
 import subprocess
@@ -109,11 +109,14 @@ def get_vault(vaults=None, **kwargs):
                 pass
             vaults.append(Vault(args[srv], email, passw, twofactor))
     if vault_cli:
-        va_ = [
-            i
-            for i in vaults
-            if i.url == vault_cli and (i.email == login_cli or not login_cli)
-        ]
+        va_ = [i for i in vaults if i.url == vault_cli]
+        if login_cli:
+            va_ = [i for i in va_ if i.email == login_cli]
+        if len(va_) > 1:
+            msg = ("Multiple accounts for this vault URL. "
+                   "Use -l to specify login email.")
+            dmenu_err(msg)
+            return None
         if va_:
             vaults.insert(0, vaults.pop(vaults.index(va_[0])))
         else:
@@ -125,17 +128,25 @@ def get_vault(vaults=None, **kwargs):
         else:
             return None
     if len(vaults) > 1 and not vault_cli:
-        inp = "\n".join(i.url for i in vaults)
+        inp = "\n".join(f"{i.url} - {i.email}" for i in vaults)
         sel = dmenu_select(len(vaults), "Select Vault", inp=inp)
-        if not sel or (vaults[0].url == sel and vaults[0].session):
+        if sel:
+            sel_parts = sel.rsplit(" - ", 1)
+            sel_url = sel_parts[0]
+            sel_email = sel_parts[1] if len(sel_parts) > 1 else ""
+        else:
+            sel_url = ""
+            sel_email = ""
+        if not sel or (vaults[0].url == sel_url and vaults[0].email == sel_email
+                       and vaults[0].session):
             # No changes if invalid selection or current active vault chosen
             if all(not i.session for i in vaults):
                 return None
             return vaults
         # First vault is the active one
-        vaults.insert(
-            0, vaults.pop(vaults.index([i for i in vaults if i.url == sel][0]))
-        )
+        matched = [i for i in vaults if i.url == sel_url and i.email == sel_email]
+        if matched:
+            vaults.insert(0, vaults.pop(vaults.index(matched[0])))
     return set_vault(vaults)
 
 
@@ -152,7 +163,27 @@ def set_vault(vaults):
         return passw or None
 
     vault = vaults[0]
-    vault_dir = join(bwm.DATA_HOME, urlsplit(vault.url).netloc)
+    netloc_dir = join(bwm.DATA_HOME, urlsplit(vault.url).netloc)
+    vault_dir = join(netloc_dir, vault.email)
+    # Migrate old flat directory to new netloc/email structure
+    if exists(netloc_dir) and not exists(vault_dir):
+        # Check that no other vault already has a subdirectory here
+        has_other_email_dirs = any(
+            exists(join(netloc_dir, v.email))
+            for v in vaults
+            if v is not vault and v.email
+        )
+        if not has_other_email_dirs:
+            # Old flat dir contains bw CLI data; move into email subdir
+            tmp_dir = netloc_dir + ".migrate_tmp"
+            try:
+                rename(netloc_dir, tmp_dir)
+                makedirs(netloc_dir, exist_ok=True)
+                rename(tmp_dir, vault_dir)
+            except OSError:
+                logging.warning("Failed to migrate vault data directory")
+                # Fallback: just create the new directory
+                makedirs(vault_dir, exist_ok=True)
     makedirs(vault_dir, exist_ok=True)
     environ["BITWARDENCLI_APPDATA_DIR"] = vault_dir
 
@@ -177,55 +208,59 @@ def set_vault(vaults):
                 return None
 
         vault.passw = vault.passw or password()
-        code = get_passphrase("2FA Code") if vault.twofactor else ""
-        environ["BW_CLIENTSECRET"] = get_passphrase(
-            "client_secret (if required)"
-        )
+        if not vault.passw:
+            vault.session = False
+            err = b"No password provided"
+        else:
+            code = get_passphrase("2FA Code") if vault.twofactor else ""
+            environ["BW_CLIENTSECRET"] = get_passphrase(
+                "client_secret (if required)"
+            )
 
-        # Step 1: Login via CLI to get session token
-        logging.debug("set_vault: Logging in via CLI")
-        vault.session, err = bwcli.login(
-            vault.email, vault.passw, vault.twofactor, code
-        )
-        logging.debug(
-            f"set_vault: CLI login result - session={vault.session is not False}, err={err}"
-        )
+            # Step 1: Login via CLI to get session token
+            logging.debug("set_vault: Logging in via CLI")
+            vault.session, err = bwcli.login(
+                vault.email, vault.passw, vault.twofactor, code
+            )
+            logging.debug(
+                f"set_vault: CLI login result - session={vault.session is not False}, err={err}"
+            )
 
-        del environ["BW_CLIENTSECRET"]
+            del environ["BW_CLIENTSECRET"]
 
-        # Sync and start bw serve with session token
-        if vault.session is not False:
-            logging.debug("set_vault: Syncing vault after login")
-            if not bwcli.sync(vault.session):
-                logging.warning("set_vault: Vault sync via CLI failed")
+            # Sync and start bw serve with session token
+            if vault.session is not False:
+                logging.debug("set_vault: Syncing vault after login")
+                if not bwcli.sync(vault.session):
+                    logging.warning("set_vault: Vault sync via CLI failed")
 
-            # Step 2: Start bw serve with --session from login
-            if vault.use_serve and vault.bwcliserver is None:
-                logging.debug(
-                    "set_vault: Starting bw serve with session from login"
-                )
-                vault.bwcliserver = BWCLIServer()
-                if not vault.bwcliserver.start(session=vault.session):
-                    logging.info(
-                        "bw serve failed to start, falling back to CLI"
+                # Step 2: Start bw serve with --session from login
+                if vault.use_serve and vault.bwcliserver is None:
+                    logging.debug(
+                        "set_vault: Starting bw serve with session from login"
                     )
-                    vault.bwcliserver.stop()
-                    vault.bwcliserver = None
-                    vault.use_serve = False
-                else:
-                    # Step 3: Call unlock API endpoint on bw serve
-                    logging.debug("set_vault: Calling unlock API on bw serve")
-                    unlock_session, unlock_err = vault.bwcliserver.unlock(
-                        vault.passw
-                    )
-                    if unlock_session is False:
-                        logging.warning(
-                            f"bw serve unlock API failed: {unlock_err}, but continuing with CLI session"
+                    vault.bwcliserver = BWCLIServer()
+                    if not vault.bwcliserver.start(session=vault.session):
+                        logging.info(
+                            "bw serve failed to start, falling back to CLI"
                         )
+                        vault.bwcliserver.stop()
+                        vault.bwcliserver = None
+                        vault.use_serve = False
                     else:
-                        logging.debug(
-                            "set_vault: bw serve unlock API successful"
+                        # Step 3: Call unlock API endpoint on bw serve
+                        logging.debug("set_vault: Calling unlock API on bw serve")
+                        unlock_session, unlock_err = vault.bwcliserver.unlock(
+                            vault.passw
                         )
+                        if unlock_session is False:
+                            logging.warning(
+                                f"bw serve unlock API failed: {unlock_err}, but continuing with CLI session"
+                            )
+                        else:
+                            logging.debug(
+                                "set_vault: bw serve unlock API successful"
+                            )
 
     elif status["status"] == "locked":
         vault.passw = vault.passw or password()
@@ -657,6 +692,8 @@ class DmenuRunner(multiprocessing.Process):
                 continue
             if res == Run.SWITCH:
                 self.vaults = get_vault(self.vaults, **dargs)
+                if self.vaults is None:
+                    continue
                 self.vault = self.vaults[0]
                 if not self.vault.folders:
                     # Check if folders exist because there will always be the

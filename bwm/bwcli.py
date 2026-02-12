@@ -51,6 +51,9 @@ def login(email, password, method=None, code=""):
     Returns: session (bytes) or False on error, Error message
 
     """
+    if not email or not password:
+        logging.error("No email or password provided")
+        return (False, b"No email or password provided")
     cmd = ["bw", "login", "--raw", email, password]
     if method and code:
         cmd = [

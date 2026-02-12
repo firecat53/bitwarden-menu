@@ -2,8 +2,8 @@
 title: Bitwarden-menu
 section: 1
 header: User Manual
-footer: Bitwarden-menu v0.4.2
-date: 2023-08-26
+footer: Bitwarden-menu v0.5.2
+date: 2026-02-11
 ---
 
 # NAME
@@ -13,7 +13,7 @@ managing of Bitwarden/Vaultwarden vaults.
 
 # SYNOPSIS
 
-**bitwarden-menu** [**--vault** URL] [**--login** email] [**--lock**] [**--autotype** pattern] [**--clipboard]
+**bitwarden-menu** [**--vault** URL] [**--login** email] [**--lock**] [**--autotype** pattern] [**--clipboard**]
 
 # DESCRIPTION
 
@@ -22,9 +22,10 @@ manage most aspects of Bitwarden/Vaultwarden vaults.
 
 # OPTIONS
 
-**-v**, **--vault** Vault URL
+**-v**, **--vault** Vault URL. Use with **-l** when multiple accounts share the same server.
 
-**-l**, **--login**  Login email address
+**-l**, **--login**  Login email address. Optional when only one account exists on
+the server. Required with **-v** when multiple accounts share the same server.
 
 **-k**, **--lock**  Lock vault
 
@@ -57,7 +58,7 @@ for additional options.
 | `[dmenu_passphrase]`      | `obscure`                    | `False`                                 |
 |                           | `obscure_color`              | `#222222`                               |
 | `[vault]`                 | `server_n`                   | None                                    |
-|                           | `login_n`                    | None                                    |
+|                           | `email_n`                    | None                                    |
 |                           | `twofactor_n`                | None                                    |
 |                           | `password_n`                 | None                                    |
 |                           | `password_cmd_n`             | None                                    |

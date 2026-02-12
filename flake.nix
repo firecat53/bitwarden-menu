@@ -25,6 +25,7 @@
         ];
         shellHook = ''
           venvShellHook
+          uv pip install -e . --quiet
           alias bwm="python -m bwm"
         '';
         venvDir = "./.venv";

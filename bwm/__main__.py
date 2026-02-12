@@ -1,6 +1,7 @@
 """Read, type and edit Bitwarden vault entries using dmenu style launchers"""
 
 import argparse
+from importlib.metadata import version as meta_version
 from contextlib import closing
 import multiprocessing
 from multiprocessing.managers import BaseManager
@@ -195,6 +196,13 @@ def main():
         type=str,
         required=False,
         help="Vault URL to open, skipping the database selection menu",
+    )
+
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s {meta_version('bitwarden-menu')}",
     )
 
     args = vars(parser.parse_args())

@@ -3,7 +3,12 @@
 from copy import deepcopy
 import json
 import logging
-from subprocess import run
+import os
+import pty
+import re
+import select
+import time
+from subprocess import DEVNULL, run
 
 
 def status(session=b""):
@@ -67,11 +72,140 @@ def login(email, password, method=None, code=""):
             "--code",
             code,
         ]
-    res = run(cmd, capture_output=True, check=False)
+    res = run(cmd, capture_output=True, stdin=DEVNULL, check=False)
     if not res.stdout or res.stderr:
         logging.error(res)
         return (False, res.stderr)
     return res.stdout, None
+
+
+def _pty_read(fd, timeout=10):
+    """Read from a PTY file descriptor until idle or timeout.
+
+    Returns: bytes read
+
+    """
+    output = b""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        remaining = max(0.1, min(deadline - time.time(), 2))
+        try:
+            ready, _, _ = select.select([fd], [], [], remaining)
+        except (ValueError, OSError):
+            break
+        if ready:
+            try:
+                data = os.read(fd, 4096)
+                if not data:
+                    break
+                output += data
+            except OSError:
+                break
+        else:
+            # No data for 2 seconds - process is likely waiting for input
+            break
+    return output
+
+
+def login_pty_start(email, password):
+    """Start login with a PTY so the CLI can prompt for 2FA interactively.
+
+    The bw CLI opens /dev/tty directly for interactive prompts, bypassing
+    stdin/stdout redirection. A PTY gives the child process its own
+    controlling terminal that we can read/write via the master fd.
+
+    Args: email - string
+          password - string
+
+    Returns: (master_fd, pid) or (False, error message bytes)
+
+    """
+    if not email or not password:
+        logging.error("No email or password provided")
+        return (False, b"No email or password provided")
+    cmd = ["bw", "login", "--raw", email, password]
+    pid, fd = pty.fork()
+    if pid == 0:
+        # Child process
+        os.execvp(cmd[0], cmd)
+        os._exit(1)
+    # Parent: read initial output (prompts) until CLI is waiting for input
+    _pty_read(fd, timeout=15)
+    return (fd, pid)
+
+
+def login_pty_finish(fd, pid, code, timeout=60):
+    """Send the 2FA code to the bw login process and get the session token.
+
+    Args: fd - PTY master file descriptor from login_pty_start
+          pid - child process ID from login_pty_start
+          code - OTP code string
+          timeout - seconds to wait for completion
+
+    Returns: session (bytes) or False on error, Error message
+
+    """
+    try:
+        os.write(fd, (code + "\n").encode())
+    except OSError as exc:
+        logging.error(f"Failed to send OTP code: {exc}")
+        return (False, str(exc).encode())
+
+    # Read output until the process exits (not idle timeout),
+    # since the CLI makes an API call that can take several seconds
+    result = b""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        exited = False
+        try:
+            wpid, status = os.waitpid(pid, os.WNOHANG)
+            if wpid != 0:
+                exited = True
+        except ChildProcessError:
+            exited = True
+            status = 0
+        try:
+            remaining = max(0.1, deadline - time.time())
+            ready, _, _ = select.select([fd], [], [], min(remaining, 1))
+            if ready:
+                data = os.read(fd, 4096)
+                if data:
+                    result += data
+                elif exited:
+                    break
+            elif exited:
+                break
+        except (OSError, ValueError):
+            break
+
+    if not exited:
+        import signal
+
+        os.kill(pid, signal.SIGTERM)
+        try:
+            _, status = os.waitpid(pid, 0)
+        except ChildProcessError:
+            status = 1
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+
+    exit_code = os.WEXITSTATUS(status) if os.WIFEXITED(status) else 1
+    if exit_code != 0:
+        logging.error(f"Email OTP login failed (exit {exit_code}): {result}")
+        return (False, result or b"Email OTP login failed")
+
+    # Extract session token: strip ANSI escapes and find the raw token
+    cleaned = re.sub(rb"\x1b\[[0-9;]*[a-zA-Z]", b"", result)
+    for line in reversed(cleaned.strip().split(b"\n")):
+        line = line.strip()
+        # Session token is a long string with no spaces
+        if len(line) > 20 and b" " not in line:
+            return (line, None)
+
+    logging.error(f"Could not extract session token from: {result}")
+    return (False, result or b"Could not extract session token")
 
 
 def unlock(password):

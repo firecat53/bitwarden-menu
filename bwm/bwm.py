@@ -113,8 +113,10 @@ def get_vault(vaults=None, **kwargs):
         if login_cli:
             va_ = [i for i in va_ if i.email == login_cli]
         if len(va_) > 1:
-            msg = ("Multiple accounts for this vault URL. "
-                   "Use -l to specify login email.")
+            msg = (
+                "Multiple accounts for this vault URL. "
+                "Use -l to specify login email."
+            )
             dmenu_err(msg)
             return None
         if va_:
@@ -137,14 +139,19 @@ def get_vault(vaults=None, **kwargs):
         else:
             sel_url = ""
             sel_email = ""
-        if not sel or (vaults[0].url == sel_url and vaults[0].email == sel_email
-                       and vaults[0].session):
+        if not sel or (
+            vaults[0].url == sel_url
+            and vaults[0].email == sel_email
+            and vaults[0].session
+        ):
             # No changes if invalid selection or current active vault chosen
             if all(not i.session for i in vaults):
                 return None
             return vaults
         # First vault is the active one
-        matched = [i for i in vaults if i.url == sel_url and i.email == sel_email]
+        matched = [
+            i for i in vaults if i.url == sel_url and i.email == sel_email
+        ]
         if matched:
             vaults.insert(0, vaults.pop(vaults.index(matched[0])))
     return set_vault(vaults)
@@ -212,16 +219,27 @@ def set_vault(vaults):
             vault.session = False
             err = b"No password provided"
         else:
-            code = get_passphrase("2FA Code") if vault.twofactor else ""
             environ["BW_CLIENTSECRET"] = get_passphrase(
                 "client_secret (if required)"
             )
 
             # Step 1: Login via CLI to get session token
             logging.debug("set_vault: Logging in via CLI")
-            vault.session, err = bwcli.login(
-                vault.email, vault.passw, vault.twofactor, code
-            )
+            if vault.twofactor in ("", "1"):
+                # Unconfigured or Email OTP: use PTY-based interactive
+                # login so the CLI can prompt for 2FA
+                result = bwcli.login_pty_start(vault.email, vault.passw)
+                if result[0] is False:
+                    vault.session, err = result
+                else:
+                    fd, pid = result
+                    code = get_passphrase("2FA Code")
+                    vault.session, err = bwcli.login_pty_finish(fd, pid, code)
+            else:
+                code = get_passphrase("2FA Code") if vault.twofactor else ""
+                vault.session, err = bwcli.login(
+                    vault.email, vault.passw, vault.twofactor, code
+                )
             logging.debug(
                 f"set_vault: CLI login result - session={vault.session is not False}, err={err}"
             )
@@ -249,7 +267,9 @@ def set_vault(vaults):
                         vault.use_serve = False
                     else:
                         # Step 3: Call unlock API endpoint on bw serve
-                        logging.debug("set_vault: Calling unlock API on bw serve")
+                        logging.debug(
+                            "set_vault: Calling unlock API on bw serve"
+                        )
                         unlock_session, unlock_err = vault.bwcliserver.unlock(
                             vault.passw
                         )

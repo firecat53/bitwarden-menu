@@ -11,17 +11,17 @@ from bwm.bwm import Vault, get_vault, set_vault
 
 @pytest.fixture
 def vault_a():
-    return Vault("https://vault.bitwarden.com", "alice@example.com", "pw1", "")
+    return Vault("https://vault.bitwarden.com", "alice@example.com", "pw1", "0")
 
 
 @pytest.fixture
 def vault_b():
-    return Vault("https://vault.bitwarden.com", "bob@example.com", "pw2", "")
+    return Vault("https://vault.bitwarden.com", "bob@example.com", "pw2", "0")
 
 
 @pytest.fixture
 def vault_c():
-    return Vault("https://vault.mydomain.net", "carol@example.com", "pw3", "")
+    return Vault("https://vault.mydomain.net", "carol@example.com", "pw3", "0")
 
 
 @pytest.fixture

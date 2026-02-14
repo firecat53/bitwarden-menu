@@ -44,83 +44,102 @@ CONF_FILE = join(xdg_config_home(), "bwm/config.ini")
 DATA_HOME = join(xdg_data_home(), "bwm")
 SECRET_VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 CLIPBOARD = False
-if os.environ.get("WAYLAND_DISPLAY"):
-    clips = ["wl-copy -o"]
-else:
-    clips = ["xsel -b", "xclip -l 1 -selection clip"]
-for clip in clips:
-    try:
-        _ = run(
-            shlex.split(clip),
-            check=False,
-            stdout=DEVNULL,
-            stderr=DEVNULL,
-            input="",
-        )
-        CLIPBOARD_CMD = clip
-        break
-    except (OSError, FileNotFoundError):
-        CLIPBOARD_CMD = ""
-        logger.warning(
-            "Clipboard support disabled. Need wl-clipboard, xsel or xclip installed"
-        )
-
+CLIPBOARD_CMD = ""
 ENV = os.environ.copy()
 ENC = locale.getpreferredencoding()
 SESSION_TIMEOUT_DEFAULT_MIN = 360
+SESSION_TIMEOUT_MIN = SESSION_TIMEOUT_DEFAULT_MIN
 SEQUENCE = "{USERNAME}{TAB}{PASSWORD}{ENTER}"
-if not exists(CONF_FILE):
-    CONF = configparser.ConfigParser()
-    try:
-        os.mkdir(os.path.dirname(CONF_FILE))
-    except OSError:
-        pass
-    with open(CONF_FILE, "w", encoding=ENC) as conf_file:
-        CONF.add_section("dmenu")
-        CONF.set("dmenu", "dmenu_command", "dmenu")
-        CONF.add_section("dmenu_passphrase")
-        CONF.set("dmenu_passphrase", "obscure", "True")
-        CONF.set("dmenu_passphrase", "obscure_color", "#222222")
-        CONF.add_section("vault")
-        CONF.set("vault", "server_1", "")
-        CONF.set("vault", "email_1", "")
-        CONF.set("vault", "twofactor_1", "")
-        CONF.set(
-            "vault", "session_timeout_min ", str(SESSION_TIMEOUT_DEFAULT_MIN)
-        )
-        CONF.set("vault", "autotype_default", SEQUENCE)
-        CONF.write(conf_file)
-CONF = configparser.ConfigParser()
-try:
-    CONF.read(CONF_FILE)
-except configparser.ParsingError as err:
-    logger.warning(f"Config file error: {err}")
-    sys.exit(1)
-
 MAX_LEN = 24
-if CONF.has_option("dmenu", "dmenu_command"):
-    command = shlex.split(CONF.get("dmenu", "dmenu_command"))
-    if "-l" in command:
-        MAX_LEN = int(command[command.index("-l") + 1])
-    elif "-L" in command:
-        MAX_LEN = int(command[command.index("-L") + 1])
+CONF = configparser.ConfigParser()
 
-if CONF.has_option("vault", "session_timeout_min"):
-    SESSION_TIMEOUT_MIN = int(CONF.get("vault", "session_timeout_min"))
-else:
-    SESSION_TIMEOUT_MIN = SESSION_TIMEOUT_DEFAULT_MIN
-if CONF.has_option("vault", "autotype_default"):
-    SEQUENCE = CONF.get("vault", "autotype_default")
-if CONF.has_option("vault", "type_library"):
-    type_library = CONF.get("vault", "type_library")
-    for lib in (["xdotool", "version"], ["ydotool"], ["wtype"]):
-        if lib[0] != type_library:
-            continue
+
+def reload_config(conf_file=None):
+    """Reload config file. Primarily for use with the --config flag.
+
+    Args: conf_file - os.path or None for default
+
+    """
+    # pylint: disable=global-statement
+    global CONF, MAX_LEN, SESSION_TIMEOUT_MIN, SEQUENCE, CLIPBOARD_CMD
+    # pylint: enable=global-statement
+
+    CONF = configparser.ConfigParser()
+    conf_file = conf_file if conf_file is not None else CONF_FILE
+    if not exists(conf_file):
+        conf_dir = os.path.dirname(conf_file)
         try:
-            run(lib, check=False, stdout=DEVNULL, stderr=DEVNULL)
-        except OSError:
+            os.makedirs(conf_dir, exist_ok=True)
+        except OSError as err:
+            logger.error(f"Cannot create config directory {conf_dir}: {err}")
+            sys.exit(1)
+        with open(conf_file, "w", encoding=ENC) as cfile:
+            CONF.add_section("dmenu")
+            CONF.set("dmenu", "dmenu_command", "dmenu")
+            CONF.add_section("dmenu_passphrase")
+            CONF.set("dmenu_passphrase", "obscure", "True")
+            CONF.set("dmenu_passphrase", "obscure_color", "#222222")
+            CONF.add_section("vault")
+            CONF.set("vault", "server_1", "")
+            CONF.set("vault", "email_1", "")
+            CONF.set("vault", "twofactor_1", "")
+            CONF.set(
+                "vault", "session_timeout_min ", str(SESSION_TIMEOUT_DEFAULT_MIN)
+            )
+            CONF.set("vault", "autotype_default", SEQUENCE)
+            CONF.write(cfile)
+    try:
+        CONF.read(conf_file)
+    except configparser.ParsingError as err:
+        logger.warning(f"Config file error: {err}")
+        sys.exit(1)
+
+    MAX_LEN = 24
+    if CONF.has_option("dmenu", "dmenu_command"):
+        command = shlex.split(CONF.get("dmenu", "dmenu_command"))
+        if "-l" in command:
+            MAX_LEN = int(command[command.index("-l") + 1])
+        elif "-L" in command:
+            MAX_LEN = int(command[command.index("-L") + 1])
+
+    if CONF.has_option("vault", "session_timeout_min"):
+        SESSION_TIMEOUT_MIN = int(CONF.get("vault", "session_timeout_min"))
+    else:
+        SESSION_TIMEOUT_MIN = SESSION_TIMEOUT_DEFAULT_MIN
+    if CONF.has_option("vault", "autotype_default"):
+        SEQUENCE = CONF.get("vault", "autotype_default")
+    if CONF.has_option("vault", "type_library"):
+        type_library = CONF.get("vault", "type_library")
+        for lib in (["xdotool", "version"], ["ydotool"], ["wtype"]):
+            if lib[0] != type_library:
+                continue
+            try:
+                run(lib, check=False, stdout=DEVNULL, stderr=DEVNULL)
+            except OSError:
+                logger.warning(
+                    f"{lib[0]} not installed. Please install {lib[0]} or update config.ini"
+                )
+
+    # Set up clipboard command
+    if os.environ.get("WAYLAND_DISPLAY"):
+        clips = ["wl-copy -o"]
+    else:
+        clips = ["xsel -b", "xclip -l 1 -selection clip"]
+    for clip in clips:
+        try:
+            _ = run(
+                shlex.split(clip),
+                check=False,
+                stdout=DEVNULL,
+                stderr=DEVNULL,
+                input="",
+            )
+            CLIPBOARD_CMD = clip
+            break
+        except (OSError, FileNotFoundError):
+            CLIPBOARD_CMD = ""
             logger.warning(
-                f"{lib[0]} not installed. Please install {lib[0]} or update config.ini"
+                "Clipboard support disabled. Need wl-clipboard, xsel or xclip installed"
             )
 
 LOGIN = {"Username": "username", "Password": "password", "TOTP": "totp"}

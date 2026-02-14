@@ -3,7 +3,7 @@ title: Bitwarden-menu
 section: 1
 header: User Manual
 footer: Bitwarden-menu v0.5.2
-date: 2026-02-11
+date: 2026-02-13
 ---
 
 # NAME
@@ -34,6 +34,10 @@ https://keepass.info/help/base/autotype.html#autoseq . Overrides global default
 from config.ini for current vault.
 
 **-C**, **--clipboard** Select to clipboard
+
+**-c**, **--config** _PATH_
+Path to config file. Supports absolute paths, relative paths, and tilde expansion.
+Default: ~/.config/bwm/config.ini
 
 # EXAMPLES
 

@@ -13,7 +13,7 @@
 
 ## CLI Options
 
-`bwm [-h] [-v VAULT] [-l EMAIL] [-k] [-a AUTOTYPE] [-C]`
+`bwm [-h] [-v VAULT] [-l EMAIL] [-k] [-a AUTOTYPE] [-C] [-c CONFIG]`
 
 --help, -h Output a usage message and exit.
 
@@ -28,6 +28,9 @@ the server. Required with -v when multiple accounts share the same server.
 -a AUTOTYPE, --autotype AUTOTYPE Override autotype sequence in config.ini
 
 --clipboard -C, type to clipboard
+
+-c CONFIG, --config PATH Path to config file. Supports absolute paths, relative
+paths, and tilde expansion. Default: ~/.config/bwm/config.ini
 
 ## Features
 

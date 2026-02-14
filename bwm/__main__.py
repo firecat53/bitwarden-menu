@@ -207,6 +207,14 @@ def main():
         version=f"%(prog)s {meta_version('bitwarden-menu')}",
     )
 
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        required=False,
+        help="Path to config file (default: ~/.config/bwm/config.ini)",
+    )
+
     args = vars(parser.parse_args())
 
     args = args if any(args.values()) else {}

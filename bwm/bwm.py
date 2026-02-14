@@ -6,7 +6,7 @@ from functools import partial
 import logging
 import multiprocessing
 from os import environ, makedirs, rename
-from os.path import exists, join
+from os.path import exists, expanduser, join
 import shlex
 import sys
 import subprocess
@@ -603,6 +603,8 @@ class DmenuRunner(multiprocessing.Process):
     def __init__(self, server, **kwargs):
         multiprocessing.Process.__init__(self)
         self.server = server
+        cfile = kwargs.get("config")
+        bwm.reload_config(None if cfile is None else expanduser(cfile))
         bwm.CLIPBOARD = kwargs.get("clipboard")
         self.vaults = get_vault(**kwargs)
         if self.vaults is None:

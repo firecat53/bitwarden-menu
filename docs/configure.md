@@ -12,6 +12,8 @@ Once logged in for the first time, you will not need this value again.
 OR Copy config.ini.example to `~/.config/bwm/config.ini` and use it as a
 reference for additional options.
 
+You can use a custom config file location with the `-c/--config` option.
+
 #### Config.ini values
 
 | Section                   | Key                          | Default                                 | Notes                                                        |

@@ -126,7 +126,7 @@ def view_login(entry, folders):
         f"Username: {entry['login'].get('username') or 'None'}",
         f"Password: {'**********' if entry['login'].get('password') else 'None'}",
         f"TOTP: {'******' if entry['login'].get('totp') else 'None'}",
-        f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}",
+        f"Notes: {'<Enter to view>' if entry.get('notes') else 'None'}",
     ]
     fields[-1:-1] = make_url_entries(entry)
     sel = dmenu_select(len(fields), inp="\n".join(fields))
@@ -156,7 +156,7 @@ def view_note(entry, folders):
     fields = [
         f"Title: {entry['name'] or 'None'}",
         f"Folder: {obj_name(folders, entry.get('folderId'))}",
-        f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}",
+        f"Notes: {'<Enter to view>' if entry.get('notes') else 'None'}",
     ]
     sel = dmenu_select(len(fields), inp="\n".join(fields))
     if sel.endswith(": None") or sel not in fields:
@@ -177,7 +177,7 @@ def view_card(entry, folders):
     fields = [
         f"Title: {entry['name'] or 'None'}",
         f"Folder: {obj_name(folders, entry.get('folderId'))}",
-        f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}",
+        f"Notes: {'<Enter to view>' if entry.get('notes') else 'None'}",
     ]
     fields[-1:-1] = [
         f"{i}: {entry['card'][j] or 'None'}" for i, j in bwm.CARD.items()
@@ -201,7 +201,7 @@ def view_ident(entry, folders):
     fields = [
         f"Title: {entry['name'] or 'None'}",
         f"Folder: {obj_name(folders, entry.get('folderId'))}",
-        f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}",
+        f"Notes: {'<Enter to view>' if entry.get('notes') else 'None'}",
     ]
     fields[-1:-1] = [
         f"{i}: {entry['identity'][j] or 'None'}"

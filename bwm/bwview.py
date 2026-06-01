@@ -46,7 +46,7 @@ def view_all_entries(options, vault_entries, folders):
                 bw_login_pattern.format(
                     j,
                     join(obj_name(folders, i.get("folderId")), i["name"]),
-                    i["login"]["username"],
+                    i["login"].get("username") or "",
                     make_url_entries(i)[0].split(": ", 1)[1],
                     na=num_align,
                 )
@@ -64,9 +64,9 @@ def view_all_entries(options, vault_entries, folders):
                 bw_card_pattern.format(
                     j,
                     join(obj_name(folders, i.get("folderId")), i["name"]),
-                    i["card"]["brand"],
-                    i["card"]["cardholderName"],
-                    i["card"]["number"],
+                    i["card"].get("brand") or "",
+                    i["card"].get("cardholderName") or "",
+                    i["card"].get("number") or "",
                     na=num_align,
                 )
             )
@@ -75,10 +75,10 @@ def view_all_entries(options, vault_entries, folders):
                 bw_ident_pattern.format(
                     j,
                     join(obj_name(folders, i.get("folderId")), i["name"]),
-                    i["identity"]["lastName"],
-                    i["identity"]["firstName"],
-                    i["identity"]["email"],
-                    i["identity"]["phone"],
+                    i["identity"].get("lastName") or "",
+                    i["identity"].get("firstName") or "",
+                    i["identity"].get("email") or "",
+                    i["identity"].get("phone") or "",
                     na=num_align,
                 )
             )
@@ -123,9 +123,9 @@ def view_login(entry, folders):
     fields = [
         f"Title: {entry['name'] or 'None'}",
         f"Folder: {obj_name(folders, entry.get('folderId'))}",
-        f"Username: {entry['login']['username'] or 'None'}",
-        f"Password: {'**********' if entry['login']['password'] else 'None'}",
-        f"TOTP: {'******' if entry['login']['totp'] else 'None'}",
+        f"Username: {entry['login'].get('username') or 'None'}",
+        f"Password: {'**********' if entry['login'].get('password') else 'None'}",
+        f"TOTP: {'******' if entry['login'].get('totp') else 'None'}",
         f"Notes: {'<Enter to view>' if entry['notes'] else 'None'}",
     ]
     fields[-1:-1] = make_url_entries(entry)

@@ -180,7 +180,7 @@ def view_card(entry, folders):
         f"Notes: {'<Enter to view>' if entry.get('notes') else 'None'}",
     ]
     fields[-1:-1] = [
-        f"{i}: {entry['card'][j] or 'None'}" for i, j in bwm.CARD.items()
+        f"{i}: {entry['card'].get(j) or 'None'}" for i, j in bwm.CARD.items()
     ]
     sel = dmenu_select(len(fields), inp="\n".join(fields))
     if sel.endswith(": None") or sel not in fields:
@@ -204,7 +204,7 @@ def view_ident(entry, folders):
         f"Notes: {'<Enter to view>' if entry.get('notes') else 'None'}",
     ]
     fields[-1:-1] = [
-        f"{i}: {entry['identity'][j] or 'None'}"
+        f"{i}: {entry['identity'].get(j) or 'None'}"
         for i, j in bwm.IDENTITY.items()
     ]
     sel = dmenu_select(len(fields), inp="\n".join(fields))

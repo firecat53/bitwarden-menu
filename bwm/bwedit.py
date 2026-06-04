@@ -163,27 +163,30 @@ def edit_entry(entry, entries, folders, collections, vault):
             f"Folder: {obj_name(folders, item.get('folderId'))}",
             f"Collections: {colls}",
             f"Autotype: {autotype_seq(item)}",
-            "Notes: <Enter to Edit>" if item["notes"] else "Notes: None",
+            "Notes: <Enter to Edit>" if item.get("notes") else "Notes: None",
             "Delete entry",
             "Save entry",
         ]
         add_f = []
         if int(item["type"]) == 1:
             add_f = [
-                f"Username: {item['login']['username']}",
+                f"Username: {item['login'].get('username') or ''}",
                 "Password: **********"
-                if item["login"]["password"]
+                if item["login"].get("password")
                 else "Password: None",
-                "TOTP: ******" if item["login"]["totp"] else "TOTP: None",
+                "TOTP: ******" if item["login"].get("totp") else "TOTP: None",
                 "URLs: <Enter to Edit>"
                 if item.get("login", {}).get("uris", [])
                 else "URLs: None",
             ]
         elif int(item["type"]) == 3:
-            add_f = [f"{i}: {item['card'][j]}" for i, j in bwm.CARD.items()]
+            add_f = [
+                f"{i}: {item['card'].get(j) or ''}" for i, j in bwm.CARD.items()
+            ]
         elif int(item["type"]) == 4:
             add_f = [
-                f"{i}: {item['identity'][j]}" for i, j in bwm.IDENTITY.items()
+                f"{i}: {item['identity'].get(j) or ''}"
+                for i, j in bwm.IDENTITY.items()
             ]
         fields[-4:-4] = add_f
         inp = "\n".join(fields)
@@ -238,7 +241,7 @@ def edit_entry(entry, entries, folders, collections, vault):
                 update_colls = "REMOVE"
             continue
         if field == "Notes":
-            item["notes"] = edit_notes(item["notes"])
+            item["notes"] = edit_notes(item.get("notes") or "")
             continue
         if field == "Autotype":
             edit = (
@@ -260,17 +263,11 @@ def edit_entry(entry, entries, folders, collections, vault):
             item = _handle_login(item, field)
             continue
         if item["type"] == 3:
-            edit = (
-                f"{item['card'][bwm.CARD[field]]}\n"
-                if item["card"][bwm.CARD[field]] is not None
-                else "\n"
-            )
+            val = item["card"].get(bwm.CARD[field])
+            edit = f"{val}\n" if val is not None else "\n"
         if item["type"] == 4:
-            edit = (
-                f"{item['identity'][bwm.IDENTITY[field]]}\n"
-                if item["identity"][bwm.IDENTITY[field]] is not None
-                else "\n"
-            )
+            val = item["identity"].get(bwm.IDENTITY[field])
+            edit = f"{val}\n" if val is not None else "\n"
         sel = dmenu_select(1, field, inp=edit)
         if sel is not None:
             if item["type"] == 3:
@@ -290,11 +287,8 @@ def _handle_login(item, field):
     if field.startswith("URLs"):
         item = edit_urls(item)
         return item
-    edit = (
-        f"{item['login'][bwm.LOGIN[field]]}\n"
-        if item["login"][bwm.LOGIN[field]] is not None
-        else "\n"
-    )
+    val = item["login"].get(bwm.LOGIN[field])
+    edit = f"{val}\n" if val is not None else "\n"
     sel = dmenu_select(1, field, inp=edit)
     if sel:
         item["login"][bwm.LOGIN[field]] = sel

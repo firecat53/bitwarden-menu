@@ -115,15 +115,17 @@ def token_command(token):
 
 
 PLACEHOLDER_AUTOTYPE_TOKENS = {
-    "{TITLE}": lambda e: e["name"],
-    "{USERNAME}": lambda e: e["login"]["username"],
-    "{URL}": lambda e: e.get("login", "").get("uris", [])[0].get("uri", "")
-    if e.get("login", "") and e.get("login", "").get("uris", [])
+    "{TITLE}": lambda e: e.get("name") or "",
+    "{USERNAME}": lambda e: (e.get("login") or {}).get("username") or "",
+    "{URL}": lambda e: (e.get("login") or {}).get("uris", [{}])[0].get("uri", "")
+    if (e.get("login") or {}).get("uris")
     else "",
-    "{PASSWORD}": lambda e: e["login"]["password"],
-    "{NOTES}": lambda e: e["notes"],
-    "{CARDNUM}": lambda e: e["card"]["number"],
-    "{TOTP}": lambda e: gen_otp(e["login"]["totp"]),
+    "{PASSWORD}": lambda e: (e.get("login") or {}).get("password") or "",
+    "{NOTES}": lambda e: e.get("notes") or "",
+    "{CARDNUM}": lambda e: (e.get("card") or {}).get("number") or "",
+    "{TOTP}": lambda e: gen_otp((e.get("login") or {})["totp"])
+    if (e.get("login") or {}).get("totp")
+    else "",
 }
 
 STRING_AUTOTYPE_TOKENS = {

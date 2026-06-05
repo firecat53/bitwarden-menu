@@ -122,9 +122,9 @@ def reload_config(conf_file=None):
 
     # Set up clipboard command
     if os.environ.get("WAYLAND_DISPLAY"):
-        clips = ["wl-copy -o"]
+        clips = ["wl-copy"]
     else:
-        clips = ["xsel -b", "xclip -l 1 -selection clip"]
+        clips = ["xsel -b", "xclip -selection clip"]
     for clip in clips:
         try:
             _ = run(

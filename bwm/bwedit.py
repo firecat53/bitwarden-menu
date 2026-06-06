@@ -244,11 +244,8 @@ def edit_entry(entry, entries, folders, collections, vault):
             item["notes"] = edit_notes(item.get("notes") or "")
             continue
         if field == "Autotype":
-            edit = (
-                f"{item['fields'][autotype_index(item)]['value']}\n"
-                if item["fields"][autotype_index(item)]["value"] is not None
-                else "\n"
-            )
+            atype = item["fields"][autotype_index(item)].get("value")
+            edit = f"{atype}\n" if atype is not None else "\n"
             sel = dmenu_select(1, field, inp=edit)
             if sel:
                 item["fields"][autotype_index(item)]["value"] = sel
@@ -481,7 +478,7 @@ def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches
     Returns: entry - Entry object or False
 
     """
-    otp_url = entry["login"]["totp"]
+    otp_url = entry["login"].get("totp")
 
     if otp_url is not None:
         inputs = [

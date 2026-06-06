@@ -514,16 +514,19 @@ def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches
                 return False
 
         inputs = [
-            "Defaut RFC 6238 token settings",
+            "Default RFC 6238 token settings",
             "Steam token settings",
-            "Use cusom settings",
+            "Use custom settings",
         ]
 
         otp_settings_choice = dmenu_select(
             len(inputs), "Settings", inp="\n".join(inputs)
         )
 
-        if otp_settings_choice == "Defaut RFC 6238 token settings":
+        if not otp_settings_choice:
+            return False
+
+        if otp_settings_choice == "Default RFC 6238 token settings":
             algorithm_choice = "sha1"
             time_step_choice = 30
             code_size_choice = 6
@@ -552,7 +555,7 @@ def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches
             if not code_size_choice:
                 return False
             try:
-                code_size_choice = int(time_step_choice)
+                code_size_choice = int(code_size_choice)
             except ValueError:
                 code_size_choice = 6
 

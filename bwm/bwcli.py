@@ -276,7 +276,7 @@ class Item(dict):
     def __init__(self, /, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setdefault("fields", [])
-        if not any(i["name"] == "autotype" for i in self.get("fields")):
+        if not any(i.get("name") == "autotype" for i in self.get("fields")):
             self["fields"].append({"name": "autotype", "value": "", "type": 0})
 
 

@@ -75,6 +75,7 @@ class BWCLIServer:
                     "serve",
                     "--session",
                     session_str,
+                    "--disable-origin-protection",
                     "--hostname",
                     f"fd+connected://{server_sock.fileno()}",
                 ],

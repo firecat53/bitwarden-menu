@@ -12,6 +12,9 @@ import time
 from urllib.parse import urlencode
 from bwm.bwcli import Item
 
+# Default `bw serve` port per their docs
+BW_SERVE_PORT = 8087
+
 
 class BWHTTPConnection(HTTPConnection):
     """
@@ -19,7 +22,9 @@ class BWHTTPConnection(HTTPConnection):
     """
 
     def __init__(self, sock):
-        super().__init__("bwserver", 80)
+        # bw serve >= 2026.6 rejects any request whose Host header isn't
+        # localhost/127.0.0.1/[::1] on BW_SERVE_PORT.
+        super().__init__("localhost", BW_SERVE_PORT)
         self.sock = sock
 
     def connect(self):
@@ -75,6 +80,8 @@ class BWCLIServer:
                     "serve",
                     "--session",
                     session_str,
+                    "--port",
+                    str(BW_SERVE_PORT),
                     "--hostname",
                     f"fd+connected://{server_sock.fileno()}",
                 ],
@@ -732,6 +739,16 @@ class BWCLIServer:
             logging.debug(
                 f"Response body (first 200 chars): {response_body[:200]}"
             )
+
+            # bw serve returns plain text (not JSON) for some errors, e.g. a
+            # bare "Forbidden" from the Host/Origin guards. Check the status
+            # first so those surface as-is instead of a JSON decode error.
+            if response.status >= 400:
+                logging.error(
+                    f"HTTP {response.status} from bw serve for {method} {url}: "
+                    f"{response_body[:100]}"
+                )
+                return False, f"HTTP {response.status}: {response_body[:100]}"
 
             if not response_body:
                 return False, "Empty response from server"

@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from bwm.bwm import Vault, get_vault, set_vault
+from bwm.bwm import Vault, check_online, dmenu_sync, get_vault, set_vault
 
 
 @pytest.fixture
@@ -216,6 +216,7 @@ class TestVaultCliArgs:
 class TestVaultDataDirectory:
     """Tests for data directory path using netloc/email structure."""
 
+    @patch("bwm.bwm.bwcli.is_online", return_value=True)
     @patch("bwm.bwm.bwcli.status", return_value={"status": "unauthenticated", "serverUrl": None})
     @patch("bwm.bwm.bwcli.set_server", return_value=True)
     @patch("bwm.bwm.get_passphrase", return_value="pw")
@@ -224,7 +225,7 @@ class TestVaultDataDirectory:
     @patch("bwm.bwm.BWCLIServer")
     def test_vault_dir_uses_email_subdirectory(
         self, mock_server, mock_sync, mock_login, mock_passphrase,
-        mock_set_server, mock_status, tmp_path, vault_a
+        mock_set_server, mock_status, mock_online, tmp_path, vault_a
     ):
         """Data directory should be DATA_HOME/netloc/email."""
         mock_bwserver = MagicMock()
@@ -243,6 +244,7 @@ class TestVaultDataDirectory:
 class TestVaultDataMigration:
     """Tests for migrating old flat directory to netloc/email structure."""
 
+    @patch("bwm.bwm.bwcli.is_online", return_value=True)
     @patch("bwm.bwm.bwcli.status", return_value={"status": "unauthenticated", "serverUrl": None})
     @patch("bwm.bwm.bwcli.set_server", return_value=True)
     @patch("bwm.bwm.get_passphrase", return_value="pw")
@@ -251,7 +253,7 @@ class TestVaultDataMigration:
     @patch("bwm.bwm.BWCLIServer")
     def test_migration_moves_old_flat_dir(
         self, mock_server, mock_sync, mock_login, mock_passphrase,
-        mock_set_server, mock_status, tmp_path, vault_a
+        mock_set_server, mock_status, mock_online, tmp_path, vault_a
     ):
         """Old flat netloc directory should be migrated into netloc/email."""
         mock_bwserver = MagicMock()
@@ -272,6 +274,7 @@ class TestVaultDataMigration:
         assert exists(new_dir)
         assert exists(join(new_dir, "data.json"))
 
+    @patch("bwm.bwm.bwcli.is_online", return_value=True)
     @patch("bwm.bwm.bwcli.status", return_value={"status": "unauthenticated", "serverUrl": None})
     @patch("bwm.bwm.bwcli.set_server", return_value=True)
     @patch("bwm.bwm.get_passphrase", return_value="pw")
@@ -280,7 +283,7 @@ class TestVaultDataMigration:
     @patch("bwm.bwm.BWCLIServer")
     def test_no_migration_when_other_email_dirs_exist(
         self, mock_server, mock_sync, mock_login, mock_passphrase,
-        mock_set_server, mock_status, tmp_path, vault_a, vault_b
+        mock_set_server, mock_status, mock_online, tmp_path, vault_a, vault_b
     ):
         """Should not migrate if another vault already has a subdirectory."""
         mock_bwserver = MagicMock()
@@ -303,6 +306,7 @@ class TestVaultDataMigration:
         # The stale file should still be in the netloc dir (no migration happened)
         assert exists(join(netloc_dir, "stale.json"))
 
+    @patch("bwm.bwm.bwcli.is_online", return_value=True)
     @patch("bwm.bwm.bwcli.status", return_value={"status": "unauthenticated", "serverUrl": None})
     @patch("bwm.bwm.bwcli.set_server", return_value=True)
     @patch("bwm.bwm.get_passphrase", return_value="pw")
@@ -311,7 +315,7 @@ class TestVaultDataMigration:
     @patch("bwm.bwm.BWCLIServer")
     def test_no_migration_when_email_dir_already_exists(
         self, mock_server, mock_sync, mock_login, mock_passphrase,
-        mock_set_server, mock_status, tmp_path, vault_a
+        mock_set_server, mock_status, mock_online, tmp_path, vault_a
     ):
         """Should not migrate if the email subdirectory already exists."""
         mock_bwserver = MagicMock()
@@ -332,6 +336,97 @@ class TestVaultDataMigration:
         assert exists(join(email_dir, "data.json"))
         with open(join(email_dir, "data.json")) as f:
             assert "existing" in f.read()
+
+
+class TestOffline:
+    """Tests for offline operation."""
+
+    @patch("bwm.bwm.dmenu_err")
+    @patch("bwm.bwm.bwcli.is_online", return_value=True)
+    def test_check_online_when_reachable(
+        self, mock_online, mock_err, vault_a
+    ):
+        """check_online passes silently when the server is reachable."""
+        assert check_online(vault_a) is True
+        mock_online.assert_called_once_with(vault_a.url)
+        mock_err.assert_not_called()
+
+    @patch("bwm.bwm.dmenu_err")
+    @patch("bwm.bwm.bwcli.is_online", return_value=False)
+    def test_check_online_when_unreachable(
+        self, mock_online, mock_err, vault_a
+    ):
+        """check_online reports an error when the server is unreachable."""
+        assert check_online(vault_a) is False
+        assert "Offline" in mock_err.call_args[0][0]
+
+    @patch("bwm.bwm.dmenu_err")
+    @patch("bwm.bwm.bwcli.sync")
+    @patch("bwm.bwm.bwcli.is_online", return_value=False)
+    def test_sync_skipped_when_offline(
+        self, mock_online, mock_sync, mock_err, vault_a
+    ):
+        """Sync should not be attempted while offline."""
+        assert dmenu_sync(vault_a) is False
+        mock_sync.assert_not_called()
+
+    @patch("bwm.bwm.dmenu_err")
+    @patch("bwm.bwm.bwcli.sync", return_value=True)
+    @patch("bwm.bwm.bwcli.is_online", return_value=True)
+    def test_sync_runs_when_online(
+        self, mock_online, mock_sync, mock_err, vault_a
+    ):
+        """Sync should run and report success while online."""
+        assert dmenu_sync(vault_a) is True
+        mock_sync.assert_called_once()
+        mock_err.assert_not_called()
+
+    @patch("bwm.bwm.dmenu_err")
+    @patch("bwm.bwm.get_passphrase")
+    @patch("bwm.bwm.bwcli.login")
+    @patch("bwm.bwm.bwcli.is_online", return_value=False)
+    @patch(
+        "bwm.bwm.bwcli.status",
+        return_value={"status": "unauthenticated", "serverUrl": None},
+    )
+    def test_login_refused_when_offline(
+        self, mock_status, mock_online, mock_login, mock_passphrase, mock_err,
+        tmp_path, vault_a
+    ):
+        """An unauthenticated vault should fail fast offline, without prompting."""
+        with patch("bwm.DATA_HOME", str(tmp_path)):
+            result = set_vault([vault_a])
+
+        assert result is None
+        assert vault_a.session is False
+        # No password/2FA prompt and no doomed login attempt
+        mock_passphrase.assert_not_called()
+        mock_login.assert_not_called()
+        assert "Offline" in mock_err.call_args[0][0]
+
+    @patch("bwm.bwm.BWCLIServer")
+    @patch("bwm.bwm.get_passphrase", return_value="pw")
+    @patch("bwm.bwm.bwcli.unlock", return_value=(b"session", None))
+    @patch("bwm.bwm.bwcli.is_online", return_value=False)
+    @patch("bwm.bwm.bwcli.status", return_value={"status": "locked"})
+    def test_unlock_allowed_when_offline(
+        self, mock_status, mock_online, mock_unlock, mock_passphrase,
+        mock_server, tmp_path, vault_a
+    ):
+        """A locked vault should still unlock offline - it is a local operation."""
+        mock_bwserver = MagicMock()
+        mock_bwserver.start.return_value = True
+        mock_bwserver.unlock.return_value = (b"session", "")
+        mock_server.return_value = mock_bwserver
+
+        with patch("bwm.DATA_HOME", str(tmp_path)):
+            result = set_vault([vault_a])
+
+        assert result == [vault_a]
+        assert vault_a.session == b"session"
+        mock_unlock.assert_called_once()
+        # Unlocking is local, so it must not cost a reachability check
+        mock_online.assert_not_called()
 
 
 class TestVaultFromConfig:

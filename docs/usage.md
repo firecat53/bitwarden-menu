@@ -78,4 +78,36 @@ paths, and tilde expansion. Default: ~/.config/bwm/config.ini
       `-multi-select` option is passed via `dmenu_command`.
     - Optional Pinentry support for secure passphrase entry.
 
+## Offline use
+
+Once a vault has been logged into, unlocking it is a purely local operation -
+the master password is verified against the encrypted vault cached in
+`~/.local/share/bwm/`. Bitwarden-menu can therefore be unlocked and used
+without a network connection.
+
+Available offline:
+
+- Unlocking the vault
+- View/Type individual entries and the previous entry
+- Copy fields to the clipboard, open URLs, generate TOTP codes
+- Locking the vault and switching between vaults
+
+Requires a connection to the vault server:
+
+- The *initial* login (and any login after `Lock vault` has been replaced by a
+  full logout). Bitwarden's identity server has to issue the tokens, so there is
+  no way around this.
+- `Sync vault`
+- `Edit entries`, `Add entry`, `Manage folders` and `Manage collections`
+
+Selecting one of the server-backed options while offline shows an error instead
+of failing partway through. Connectivity is re-tested each time, so those
+options start working again as soon as the network returns - there is no need to
+restart bitwarden-menu.
+
+Note that the reachability test is a direct TCP connection to the host and port
+of the configured vault URL. If your vault is only reachable through an HTTP
+proxy, this test will report "offline" even though the Bitwarden CLI can still
+reach the server.
+
 [1]: https://keepass.info/help/base/autotype.html#autoseq "Keepass 2.x codes"

@@ -62,6 +62,8 @@ For full installation documention see the [installation docs][docs/install.md].
   generation.
 - Optional Pinentry support for secure passphrase entry.
 - Add, edit and type TOTP codes.
+- Offline use: an already logged in vault can be unlocked, viewed and typed
+  without a network connection.
 
 ## License
 

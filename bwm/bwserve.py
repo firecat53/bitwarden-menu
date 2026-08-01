@@ -307,7 +307,14 @@ class BWCLIServer:
         )
 
         if not successful:
-            error_msg = data if isinstance(data, str) else "Failed to unlock"
+            # Unlocking is a local operation, so a failure here is a bad master
+            # password or a broken vault cache, not a missing network
+            error_msg = (
+                data
+                if isinstance(data, str)
+                else "Failed to unlock. Check the master password and "
+                "~/.cache/bwm.log."
+            )
             logging.error(f"Unlock error: {error_msg}")
             return False, error_msg
 

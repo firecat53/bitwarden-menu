@@ -202,8 +202,25 @@ def set_vault(vaults):
     )
 
     err = ""
+    # Server availability is only ever tested for operations that have already failed or
+    # that cannot work offline, so unlocking costs no network round trip
     if not status:
         vault.session = False
+        err = (
+            "Unable to read the vault status. Is the Bitwarden CLI (bw) "
+            "installed and on $PATH? See ~/.cache/bwm.log."
+        )
+    elif status["status"] == "unauthenticated" and not bwcli.is_online(
+        vault.url
+    ):
+        # The initial login needs the server, unlike unlocking an
+        # already authenticated vault, which is entirely local.
+        vault.session = False
+        err = (
+            f"Offline - unable to reach {vault.url}.\n"
+            "Initial login requires a network connection. Once logged in, "
+            "the vault can be unlocked and read offline."
+        )
     elif status["status"] == "unauthenticated":
         if status["serverUrl"] is None:
             # Set server URL using CLI (bw serve not available when unauthenticated)
@@ -285,12 +302,19 @@ def set_vault(vaults):
     elif status["status"] == "locked":
         vault.passw = vault.passw or password()
 
-        # Step 1: Unlock via CLI to get session token
+        # Step 1: Unlock via CLI to get session token. This is a local
+        # operation and works while offline.
         logging.debug("set_vault: Unlocking via CLI")
         vault.session, err = bwcli.unlock(vault.passw)
         logging.debug(
             f"set_vault: CLI unlock result - session={vault.session is not False}, err={err}"
         )
+        if vault.session is False and not bwcli.is_online(vault.url):
+            err = (
+                f"{err.decode(bwm.ENC) if isinstance(err, bytes) else err}\n\n"
+                f"Note: {vault.url} is unreachable, but unlocking does not "
+                "need a network connection - check the master password."
+            )
 
         # Step 2: Start bw serve with --session from unlock
         # Step 3: Call /unlock API endpoint to unlock the vault in bw serve
@@ -483,12 +507,37 @@ def dmenu_collections(collections, vault):
     return Run.CONTINUE
 
 
+def check_online(vault):
+    """Verify the vault server is reachable before a network operation.
+
+    Connectivity is re-tested on each call to an operation that needs the
+    network. A session started offline starts working again as soon as the
+    network comes back.
+
+    Args: vault - Vault object
+    Returns: True if online. Shows an error and returns False if not.
+
+    """
+    if not bwcli.is_online(vault.url):
+        dmenu_err(
+            f"Offline - unable to reach {vault.url}.\n"
+            "This operation needs a connection to the vault server. "
+            "Viewing and typing existing entries works offline."
+        )
+        return False
+    return True
+
+
 def dmenu_sync(vault):
     """Call vault sync option (called from dmenu_run)
 
     Args: vault - Vault object
+    Returns: True on success, False on error or when offline
 
     """
+    if not check_online(vault):
+        return False
+
     if vault.bwcliserver:
         res = vault.bwcliserver.sync()
     else:
@@ -496,6 +545,8 @@ def dmenu_sync(vault):
 
     if res is False:
         dmenu_err("Sync error. Check logs.")
+        return False
+    return True
 
 
 def lock_vault(vault):
@@ -546,6 +597,17 @@ def dmenu_run(vault):
         entries_hid = [i for i in vault.entries if i["folder"] not in hid_fold]
     else:
         entries_hid = vault.entries
+
+    def needs_server(func):
+        """Block an option that writes to the vault while offline"""
+
+        def wrapper():
+            if not check_online(vault):
+                return Run.CONTINUE
+            return func()
+
+        return wrapper
+
     options = {
         "View/Type Individual entries": partial(
             dmenu_view, entries_hid, vault.folders
@@ -553,15 +615,29 @@ def dmenu_run(vault):
         "View previous entry": partial(
             dmenu_view_previous_entry, vault.prev_entry, vault.folders
         ),
-        "Edit entries": partial(
-            dmenu_edit, vault.entries, vault.folders, vault.collections, vault
+        "Edit entries": needs_server(
+            partial(
+                dmenu_edit,
+                vault.entries,
+                vault.folders,
+                vault.collections,
+                vault,
+            )
         ),
-        "Add entry": partial(
-            dmenu_add, vault.entries, vault.folders, vault.collections, vault
+        "Add entry": needs_server(
+            partial(
+                dmenu_add,
+                vault.entries,
+                vault.folders,
+                vault.collections,
+                vault,
+            )
         ),
-        "Manage folders": partial(dmenu_folders, vault.folders, vault),
-        "Manage collections": partial(
-            dmenu_collections, vault.collections, vault
+        "Manage folders": needs_server(
+            partial(dmenu_folders, vault.folders, vault)
+        ),
+        "Manage collections": needs_server(
+            partial(dmenu_collections, vault.collections, vault)
         ),
         "Sync vault": partial(dmenu_sync, vault),
         "Switch vaults": None,
@@ -577,8 +653,8 @@ def dmenu_run(vault):
         options[sel]()
         return Run.LOCK
     if sel == "Sync vault":
-        options[sel]()
-        return Run.RELOAD
+        # Nothing to reload if the sync was skipped or failed
+        return Run.RELOAD if options[sel]() else Run.CONTINUE
     if sel == "Switch vaults":
         return Run.SWITCH
     if sel not in options:

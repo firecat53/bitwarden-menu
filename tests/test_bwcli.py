@@ -1,6 +1,7 @@
 """Tests for Bitwarden CLI wrapper module."""
 
 import json
+import socket
 from unittest.mock import patch, MagicMock
 from subprocess import CompletedProcess
 
@@ -8,6 +9,7 @@ import pytest
 
 from bwm.bwcli import (
     Item,
+    is_online,
     status,
     login,
     unlock,
@@ -123,6 +125,99 @@ class TestStatus:
         result = status()
         assert result == {}
 
+    @patch("bwm.bwcli.run")
+    def test_status_trailing_newline(self, mock_run):
+        """Test status parses output with a trailing newline."""
+        mock_run.return_value = CompletedProcess(
+            args=["bw", "--session", "", "status"],
+            returncode=0,
+            stdout=b'{"status": "locked"}\n\n',
+        )
+        assert status()["status"] == "locked"
+
+    @patch("bwm.bwcli.run")
+    def test_status_offline_nonzero_exit(self, mock_run):
+        """Test status parses valid output when the CLI exits non-zero.
+
+        Offline, the CLI can fail to fetch the server config and exit 1 while
+        still printing the status JSON (bitwarden/clients#18373).
+        """
+        mock_run.return_value = CompletedProcess(
+            args=["bw", "--session", "", "status"],
+            returncode=1,
+            stdout=b'{"status": "locked"}\n',
+            stderr=b"FetchError: getaddrinfo ENOTFOUND vault.example.com",
+        )
+        assert status()["status"] == "locked"
+
+    @patch("bwm.bwcli.run")
+    def test_status_unparseable(self, mock_run):
+        """Test status returns empty dict when stdout is not JSON."""
+        mock_run.return_value = CompletedProcess(
+            args=["bw", "--session", "", "status"],
+            returncode=1,
+            stdout=b"FetchError: getaddrinfo ENOTFOUND vault.example.com",
+        )
+        assert status() == {}
+
+
+class TestIsOnline:
+    """Tests for the vault server reachability check."""
+
+    @patch("bwm.bwcli.socket.create_connection")
+    def test_is_online_reachable(self, mock_conn):
+        """Test a reachable server returns True."""
+        assert is_online("https://vault.bitwarden.com") is True
+        assert mock_conn.call_args[0][0] == ("vault.bitwarden.com", 443)
+
+    @patch("bwm.bwcli.socket.create_connection")
+    def test_is_online_default_http_port(self, mock_conn):
+        """Test http URLs default to port 80."""
+        assert is_online("http://vault.example.com") is True
+        assert mock_conn.call_args[0][0] == ("vault.example.com", 80)
+
+    @patch("bwm.bwcli.socket.create_connection")
+    def test_is_online_explicit_port(self, mock_conn):
+        """Test an explicit port in the URL is used."""
+        assert is_online("https://vault.example.com:8443") is True
+        assert mock_conn.call_args[0][0] == ("vault.example.com", 8443)
+
+    @patch("bwm.bwcli.socket.create_connection")
+    def test_is_online_bare_hostname(self, mock_conn):
+        """Test a URL with no scheme is still parsed."""
+        assert is_online("vault.example.com") is True
+        assert mock_conn.call_args[0][0] == ("vault.example.com", 443)
+
+    @patch("bwm.bwcli.socket.create_connection")
+    def test_is_online_unreachable(self, mock_conn):
+        """Test an unreachable server returns False."""
+        mock_conn.side_effect = OSError("Network is unreachable")
+        assert is_online("https://vault.bitwarden.com") is False
+
+    @patch("bwm.bwcli.socket.create_connection")
+    def test_is_online_timeout(self, mock_conn):
+        """Test a connection timeout returns False."""
+        mock_conn.side_effect = TimeoutError("timed out")
+        assert is_online("https://vault.bitwarden.com") is False
+
+    @patch("bwm.bwcli.socket.create_connection")
+    def test_is_online_no_hostname(self, mock_conn):
+        """Test a URL with no hostname returns False without connecting."""
+        for url in ("", "///", "https://"):
+            assert is_online(url) is False
+        mock_conn.assert_not_called()
+
+    @patch("bwm.bwcli.socket.create_connection")
+    def test_is_online_unresolvable_host(self, mock_conn):
+        """Test a hostname that will not resolve returns False.
+
+        urlsplit will happily treat junk as a hostname, so the DNS failure has
+        to be handled rather than avoided.
+        """
+        mock_conn.side_effect = socket.gaierror("Name or service not known")
+        assert is_online("not a url") is False
+        assert mock_conn.call_args[0][0] == ("not a url", 443)
+
 
 class TestLogin:
     """Tests for vault login."""
@@ -152,6 +247,24 @@ class TestLogin:
         session, error = login("email@example.com", "wrongpass")
         assert session is False
         assert error == b"Invalid password"
+
+    @patch("bwm.bwcli.run")
+    def test_login_succeeds_with_stderr_warnings(self, mock_run):
+        """Test login succeeds when the CLI writes warnings to stderr.
+
+        The CLI logs to stderr and can exit non-zero on an otherwise successful
+        command when it cannot reach the server (bitwarden/clients#18373), so
+        only an empty stdout counts as a failure.
+        """
+        mock_run.return_value = CompletedProcess(
+            args=["bw", "login", "--raw", "email", "password"],
+            returncode=1,
+            stdout=b"session-key-12345",
+            stderr=b"warning: unable to fetch server config",
+        )
+        session, error = login("email@example.com", "password123")
+        assert session == b"session-key-12345"
+        assert error is None
 
     @patch("bwm.bwcli.run")
     def test_login_with_2fa(self, mock_run):
@@ -206,6 +319,24 @@ class TestUnlock:
         session, error = unlock("wrong-password")
         assert session is False
         assert error == b"Invalid password"
+
+    @patch("bwm.bwcli.run")
+    def test_unlock_succeeds_offline(self, mock_run):
+        """Test unlock succeeds when the CLI exits non-zero while offline.
+
+        Unlocking verifies the master password against the local vault cache,
+        so it works without a network connection even though the CLI may fail
+        to fetch the server config.
+        """
+        mock_run.return_value = CompletedProcess(
+            args=["bw", "unlock", "--raw", "password"],
+            returncode=1,
+            stdout=b"session-key-12345",
+            stderr=b"FetchError: getaddrinfo ENOTFOUND vault.example.com",
+        )
+        session, error = unlock("password123")
+        assert session == b"session-key-12345"
+        assert error is None
 
     def test_unlock_no_password(self):
         """Test unlock with no password returns error."""

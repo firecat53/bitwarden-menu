@@ -7,8 +7,36 @@ import os
 import pty
 import re
 import select
+import socket
 import time
 from subprocess import DEVNULL, run
+from urllib.parse import urlsplit
+
+
+def is_online(url, timeout=2):
+    """Check whether the vault server is reachable.
+
+    Used to tell an offline session apart from a genuine error. Unlocking an
+    already authenticated vault and reading entries are local operations, but
+    logging in, syncing and any edit require the server.
+
+    Args: url - vault server URL string
+          timeout - seconds to wait for the TCP connection
+
+    Returns: True if a TCP connection to the server succeeds, else False
+
+    """
+    parts = urlsplit(url if "//" in url else f"//{url}")
+    if not parts.hostname:
+        logging.debug(f"is_online: could not parse a hostname from {url}")
+        return False
+    port = parts.port or (80 if parts.scheme == "http" else 443)
+    try:
+        with socket.create_connection((parts.hostname, port), timeout):
+            return True
+    except OSError as exc:
+        logging.debug(f"is_online: {url} unreachable - {exc}")
+        return False
 
 
 def status(session=b""):
@@ -29,7 +57,13 @@ def status(session=b""):
     if not res.stdout:
         logging.error(res)
         return {}
-    return dict(json.loads(res.stdout.split(b"\n")[-1]))
+    # The CLI can print warnings before the returned JSON (e.g. when it fails
+    # to fetch the server config while offline), so only parse the last line.
+    try:
+        return dict(json.loads(res.stdout.strip().split(b"\n")[-1]))
+    except (ValueError, TypeError):
+        logging.error(res)
+        return {}
 
 
 def set_server(url="https://vault.bitwarden.com"):
@@ -73,7 +107,10 @@ def login(email, password, method=None, code=""):
             code,
         ]
     res = run(cmd, capture_output=True, stdin=DEVNULL, check=False)
-    if not res.stdout or res.stderr:
+    # Only an empty stdout means failure. The CLI writes warnings to stderr and
+    # can exit non-zero on a successful command when it cannot reach the server
+    # (bitwarden/clients#18373), so neither is treated as an error here.
+    if not res.stdout:
         logging.error(res)
         return (False, res.stderr)
     return res.stdout, None
@@ -211,6 +248,9 @@ def login_pty_finish(fd, pid, code, timeout=60):
 def unlock(password):
     """Unlock vault
 
+    The master password is verified locally against the cached vault, so this
+    also works without a network connection.
+
     Returns: session (bytes) or False on error, Error message
 
     """
@@ -220,6 +260,7 @@ def unlock(password):
     res = run(
         ["bw", "unlock", "--raw", password], capture_output=True, check=False
     )
+    # Deliberately not checking returncode - see the note in login()
     if not res.stdout:
         logging.error(res)
         return (False, res.stderr)

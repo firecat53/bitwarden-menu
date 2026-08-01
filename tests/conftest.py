@@ -1,7 +1,36 @@
 """Pytest fixtures for bitwarden-menu tests."""
 
 import configparser
+import socket
+
 import pytest
+
+# Hostnames the guard below lets through. test_server.py binds real sockets.
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "", None}
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """Fail any test that tries to resolve a non-local hostname.
+
+    Nothing in bitwarden-menu should reach the network from a unit test.
+    bwcli.is_online() is the one function that can, so its callers have to
+    patch it. Without this guard a missing patch still passes - it just
+    silently makes a live DNS query and waits for it to fail.
+
+    """
+    real_getaddrinfo = socket.getaddrinfo
+
+    def guard(host, *args, **kwargs):
+        if host not in LOCAL_HOSTS:
+            raise AssertionError(
+                f"Unexpected network access: getaddrinfo({host!r}). Patch "
+                "bwm.bwcli.is_online (or bwm.bwcli.socket.create_connection) "
+                "in this test."
+            )
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", guard)
 
 
 @pytest.fixture

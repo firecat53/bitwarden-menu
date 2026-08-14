@@ -7,5 +7,4 @@
 *.un~
 build/
 dist/
-bwm/_version.py
 result/

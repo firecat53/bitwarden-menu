@@ -42,19 +42,16 @@
     });
     packages = forAllSystems ({pkgs}: {
       default = pkgs.python3Packages.buildPythonApplication {
-        name = "bitwarden-menu";
         pname = "bitwarden-menu";
+        version = builtins.head (builtins.match
+          ".*\n__version__ = \"([^\"]+)\".*"
+          (builtins.readFile ./bwm/__init__.py));
         format = "pyproject";
         src = ./.;
         nativeBuildInputs = builtins.attrValues {
           inherit
-            (pkgs)
-            git
-            ;
-          inherit
             (pkgs.python3Packages)
             hatchling
-            hatch-vcs
             ;
         };
         propagatedBuildInputs = builtins.attrValues {

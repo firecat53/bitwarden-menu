@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
@@ -51,14 +51,7 @@ bwm = "bwm.__main__:main"
 Homepage = "https://github.com/firecat53/bitwarden-menu"
 
 [tool.hatch.version]
-source = "vcs"
-fallback-version = "0.0.0"
-
-[tool.hatch.version.raw-options]
-local_scheme = "no-local-version"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "bwm/_version.py"
+path = "bwm/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["/bwm"]
@@ -83,7 +76,6 @@ addopts = "-v --tb=short"
 
 [tool.coverage.run]
 source = ["bwm"]
-omit = ["bwm/_version.py"]
 
 [tool.coverage.report]
 exclude_lines = [

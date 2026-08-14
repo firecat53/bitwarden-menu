@@ -15,6 +15,10 @@ from subprocess import run, DEVNULL
 
 from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_data_home
 
+# Single source of truth for the version. pyproject.toml, flake.nix and the
+# man page footer all read this string; bump it with `make release`.
+__version__ = "0.5.3"
+
 logger = logging.getLogger("bwm")
 logging.basicConfig(
     filename=join(xdg_cache_home(), "bwm.log"), level=logging.WARNING

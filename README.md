@@ -102,6 +102,8 @@ pytest
 
 - To install bitwarden-menu in a venv: `make`
 - Build man page from Markdown source: `make man`
+- The version is hardcoded in `bwm/__init__.py` (`make version` or `bwm -V`).
+  Anything else needing a version number reads from there.
 - Using `hatch`:
     - `hatch shell`: provies venv with editable installation.
     - `hatch build` && `hatch publish`: build and publish to Pypi.
@@ -109,13 +111,20 @@ pytest
     - `nix develop`: Provides development shell with all dependencies.
     - `make test` and `hatch build/publish` work as usual.
 - GitHub Action will upload to TestPyPi on each push to `main`. To create a
-  GitHub and PyPi release, create a new tag (formatting below) and push tags.
+  GitHub and PyPi release, run `make release VERSION=x.y.z` (no leading `v`;
+  the tag gets one). It bumps `__version__`, updates and rebuilds the man page,
+  commits, and opens an editor for the annotated tag, prefilled with the
+  version as the subject and one bullet per commit since the last tag.
 
-        <tag name on first line>
+        <tag name on first line, prefilled>
 
         * Release note 1
         * Release note 2
         * ...
+
+  Then push the commit and tag: `git push origin main --follow-tags`. The
+  GitHub Action fails the build if a pushed tag does not match `__version__`,
+  so nothing mismatched can reach PyPi.
 
 ## Planned features
 

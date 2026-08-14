@@ -1,7 +1,6 @@
 """Read, type and edit Bitwarden vault entries using dmenu style launchers"""
 
 import argparse
-from importlib.metadata import version as meta_version
 from contextlib import closing
 import multiprocessing
 from multiprocessing.managers import BaseManager
@@ -204,7 +203,8 @@ def main():
         "-V",
         "--version",
         action="version",
-        version=f"%(prog)s {meta_version('bitwarden-menu')}",
+        version=f"bwm {bwm.__version__}",
+        help="Show version and exit",
     )
 
     parser.add_argument(

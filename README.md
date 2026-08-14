@@ -71,7 +71,7 @@ For full installation documention see the [installation docs][docs/install.md].
 
 ## Usage
 
-`bwm [-h] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE] [-C] [-c CONFIGPATH]`
+`bwm [-h] [-V] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE] [-C] [-c CONFIGPATH]`
 
 - Run `bwm` or bind to keystroke combination.
 - Enter account URL on first run.

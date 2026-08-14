@@ -3,7 +3,7 @@ title: Bitwarden-menu
 section: 1
 header: User Manual
 footer: Bitwarden-menu v0.5.2
-date: 2026-02-13
+date: 2026-08-13
 ---
 
 # NAME
@@ -13,7 +13,7 @@ managing of Bitwarden/Vaultwarden vaults.
 
 # SYNOPSIS
 
-**bitwarden-menu** [**--vault** URL] [**--login** email] [**--lock**] [**--autotype** pattern] [**--clipboard**]
+**bitwarden-menu** [**--help**] [**--version**] [**--vault** URL] [**--login** email] [**--lock**] [**--autotype** pattern] [**--clipboard**] [**--config** PATH]
 
 # DESCRIPTION
 
@@ -38,6 +38,10 @@ from config.ini for current vault.
 **-c**, **--config** _PATH_
 Path to config file. Supports absolute paths, relative paths, and tilde expansion.
 Default: ~/.config/bwm/config.ini
+
+**-V**, **--version**  Print version and exit
+
+**-h**, **--help**  Print help and exit
 
 # EXAMPLES
 

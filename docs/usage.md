@@ -13,9 +13,11 @@
 
 ## CLI Options
 
-`bwm [-h] [-v VAULT] [-l EMAIL] [-k] [-a AUTOTYPE] [-C] [-c CONFIG]`
+`bwm [-h] [-V] [-v VAULT] [-l EMAIL] [-k] [-a AUTOTYPE] [-C] [-c CONFIG]`
 
---help, -h Output a usage message and exit.
+-h, --help Print help and exit.
+
+-V, --version Print version and exit.
 
 -v VAULT, --vault URL Vault URL to open, skipping the selection menu. Use with -l
 when multiple accounts share the same server.
@@ -27,7 +29,7 @@ the server. Required with -v when multiple accounts share the same server.
 
 -a AUTOTYPE, --autotype AUTOTYPE Override autotype sequence in config.ini
 
---clipboard -C, type to clipboard
+-C, --clipboard Copy values to clipboard instead of typing
 
 -c CONFIG, --config PATH Path to config file. Supports absolute paths, relative
 paths, and tilde expansion. Default: ~/.config/bwm/config.ini

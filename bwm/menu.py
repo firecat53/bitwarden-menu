@@ -80,23 +80,39 @@ def dmenu_select(num_lines, prompt="Entries", inp=""):
 
     """
     cmd = dmenu_cmd(num_lines, prompt)
-    res = run(
-        cmd,
-        capture_output=True,
-        check=False,
-        input=inp,
-        encoding=bwm.ENC,
-        env=bwm.ENV,
-    )
+    try:
+        res = run(
+            cmd,
+            capture_output=True,
+            check=False,
+            input=inp,
+            encoding=bwm.ENC,
+            env=bwm.ENV,
+        )
+    except FileNotFoundError:
+        print(f"dmenu command not found: {cmd[0]}", file=sys.stderr)
+        sys.exit(1)
+    if res.returncode != 0 and res.stderr:
+        # Without this the launcher failing (no display, bad config) is
+        # indistinguishable from the user cancelling, and bwm exits silently.
+        print(f"dmenu command error: {res.stderr.strip()}", file=sys.stderr)
     return res.stdout.rstrip("\n") if res.stdout is not None else None
 
 
 def dmenu_err(prompt):
-    """Pops up a dmenu prompt with an error message"""
+    """Pops up a dmenu prompt with an error message
+
+    In CLI mode, print to stderr instead. A launcher isn't necessarily
+    installed and there's a terminal to print to.
+
+    """
     try:
         prompt = prompt.decode(bwm.ENC)
     except AttributeError:
         pass
+    if bwm.CLI is True:
+        print(prompt, file=sys.stderr)
+        return None
     return dmenu_select(len(prompt.splitlines()), "Error", inp=prompt)
 
 

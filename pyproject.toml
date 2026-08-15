@@ -34,11 +34,13 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "pynput",
     "xdg-base-dirs",
 ]
 
 [project.optional-dependencies]
+autotype = [
+    "pynput",
+]
 test = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

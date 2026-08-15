@@ -1,16 +1,23 @@
 """Tests for autotype tokenization module."""
 
+import sys
 import time
+from subprocess import CalledProcessError
 from unittest.mock import patch, MagicMock
 
 import pytest
 
+import bwm
 from bwm.bwtype import (
     tokenize_autotype,
     token_command,
     autotype_seq,
     autotype_index,
+    type_clipboard,
+    type_entry_pynput,
+    type_text,
     PLACEHOLDER_AUTOTYPE_TOKENS,
+    PYNPUT_MISSING,
     STRING_AUTOTYPE_TOKENS,
 )
 
@@ -441,3 +448,65 @@ class TestCustomFieldAccess:
         assert len(custom_fields) == 2
         assert custom_fields[0]["value"] == "custom value 1"
         assert custom_fields[1]["value"] == "custom value 2"
+
+
+class TestPynputMissing:
+    """pynput is an optional extra, so its absence must be reported."""
+
+    def test_type_entry_pynput_reports_missing(self, monkeypatch):
+        """type_entry_pynput errors out instead of silently doing nothing."""
+        monkeypatch.setitem(sys.modules, "pynput", None)
+        with patch("bwm.bwtype.dmenu_err") as err:
+            type_entry_pynput({"name": "Test"}, iter([]))
+        err.assert_called_once_with(PYNPUT_MISSING)
+
+    def test_type_text_reports_missing(self, monkeypatch):
+        """type_text errors out instead of silently doing nothing."""
+        monkeypatch.setitem(sys.modules, "pynput", None)
+        monkeypatch.setattr(bwm, "CLIPBOARD", False)
+        with patch("bwm.bwtype.dmenu_err") as err:
+            type_text("some text")
+        err.assert_called_once_with(PYNPUT_MISSING)
+
+    def test_message_names_the_extra_and_alternatives(self):
+        """The message has to tell the user how to fix it."""
+        assert "bitwarden-menu[autotype]" in PYNPUT_MISSING
+        assert "type_library" in PYNPUT_MISSING
+
+
+class TestTypeClipboard:
+    """type_clipboard reports failure instead of crashing or hanging."""
+
+    def test_returns_false_with_no_clipboard_tool(self, monkeypatch):
+        """No clipboard command installed used to crash on run([])."""
+        monkeypatch.setattr(bwm, "CLIPBOARD_CMD", None)
+        with patch("bwm.bwtype.bwm.get_clipboard_cmd", return_value=None), \
+                patch("bwm.bwtype.run") as mock_run:
+            assert type_clipboard("secret") is False
+        mock_run.assert_not_called()
+
+    def test_returns_false_when_command_fails(self):
+        """A clipboard command that exits non-zero is reported, not raised."""
+        with patch("bwm.bwtype.bwm.get_clipboard_cmd", return_value="wl-copy"), \
+                patch(
+                    "bwm.bwtype.run",
+                    side_effect=CalledProcessError(1, "wl-copy"),
+                ):
+            assert type_clipboard("secret") is False
+
+    def test_clear_timer_is_daemonic(self):
+        """A one-shot invocation must not be held open for 30 seconds."""
+        with patch("bwm.bwtype.bwm.get_clipboard_cmd", return_value="wl-copy"), \
+                patch("bwm.bwtype.run"), \
+                patch("bwm.bwtype.Timer") as mock_timer:
+            assert type_clipboard("secret") is True
+        assert mock_timer.return_value.daemon is True
+        mock_timer.return_value.start.assert_called_once()
+
+    def test_type_text_reports_missing_clipboard(self, monkeypatch):
+        """The GUI caller surfaces the failure rather than silently no-oping."""
+        monkeypatch.setattr(bwm, "CLIPBOARD", True)
+        with patch("bwm.bwtype.type_clipboard", return_value=False), \
+                patch("bwm.bwtype.dmenu_err") as err:
+            type_text("some text")
+        assert "clipboard" in err.call_args[0][0].lower()

@@ -12,10 +12,12 @@ LLC.
 
 ## Installation
 
-`pip install --user bitwarden-menu`
+`pip install --user bitwarden-menu[autotype]`
 
 Ensure `~/.local/bin` is in your `$PATH`. Run `bwm` and enter your database
 path, keyfile path, and password.
+
+Drop the `[autotype]` extra to install without pynput.
 
 **NOTE:** _Initial login to some servers, including vault.bitwarden.com, will
 require the `client_secret` from your account settings page. Ensure this is in
@@ -32,11 +34,16 @@ For full installation documention see the [installation docs][docs/install.md].
 
 1. Python 3.10+
 2. [Bitwarden CLI][2]. Ensure the `bw` command is in `$PATH`
-3. [Pynput][1] and [Xdg][6]
-4. Dmenu, [Rofi][3], [Wofi][7] or [Bemenu][4]
-5. xsel or wl-copy
-6. (optional) Pinentry.
-7. (optional) xdotool, ydotool(>= 1.0.0)/wtype (for Wayland).
+3. [Xdg][6]
+
+The rest is only needed for the interactive (launcher) mode:
+
+4. [Pynput][1] (`pip install bitwarden-menu[autotype]`), or one of the alternate
+   type libraries below
+5. Dmenu, [Rofi][3], [Wofi][7] or [Bemenu][4]
+6. xsel or wl-copy
+7. (optional) Pinentry.
+8. (optional) xdotool, ydotool(>= 1.0.0)/wtype (for Wayland).
 
 ## Features
 
@@ -64,6 +71,11 @@ For full installation documention see the [installation docs][docs/install.md].
 - Add, edit and type TOTP codes.
 - Offline use: an already logged in vault can be unlocked, viewed and typed
   without a network connection.
+- Output any field(s) to stdout with `--show`, usable as a CLI-only password
+  manager with no launcher or GUI installed. Works headless, including the
+  initial login and 2FA.
+- Runs as a background daemon, so a vault is unlocked once rather than on every
+  lookup. `--foreground` keeps it attached for troubleshooting.
 
 ## License
 
@@ -71,7 +83,7 @@ For full installation documention see the [installation docs][docs/install.md].
 
 ## Usage
 
-`bwm [-h] [-V] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE] [-C] [-c CONFIGPATH]`
+`bwm [-h] [-V] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE] [-C] [-c CONFIGPATH] [-s SEARCH] [-f FIELD] [-F]`
 
 - Run `bwm` or bind to keystroke combination.
 - Enter account URL on first run.

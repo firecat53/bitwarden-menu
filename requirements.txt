@@ -1,2 +1,0 @@
-pynput
-xdg-base-dirs

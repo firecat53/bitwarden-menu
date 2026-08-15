@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import partial
+from getpass import getpass
+import json
 import logging
 import multiprocessing
 from os import environ, makedirs, rename
@@ -22,8 +24,24 @@ from bwm.bwserve import BWCLIServer
 import bwm
 
 
+def _as_bytes(session):
+    """Normalize a session token to bytes.
+
+    bwcli returns bytes, the bw serve API returns str.
+
+    Args: session - str or bytes
+    Returns: bytes
+
+    """
+    return session.encode() if isinstance(session, str) else session
+
+
 def get_passphrase(secret="Password"):
-    """Get a vault password from dmenu or pinentry
+    """Get a vault password from the terminal, dmenu or pinentry
+
+    Every credential prompt in the login/unlock flow goes through here - master
+    password, 2FA code and client_secret - so routing this to the terminal is
+    what makes the whole flow usable without a launcher.
 
     Args: secret - string ('Password' or '2FA Code' or 'client_secret')
     Returns: string
@@ -31,7 +49,18 @@ def get_passphrase(secret="Password"):
     """
     pin_prompt = f"SETDESC Enter {secret}\nGETPIN\n"
     pinentry = bwm.CONF.get("dmenu", "pinentry", fallback=None)
-    if pinentry:
+    if bwm.CLI is True:
+        try:
+            password = getpass(f"Enter {secret}: ")
+        except (EOFError, OSError, AttributeError):
+            # No terminal to prompt on (e.g. run from a script with stdin
+            # closed). Treat it as a cancelled prompt.
+            print(
+                f"No terminal available to read {secret} from.",
+                file=sys.stderr,
+            )
+            return ""
+    elif pinentry:
         password = ""
         out = subprocess.run(
             pinentry,
@@ -74,13 +103,18 @@ def get_vault(vaults=None, **kwargs):
     Args: vaults - list of Vault objects
           **kwargs - vault (URL string)
                      login (login email address)
+                     password (master password, e.g. prompted for by the
+                               client on behalf of the daemon)
     Returns: vaults - list of Vault objects (1st is active) or None on error
                       opening/reading a single vault.
 
     """
     vaults = [] if vaults is None else vaults
-    vault_cli = kwargs.get("vault", "")
-    login_cli = kwargs.get("login", "")
+    # argparse supplies these keys with a None value when the flag is absent,
+    # so `or ""` rather than a dict default
+    vault_cli = kwargs.get("vault") or ""
+    login_cli = kwargs.get("login") or ""
+    passw_cli = kwargs.get("password") or ""
     if not vaults:
         args = dict(bwm.CONF.items("vault"))
         servers = [i for i in args if i.startswith("server")]
@@ -121,14 +155,35 @@ def get_vault(vaults=None, **kwargs):
             return None
         if va_:
             vaults.insert(0, vaults.pop(vaults.index(va_[0])))
+            # A password supplied by the caller saves a prompt in set_vault
+            vaults[0].passw = vaults[0].passw or passw_cli
         else:
-            vaults.insert(0, Vault(vault_cli, login_cli, "", ""))
+            vaults.insert(0, Vault(vault_cli, login_cli, passw_cli, ""))
     if not vaults or (not vaults[0].url or not vaults[0].email):
+        if bwm.CLI is True:
+            # get_initial_vault() is an interactive first run wizard that also
+            # writes to config.ini. Non-interactive callers pass -v/-l instead.
+            # Name the piece that's actually missing: -v alone isn't enough.
+            if vault_cli:
+                msg = (
+                    f"No login email for {vault_cli}. Pass -l, or add "
+                    "server_N/email_N to config.ini."
+                )
+            else:
+                msg = (
+                    "No vault configured. Add server_N/email_N to config.ini, "
+                    "or pass -v and -l."
+                )
+            dmenu_err(msg)
+            return None
         sel = get_initial_vault(vault_cli, login_cli)
         if sel:
             vaults.insert(0, sel)
         else:
             return None
+    if len(vaults) > 1 and not vault_cli and bwm.CLI is True:
+        dmenu_err("Multiple vaults configured. Specify one with -v.")
+        return None
     if len(vaults) > 1 and not vault_cli:
         inp = "\n".join(f"{i.url} - {i.email}" for i in vaults)
         sel = dmenu_select(len(vaults), "Select Vault", inp=inp)
@@ -196,7 +251,16 @@ def set_vault(vaults):
 
     # Get status first to determine vault state
     # NOTE: Don't start bw serve yet - it requires vault to be authenticated
-    status = bwcli.status()
+    status = None
+    if vault.bwcliserver is not None:
+        # Ask the running server over HTTP. Spawning the CLI costs a Node
+        # startup - seconds - which is the bulk of a vault switch.
+        status = vault.bwcliserver.get_status() or None
+    if status is None:
+        # Pass any session we are already holding: `bw status` only reports
+        # 'unlocked' when given one, so without this, switching back to a vault
+        # that is already unlocked pays for a full unlock again.
+        status = bwcli.status(vault.session or b"")
     logging.debug(
         f"set_vault: Initial status check - {status.get('status') if status else 'error'}"
     )
@@ -295,6 +359,10 @@ def set_vault(vaults):
                                 f"bw serve unlock API failed: {unlock_err}, but continuing with CLI session"
                             )
                         else:
+                            # Unlocking rotates the session, invalidating the
+                            # token the CLI unlock returned. Keep the live one
+                            # or every later `bw --session` call is rejected.
+                            vault.session = _as_bytes(unlock_session)
                             logging.debug(
                                 "set_vault: bw serve unlock API successful"
                             )
@@ -343,11 +411,21 @@ def set_vault(vaults):
                         f"bw serve unlock API failed: {unlock_err}, but continuing with CLI session"
                     )
                 else:
+                    # Unlocking rotates the session, invalidating the token the
+                    # CLI unlock returned. Keep the live one or every later
+                    # `bw --session` call is rejected.
+                    vault.session = _as_bytes(unlock_session)
                     logging.debug("set_vault: bw serve unlock API successful")
 
     elif status["status"] == "unlocked":
-        # Vault is already unlocked via CLI, get the session token
-        vault.session = status.get("session", b"")
+        # Already unlocked, so no need to unlock again. `bw status` doesn't hand
+        # the token back in its JSON, so keep the one we passed in, falling back
+        # to the environment for a vault unlocked outside bwm.
+        vault.session = (
+            vault.session
+            or status.get("session", b"")
+            or environ.get("BW_SESSION", "")
+        )
         logging.debug("set_vault: Vault already unlocked via CLI")
 
         # Start bw serve with the existing session token
@@ -676,16 +754,20 @@ class DmenuRunner(multiprocessing.Process):
 
     """
 
-    def __init__(self, server, **kwargs):
+    def __init__(self, server, unlocked=None, background=True, **kwargs):
         multiprocessing.Process.__init__(self)
         self.server = server
+        self.unlocked = unlocked
+        self.background = background
         cfile = kwargs.get("config")
         bwm.reload_config(None if cfile is None else expanduser(cfile))
         bwm.CLIPBOARD = kwargs.get("clipboard")
         self.vaults = get_vault(**kwargs)
         if self.vaults is None:
             self.server.kill_flag.set()
-            sys.exit()
+            # __init__ runs in the parent process, so this is the exit code the
+            # user sees. Failing to open a vault is not success.
+            sys.exit(1)
         self.vault = self.vaults[0]
 
         # Get entries using server or CLI
@@ -717,6 +799,115 @@ class DmenuRunner(multiprocessing.Process):
             dmenu_err("Error loading vault entries.")
             self.server.kill_flag.set()
             sys.exit(1)
+        self._publish_unlocked()
+
+    def _publish_unlocked(self):
+        """Publish which vaults hold a session, for the client to query.
+
+        The client uses this to decide whether a --show request needs a master
+        password prompt, which has to happen in the client's terminal.
+
+        """
+        if self.unlocked is None:
+            return
+        data = json.dumps(
+            [[i.url, i.email] for i in self.vaults if i.session]
+        ).encode(bwm.ENC)
+        if len(data) >= len(self.unlocked):
+            logging.warning("Too many unlocked vaults to publish")
+            return
+        with self.unlocked.get_lock():
+            self.unlocked.value = data
+
+    def unlock_for_show(self, **kwargs):
+        """Unlock a vault the daemon isn't holding yet, for a --show request.
+
+        The client already prompted for the master password and sent it along,
+        so get_vault() can unlock without any interaction. CLI mode is forced on
+        for the attempt so a failure reports to stderr instead of popping a
+        launcher dialog at a user who is sitting at a terminal.
+
+        The GUI's active vault is restored afterwards: running a CLI query
+        shouldn't move the menu out from under someone.
+
+        Args: kwargs - the client's parsed args, including 'password'
+        Returns: the unlocked Vault, or None
+
+        """
+        prev_active = self.vault
+        prev_appdata = environ.get("BITWARDENCLI_APPDATA_DIR")
+        prev_cli = bwm.CLI
+        bwm.CLI = True
+        try:
+            vaults = get_vault(self.vaults, **kwargs)
+        finally:
+            bwm.CLI = prev_cli
+        if not vaults:
+            return None
+        self.vaults = vaults
+        vault = self.vaults[0]
+        if vault.session is False or not vault.session:
+            return None
+        # Test folders, not entries: Vault.entries defaults to bwcli.Item(),
+        # which seeds itself with a 'fields' key and is therefore truthy even
+        # when nothing has been loaded. The Run.SWITCH branch does the same.
+        if not vault.folders:
+            if vault.bwcliserver:
+                res = vault.bwcliserver.get_entries()
+            else:
+                res = bwcli.get_entries(vault.session)
+            if not res or res[0] is False:
+                return None
+            vault.entries, vault.folders, vault.collections, vault.orgs = res
+        self._publish_unlocked()
+        # Put the GUI back where it was
+        if prev_active in self.vaults:
+            self.vaults.insert(
+                0, self.vaults.pop(self.vaults.index(prev_active))
+            )
+        self.vault = prev_active
+        if prev_appdata is not None:
+            environ["BITWARDENCLI_APPDATA_DIR"] = prev_appdata
+        return vault
+
+    def show_entry(self, **kwargs):
+        """Handle a --show request and send the result back to the client.
+
+        Runs in the daemon, which has no terminal, so this must never call a
+        launcher or prompt. Errors travel back as 'ERROR: ' strings.
+
+        Args: kwargs - the client's parsed args
+
+        """
+        # pylint: disable=import-outside-toplevel
+        from bwm.run_once import show_fields
+
+        vault = self.vault
+        url = kwargs.get("vault", "")
+        if url:
+            login = kwargs.get("login", "")
+            matched = [
+                i
+                for i in self.vaults
+                if i.url == url and (not login or i.email == login) and i.session
+            ]
+            if not matched:
+                vault = self.unlock_for_show(**kwargs)
+                if vault is None:
+                    self.server.send_result(
+                        f"ERROR: Could not unlock vault {url}."
+                    )
+                    return
+            else:
+                vault = matched[0]
+        result = show_fields(
+            vault.entries,
+            vault.folders,
+            kwargs.get("show", ""),
+            fields=kwargs.get("field"),
+            return_errors=True,
+        )
+        self.server.send_result(result or "")
 
     def _set_timer(self):
         """Set inactivity timer"""
@@ -726,6 +917,13 @@ class DmenuRunner(multiprocessing.Process):
         self.cache_timer.start()
 
     def run(self):
+        bwm.detach_from_terminal(self.background)
+        if self.background:
+            # Started from a --show invocation, this process inherited
+            # bwm.CLI=True. It is now detached with no terminal to prompt on,
+            # and everything it does from here is GUI work, so CLI mode would
+            # only suppress menus - notably the vault selection menu.
+            bwm.CLI = False
         at_saved = ""
         while True:
             self.server.start_flag.wait()
@@ -740,6 +938,17 @@ class DmenuRunner(multiprocessing.Process):
             if self.server.args_flag.is_set():
                 dargs = self.server.get_args()
                 self.server.args_flag.clear()
+            if dargs.get("show"):
+                # --show handles the clipboard itself and must not leave the
+                # GUI's clipboard mode toggled
+                prev_clipboard = bwm.CLIPBOARD
+                try:
+                    bwm.CLIPBOARD = bool(dargs.get("clipboard"))
+                    self.show_entry(**dargs)
+                finally:
+                    bwm.CLIPBOARD = prev_clipboard
+                self.server.start_flag.clear()
+                continue
             bwm.CLIPBOARD = dargs.get("clipboard") or bwm.CLIPBOARD
             self.vault.autotype = dargs.get("autotype", "") or bwm.SEQUENCE
             if dargs.get("vault", ""):
@@ -822,6 +1031,7 @@ class DmenuRunner(multiprocessing.Process):
                     if i is False
                 ):
                     dmenu_err("Error loading entries. See logs.")
+                self._publish_unlocked()
                 continue
             if res == Run.CONTINUE:
                 continue

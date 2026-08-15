@@ -1,5 +1,8 @@
 """Tests for bwm.bwm module - vault selection, data directories, and CLI args."""
 
+import configparser
+import json
+import multiprocessing
 import os
 from os.path import exists, join
 from unittest.mock import patch, MagicMock
@@ -450,3 +453,505 @@ class TestVaultFromConfig:
         inp = mock_select.call_args[1]["inp"]
         assert "alice@example.com" in inp
         assert "bob@example.com" in inp
+
+
+class TestCliMode:
+    """Non-interactive mode: prompts and errors use the terminal."""
+
+    def test_get_passphrase_uses_getpass(self, monkeypatch):
+        """The master password is read from the terminal, not a launcher."""
+        import bwm
+        from bwm.bwm import get_passphrase
+
+        monkeypatch.setattr(bwm, "CLI", True)
+        with patch("bwm.bwm.getpass", return_value="hunter2") as gp, \
+                patch("bwm.bwm.dmenu_select") as sel:
+            assert get_passphrase() == "hunter2"
+        sel.assert_not_called()
+        assert "Password" in gp.call_args[0][0]
+
+    def test_get_passphrase_prompts_name_the_secret(self, monkeypatch):
+        """2FA and client_secret prompts go to the terminal too.
+
+        These are the prompts the login flow needs, so routing this one
+        function is what makes a CLI login possible.
+
+        """
+        import bwm
+        from bwm.bwm import get_passphrase
+
+        monkeypatch.setattr(bwm, "CLI", True)
+        for secret in ("2FA Code", "client_secret"):
+            with patch("bwm.bwm.getpass", return_value="x") as gp:
+                assert get_passphrase(secret) == "x"
+            assert secret in gp.call_args[0][0]
+
+    def test_get_passphrase_no_tty(self, monkeypatch, capsys):
+        """No terminal to prompt on is a message, not a traceback."""
+        import bwm
+        from bwm.bwm import get_passphrase
+
+        monkeypatch.setattr(bwm, "CLI", True)
+        with patch("bwm.bwm.getpass", side_effect=EOFError):
+            assert get_passphrase() == ""
+        assert "No terminal available" in capsys.readouterr().err
+
+    def test_get_passphrase_gui_unaffected(self, monkeypatch):
+        """With CLI off, the launcher is still used."""
+        import bwm
+        from bwm.bwm import get_passphrase
+
+        monkeypatch.setattr(bwm, "CLI", False)
+        with patch.object(bwm, "CONF", configparser.ConfigParser()), \
+                patch("bwm.bwm.dmenu_select", return_value="from-dmenu") as sel:
+            assert get_passphrase() == "from-dmenu"
+        sel.assert_called_once()
+
+    def test_get_vault_multiple_needs_v(self, monkeypatch, mock_config_vaults):
+        """Vault selection can't be shown, so -v is required."""
+        import bwm
+
+        monkeypatch.setattr(bwm, "CLI", True)
+        with patch.object(bwm, "CONF", mock_config_vaults), \
+                patch("bwm.bwm.dmenu_select") as sel, \
+                patch("bwm.bwm.dmenu_err") as err:
+            assert get_vault() is None
+        sel.assert_not_called()
+        assert "-v" in err.call_args[0][0]
+
+    def test_get_vault_no_config_no_wizard(self, monkeypatch):
+        """The interactive first run wizard is never launched in CLI mode."""
+        import bwm
+
+        empty = configparser.ConfigParser()
+        empty.add_section("vault")
+        monkeypatch.setattr(bwm, "CLI", True)
+        with patch.object(bwm, "CONF", empty), \
+                patch("bwm.bwm.get_initial_vault") as wizard, \
+                patch("bwm.bwm.dmenu_err") as err:
+            assert get_vault() is None
+        wizard.assert_not_called()
+        assert "No vault configured" in err.call_args[0][0]
+
+
+class TestDmenuRunnerShow:
+    """The daemon answers --show without ever touching a launcher."""
+
+    def _runner(self, vaults):
+        """A DmenuRunner with __init__ bypassed (it opens a real vault)."""
+        from bwm.bwm import DmenuRunner
+
+        runner = DmenuRunner.__new__(DmenuRunner)
+        runner.server = MagicMock()
+        runner.unlocked = multiprocessing.Array("c", 8192)
+        runner.vaults = vaults
+        runner.vault = vaults[0]
+        return runner
+
+    def _vault(self, entries, folders, url="https://v.example.com",
+               email="a@example.com", session=b"sess"):
+        from bwm.bwm import Vault
+
+        vault = Vault(url, email, "", "", session=session)
+        vault.entries = entries
+        vault.folders = folders
+        return vault
+
+    def test_sends_result_for_active_vault(self, entries, sample_folders):
+        runner = self._runner([self._vault(entries, sample_folders)])
+        with patch("bwm.bwm.dmenu_select") as sel, patch("bwm.bwm.dmenu_err") as err:
+            runner.show_entry(show="Test Login", field=["username"])
+        runner.server.send_result.assert_called_once_with("testuser")
+        sel.assert_not_called()
+        err.assert_not_called()
+
+    def test_locked_vault_is_unlocked_with_the_sent_password(
+        self, entries, sample_folders
+    ):
+        """The client already prompted for it, so use it rather than refusing.
+
+        Matches what the GUI's 'Switch vaults' does with the same password.
+
+        """
+        runner = self._runner([self._vault(entries, sample_folders)])
+        target = self._vault(
+            entries, sample_folders, url="https://other.example.com"
+        )
+        with patch("bwm.bwm.get_vault", return_value=[target]) as gv:
+            runner.show_entry(
+                show="Test Login",
+                vault="https://other.example.com",
+                password="master",
+                field=["password"],
+            )
+        assert gv.call_args.kwargs["password"] == "master"
+        runner.server.send_result.assert_called_once_with("testpass123")
+
+    def test_failed_unlock_reports_without_a_gui_prompt(
+        self, entries, sample_folders
+    ):
+        """A wrong password must not pop a dialog at a terminal user."""
+        runner = self._runner([self._vault(entries, sample_folders)])
+        with patch("bwm.bwm.get_vault", return_value=None), \
+                patch("bwm.bwm.dmenu_select") as sel:
+            runner.show_entry(show="x", vault="https://other.example.com")
+        sel.assert_not_called()
+        sent = runner.server.send_result.call_args[0][0]
+        assert sent.startswith("ERROR:") and "Could not unlock" in sent
+
+    def test_gui_focus_is_restored_after_unlock(
+        self, entries, sample_folders
+    ):
+        """A CLI query shouldn't move the GUI's menu to another vault."""
+        active = self._vault(entries, sample_folders)
+        runner = self._runner([active])
+        target = self._vault(
+            entries, sample_folders, url="https://other.example.com"
+        )
+        with patch("bwm.bwm.get_vault", return_value=[target, active]):
+            runner.show_entry(
+                show="Test Login",
+                vault="https://other.example.com",
+                password="master",
+            )
+        assert runner.vault is active
+        assert runner.vaults[0] is active
+
+    def test_cli_mode_restored_after_unlock(self, entries, sample_folders):
+        """CLI mode is forced on only for the unlock attempt."""
+        import bwm
+
+        runner = self._runner([self._vault(entries, sample_folders)])
+        seen = {}
+        def record(*_a, **_k):
+            seen["cli"] = bwm.CLI
+            return None
+        with patch.object(bwm, "CLI", False), \
+                patch("bwm.bwm.get_vault", side_effect=record):
+            runner.show_entry(show="x", vault="https://other.example.com")
+            assert seen["cli"] is True
+            assert bwm.CLI is False
+
+    def test_selects_the_named_vault(self, entries, sample_folders):
+        other = self._vault(
+            entries, sample_folders, url="https://other.example.com"
+        )
+        runner = self._runner([self._vault([], {}), other])
+        runner.show_entry(
+            show="Test Login",
+            vault="https://other.example.com",
+            field=["password"],
+        )
+        runner.server.send_result.assert_called_once_with("testpass123")
+
+    def test_publish_unlocked_only_lists_sessions(self, sample_folders):
+        runner = self._runner(
+            [
+                self._vault([], sample_folders),
+                self._vault(
+                    [], sample_folders, url="https://locked.example.com",
+                    session=b"",
+                ),
+            ]
+        )
+        runner._publish_unlocked()
+        assert json.loads(runner.unlocked.value) == [
+            ["https://v.example.com", "a@example.com"]
+        ]
+
+
+class TestCliVaultMessages:
+    """CLI errors have to name the piece that's actually missing."""
+
+    def _empty_conf(self):
+        conf = configparser.ConfigParser()
+        conf.add_section("vault")
+        return conf
+
+    def test_vault_given_without_login(self, monkeypatch):
+        """`-v <url>` alone still needs an email; don't claim -v is missing."""
+        import bwm
+
+        monkeypatch.setattr(bwm, "CLI", True)
+        with patch.object(bwm, "CONF", self._empty_conf()), \
+                patch("bwm.bwm.get_initial_vault") as wizard, \
+                patch("bwm.bwm.dmenu_err") as err:
+            # argparse supplies login=None when -l is absent
+            assert get_vault(vault="https://v.example.com", login=None) is None
+        wizard.assert_not_called()
+        msg = err.call_args[0][0]
+        assert "No login email" in msg and "https://v.example.com" in msg
+
+    def test_nothing_given(self, monkeypatch):
+        import bwm
+
+        monkeypatch.setattr(bwm, "CLI", True)
+        with patch.object(bwm, "CONF", self._empty_conf()), \
+                patch("bwm.bwm.dmenu_err") as err:
+            assert get_vault(vault=None, login=None) is None
+        assert "No vault configured" in err.call_args[0][0]
+
+    def test_vault_and_login_proceed_to_set_vault(self, monkeypatch):
+        """With both, an unconfigured vault is built and unlocked normally."""
+        import bwm
+
+        monkeypatch.setattr(bwm, "CLI", True)
+        with patch.object(bwm, "CONF", self._empty_conf()), \
+                patch("bwm.bwm.set_vault", side_effect=lambda v: v) as sv:
+            vaults = get_vault(
+                vault="https://v.example.com", login="me@example.com"
+            )
+        sv.assert_called_once()
+        assert vaults[0].url == "https://v.example.com"
+        assert vaults[0].email == "me@example.com"
+
+    def test_password_kwarg_prefills_vault(self, monkeypatch):
+        """The client's prompt result reaches set_vault without a GUI prompt."""
+        import bwm
+
+        monkeypatch.setattr(bwm, "CLI", True)
+        with patch.object(bwm, "CONF", self._empty_conf()), \
+                patch("bwm.bwm.set_vault", side_effect=lambda v: v):
+            vaults = get_vault(
+                vault="https://v.example.com",
+                login="me@example.com",
+                password="from-client",
+            )
+        assert vaults[0].passw == "from-client"
+
+
+class TestDaemonLeavesCliMode:
+    """A daemon started by --show must not stay in CLI mode.
+
+    bwm.CLI is a global set per invocation. The DmenuRunner child inherits it
+    across the fork, but once detached it has no terminal to prompt on and
+    serves GUI requests - where CLI mode suppresses menus instead.
+
+    """
+
+    def _runner(self, background):
+        from bwm.bwm import DmenuRunner
+
+        runner = DmenuRunner.__new__(DmenuRunner)
+        runner.server = MagicMock()
+        runner.server.kill_flag.is_set.return_value = True  # exit the loop
+        runner.background = background
+        runner.unlocked = None
+        runner.vaults = []
+        runner.vault = MagicMock()
+        return runner
+
+    def test_backgrounded_daemon_clears_cli(self, monkeypatch):
+        import bwm
+
+        monkeypatch.setattr(bwm, "CLI", True)
+        with patch("bwm.detach_from_terminal"):
+            self._runner(background=True).run()
+        assert bwm.CLI is False
+
+    def test_foreground_daemon_keeps_terminal_prompts(self, monkeypatch):
+        """--foreground still has the terminal attached."""
+        import bwm
+
+        monkeypatch.setattr(bwm, "CLI", True)
+        with patch("bwm.detach_from_terminal"):
+            self._runner(background=False).run()
+        assert bwm.CLI is True
+
+    def test_switch_vaults_shows_the_menu_in_gui_mode(self, mock_config_vaults):
+        """The symptom: CLI mode skipped vault selection entirely."""
+        import bwm
+        from bwm.bwm import get_vault
+
+        vaults = [
+            Vault("https://vault.bitwarden.com", "alice@example.com", "", "",
+                  session=b"tok"),
+            Vault("https://vault.bitwarden.com", "bob@example.com", "", ""),
+        ]
+        with patch.object(bwm, "CLI", False), \
+                patch.object(bwm, "CONF", mock_config_vaults), \
+                patch("bwm.bwm.set_vault", side_effect=lambda v: v), \
+                patch("bwm.bwm.dmenu_select",
+                      return_value="https://vault.bitwarden.com - bob@example.com") as sel:
+            result = get_vault(list(vaults))
+        sel.assert_called_once()
+        assert result[0].email == "bob@example.com"
+
+
+class TestSwitchToUnlockedVault:
+    """Switching to an already unlocked vault must not unlock it again.
+
+    `bw status` only reports 'unlocked' when it is given a session, so calling
+    it bare made every switch look locked and pay for a full unlock - 8-10
+    seconds against a real server.
+
+    """
+
+    def _vault(self):
+        return Vault(
+            "https://v.example.com", "me@x.com", "pw", "", session=b"tok"
+        )
+
+    def test_status_is_asked_about_the_session_we_hold(self, tmp_path):
+        import bwm
+
+        vault = self._vault()
+        with patch.object(bwm, "DATA_HOME", str(tmp_path)), \
+                patch("bwm.bwm.bwcli.status",
+                      return_value={"status": "unlocked", "serverUrl": "x"}) as st, \
+                patch("bwm.bwm.bwcli.unlock") as unlock, \
+                patch("bwm.bwm.BWCLIServer"):
+            set_vault([vault])
+        st.assert_called_once_with(b"tok")
+        unlock.assert_not_called()
+
+    def test_existing_session_is_kept(self, tmp_path):
+        """`bw status` doesn't echo the token back, so don't clobber it."""
+        import bwm
+
+        vault = self._vault()
+        with patch.object(bwm, "DATA_HOME", str(tmp_path)), \
+                patch("bwm.bwm.bwcli.status",
+                      return_value={"status": "unlocked", "serverUrl": "x"}), \
+                patch("bwm.bwm.bwcli.unlock"), \
+                patch("bwm.bwm.BWCLIServer"):
+            set_vault([vault])
+        assert vault.session == b"tok"
+
+    def test_locked_vault_still_unlocks(self, tmp_path):
+        """A vault with no session, or a stale one, unlocks as before."""
+        import bwm
+
+        vault = Vault("https://v.example.com", "me@x.com", "pw", "")
+        with patch.object(bwm, "DATA_HOME", str(tmp_path)), \
+                patch("bwm.bwm.bwcli.status",
+                      return_value={"status": "locked", "serverUrl": "x"}), \
+                patch("bwm.bwm.bwcli.unlock",
+                      return_value=(b"fresh", None)) as unlock, \
+                patch("bwm.bwm.BWCLIServer") as srv:
+            srv.return_value.start.return_value = False  # fall back to the CLI
+            set_vault([vault])
+        unlock.assert_called_once_with("pw")
+        assert vault.session == b"fresh"
+
+
+class TestSessionRotation:
+    """Unlocking again through `bw serve` invalidates the CLI's token.
+
+    set_vault() unlocks twice - once via the CLI for a token, then again
+    through the serve API - and Bitwarden rotates the session on each unlock.
+    Keeping the first token means every later `bw --session <token>` is
+    rejected, `bw status` reports 'locked', and switching to an already
+    unlocked vault pays for a whole new unlock.
+
+    """
+
+    def _serve(self, rotated="rotated-token"):
+        srv = MagicMock()
+        srv.start.return_value = True
+        srv.unlock.return_value = (rotated, None)
+        return srv
+
+    def test_rotated_token_replaces_the_cli_one(self, tmp_path):
+        import bwm
+
+        vault = Vault("https://v.example.com", "me@x.com", "pw", "")
+        srv = self._serve()
+        with patch.object(bwm, "DATA_HOME", str(tmp_path)), \
+                patch("bwm.bwm.bwcli.status",
+                      return_value={"status": "locked", "serverUrl": "x"}), \
+                patch("bwm.bwm.bwcli.unlock", return_value=(b"cli-token", None)), \
+                patch("bwm.bwm.BWCLIServer", return_value=srv):
+            set_vault([vault])
+        assert vault.session == b"rotated-token"
+
+    def test_failed_serve_unlock_keeps_the_cli_token(self, tmp_path):
+        """Falling back to the CLI means the CLI token is still the live one."""
+        import bwm
+
+        vault = Vault("https://v.example.com", "me@x.com", "pw", "")
+        srv = self._serve()
+        srv.unlock.return_value = (False, "nope")
+        with patch.object(bwm, "DATA_HOME", str(tmp_path)), \
+                patch("bwm.bwm.bwcli.status",
+                      return_value={"status": "locked", "serverUrl": "x"}), \
+                patch("bwm.bwm.bwcli.unlock", return_value=(b"cli-token", None)), \
+                patch("bwm.bwm.BWCLIServer", return_value=srv):
+            set_vault([vault])
+        assert vault.session == b"cli-token"
+
+    def test_switching_back_reuses_the_live_token(self, tmp_path):
+        """The whole point: no second unlock when switching to it again."""
+        import bwm
+
+        vault = Vault("https://v.example.com", "me@x.com", "pw", "")
+        srv = self._serve()
+        with patch.object(bwm, "DATA_HOME", str(tmp_path)), \
+                patch("bwm.bwm.bwcli.status",
+                      return_value={"status": "locked", "serverUrl": "x"}), \
+                patch("bwm.bwm.bwcli.unlock", return_value=(b"cli-token", None)), \
+                patch("bwm.bwm.BWCLIServer", return_value=srv):
+            set_vault([vault])
+        assert vault.session == b"rotated-token"
+        # Now switch away and back. The running server answers the status
+        # check, so no `bw` process is spawned and nothing is unlocked again.
+        srv.get_status.return_value = {"status": "unlocked", "serverUrl": "x"}
+        with patch.object(bwm, "DATA_HOME", str(tmp_path)), \
+                patch("bwm.bwm.bwcli.status") as st, \
+                patch("bwm.bwm.bwcli.unlock") as unlock:
+            set_vault([vault])
+        srv.get_status.assert_called_once()
+        st.assert_not_called()
+        unlock.assert_not_called()
+
+
+class TestStatusViaServer:
+    """Spawning `bw` costs a Node startup - seconds. Use the running server.
+
+    Measured on a dev machine: `bw --version` 1.8s, `bw status` 3.5s. A vault
+    switch made exactly one such call, which was most of its cost.
+
+    """
+
+    def _vault(self, srv=None):
+        return Vault(
+            "https://v.example.com", "me@x.com", "pw", "",
+            session=b"tok", bwcliserver=srv,
+        )
+
+    def test_running_server_answers_instead_of_the_cli(self, tmp_path):
+        import bwm
+
+        srv = MagicMock()
+        srv.get_status.return_value = {"status": "unlocked", "serverUrl": "x"}
+        with patch.object(bwm, "DATA_HOME", str(tmp_path)), \
+                patch("bwm.bwm.bwcli.status") as cli_status, \
+                patch("bwm.bwm.bwcli.unlock") as unlock:
+            set_vault([self._vault(srv)])
+        srv.get_status.assert_called_once()
+        cli_status.assert_not_called()   # no Node process spawned
+        unlock.assert_not_called()
+
+    def test_falls_back_to_the_cli_without_a_server(self, tmp_path):
+        import bwm
+
+        with patch.object(bwm, "DATA_HOME", str(tmp_path)), \
+                patch("bwm.bwm.bwcli.status",
+                      return_value={"status": "unlocked", "serverUrl": "x"}) as cli_status, \
+                patch("bwm.bwm.bwcli.unlock"), \
+                patch("bwm.bwm.BWCLIServer"):
+            set_vault([self._vault()])
+        cli_status.assert_called_once_with(b"tok")
+
+    def test_falls_back_when_the_server_errors(self, tmp_path):
+        """get_status() returns False if the server is wedged."""
+        import bwm
+
+        srv = MagicMock()
+        srv.get_status.return_value = False
+        with patch.object(bwm, "DATA_HOME", str(tmp_path)), \
+                patch("bwm.bwm.bwcli.status",
+                      return_value={"status": "unlocked", "serverUrl": "x"}) as cli_status, \
+                patch("bwm.bwm.bwcli.unlock"):
+            set_vault([self._vault(srv)])
+        cli_status.assert_called_once_with(b"tok")

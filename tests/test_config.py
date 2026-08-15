@@ -2,6 +2,7 @@
 
 import configparser
 import os
+import sys
 import tempfile
 from unittest.mock import patch, MagicMock
 
@@ -165,10 +166,53 @@ class TestClipboardConfig:
         assert bwm.CLIPBOARD in (True, False)
 
     def test_clipboard_cmd_defined(self):
-        """Test CLIPBOARD_CMD is defined (may be empty if no clipboard tool)."""
+        """Test CLIPBOARD_CMD is defined (None until first use)."""
         import bwm
 
         assert hasattr(bwm, "CLIPBOARD_CMD")
+
+    def test_clipboard_not_probed_at_config_load(self, tmp_path):
+        """reload_config must not shell out looking for a clipboard tool.
+
+        Detection is deferred so bwm works with no clipboard tool installed.
+
+        """
+        import bwm
+
+        conf = tmp_path / "config.ini"
+        conf.write_text("[vault]\nserver_1 = https://example.com\n")
+        with patch("bwm.run") as mock_run:
+            bwm.reload_config(str(conf))
+        assert mock_run.call_count == 0
+
+    def test_get_clipboard_cmd_caches(self, monkeypatch):
+        """The probe runs once and the result is cached in CLIPBOARD_CMD."""
+        import bwm
+
+        monkeypatch.setattr(bwm, "CLIPBOARD_CMD", None)
+        with patch("bwm.run") as mock_run:
+            first = bwm.get_clipboard_cmd()
+            calls_after_first = mock_run.call_count
+            second = bwm.get_clipboard_cmd()
+        assert first == second
+        assert mock_run.call_count == calls_after_first
+
+    def test_get_clipboard_cmd_none_when_unavailable(self, monkeypatch):
+        """No clipboard tool installed returns None rather than raising."""
+        import bwm
+
+        monkeypatch.setattr(bwm, "CLIPBOARD_CMD", None)
+        with patch("bwm.run", side_effect=OSError):
+            assert bwm.get_clipboard_cmd() is None
+
+    def test_clipboard_missing_msg_names_tools(self, monkeypatch):
+        """The error message names the tools actually looked for."""
+        import bwm
+
+        monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+        assert "xsel" in bwm.clipboard_missing_msg()
+        monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+        assert "wl-copy" in bwm.clipboard_missing_msg()
 
 
 class TestConfigParser:
@@ -204,3 +248,76 @@ class TestEnvironmentCopy:
 
         # PATH should exist in most environments
         assert "PATH" in bwm.ENV or len(bwm.ENV) >= 0
+
+
+class TestCliAutoDetect:
+    """CLI mode has to be on before anything can prompt."""
+
+    def _run_main(self, monkeypatch, argv):
+        import bwm
+        from bwm.__main__ import main
+
+        monkeypatch.setattr(sys, "argv", argv)
+        monkeypatch.setattr(bwm, "CLI", False)
+        with patch("bwm.__main__.get_auth", return_value=(1, b"k")), \
+                patch("bwm.__main__.port_in_use", return_value=True), \
+                patch("bwm.__main__.client", side_effect=ConnectionRefusedError), \
+                patch("bwm.reload_config"):
+            main()
+        return bwm.CLI
+
+    def test_no_display_means_cli(self, monkeypatch):
+        """A headless box has no launcher to prompt with."""
+        monkeypatch.delenv("DISPLAY", raising=False)
+        monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+        assert self._run_main(monkeypatch, ["bwm"]) is True
+
+    def test_x11_display_means_gui(self, monkeypatch):
+        monkeypatch.setenv("DISPLAY", ":0")
+        monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+        assert self._run_main(monkeypatch, ["bwm"]) is False
+
+    def test_wayland_display_means_gui(self, monkeypatch):
+        monkeypatch.delenv("DISPLAY", raising=False)
+        monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+        assert self._run_main(monkeypatch, ["bwm"]) is False
+
+    def test_show_is_always_cli(self, monkeypatch):
+        """--show prints to stdout, so prompts belong on the terminal."""
+        monkeypatch.setenv("DISPLAY", ":0")
+        assert self._run_main(monkeypatch, ["bwm", "-s", "github"]) is True
+
+
+class TestLogLevel:
+    """$BWM_LOG_LEVEL exposes the debug logging already in the vault code."""
+
+    def _level(self, value, tmp_path):
+        """Re-import bwm with the env var set and report the root log level."""
+        import subprocess
+        import sys as _sys
+
+        env = dict(os.environ, XDG_CACHE_HOME=str(tmp_path))
+        if value is None:
+            env.pop("BWM_LOG_LEVEL", None)
+        else:
+            env["BWM_LOG_LEVEL"] = value
+        out = subprocess.run(
+            [_sys.executable, "-c",
+             "import bwm, logging; print(logging.getLevelName("
+             "logging.getLogger().level))"],
+            capture_output=True, text=True, env=env, check=True,
+        )
+        return out.stdout.strip()
+
+    def test_defaults_to_warning(self, tmp_path):
+        assert self._level(None, tmp_path) == "WARNING"
+
+    def test_debug_is_honoured(self, tmp_path):
+        assert self._level("debug", tmp_path) == "DEBUG"
+
+    def test_case_insensitive(self, tmp_path):
+        assert self._level("DEBUG", tmp_path) == "DEBUG"
+
+    def test_bogus_value_falls_back(self, tmp_path):
+        """A typo must not crash bwm at import time."""
+        assert self._level("nonsense", tmp_path) == "WARNING"

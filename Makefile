@@ -4,10 +4,10 @@ PIP = $(VENV)/bin/pip
 
 all: venv
 
-$(VENV)/bin/activate: requirements.txt
+$(VENV)/bin/activate: pyproject.toml
 	python3 -m venv $(VENV)
 	$(PIP) install -U pip wheel
-	$(PIP) install .[test]
+	$(PIP) install '.[autotype,test]'
 
 venv: $(VENV)/bin/activate
 

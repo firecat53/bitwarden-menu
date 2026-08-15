@@ -535,3 +535,63 @@ class TestGetOrgs:
         )
         result = get_orgs(b"session-key")
         assert result == {}
+
+
+class TestSessionTokenIsClean:
+    """`bw <cmd> --raw` ends its output with a newline.
+
+    Keeping it makes every later `bw --session <token>` reject the session as
+    invalid, so `bw status` reports 'locked' and bwm unlocks all over again -
+    8-10 seconds each time a vault is switched to.
+
+    """
+
+    def test_unlock_strips_the_newline(self):
+        from bwm.bwcli import unlock
+
+        with patch(
+            "bwm.bwcli.run",
+            return_value=CompletedProcess([], 0, stdout=b"tok123==\n", stderr=b""),
+        ):
+            session, err = unlock("pw")
+        assert session == b"tok123=="
+        assert err is None
+
+    def test_login_strips_the_newline(self):
+        from bwm.bwcli import login
+
+        with patch(
+            "bwm.bwcli.run",
+            return_value=CompletedProcess([], 0, stdout=b"tok456==\n", stderr=b""),
+        ):
+            session, err = login("me@x.com", "pw")
+        assert session == b"tok456=="
+        assert err is None
+
+    def test_token_round_trips_into_status(self):
+        """The token unlock returns must be usable as-is by status()."""
+        from bwm.bwcli import status, unlock
+
+        with patch(
+            "bwm.bwcli.run",
+            return_value=CompletedProcess([], 0, stdout=b"tok789==\n", stderr=b""),
+        ):
+            session, _ = unlock("pw")
+        with patch("bwm.bwcli.run") as mock_run:
+            mock_run.return_value = CompletedProcess(
+                [], 0, stdout=b'{"status": "unlocked"}', stderr=b""
+            )
+            status(session)
+        assert mock_run.call_args[0][0] == ["bw", "--session", b"tok789==", "status"]
+
+    def test_empty_stdout_is_still_a_failure(self):
+        """Stripping must not turn a failure into a success."""
+        from bwm.bwcli import unlock
+
+        with patch(
+            "bwm.bwcli.run",
+            return_value=CompletedProcess([], 1, stdout=b"", stderr=b"bad password"),
+        ):
+            session, err = unlock("pw")
+        assert session is False
+        assert err == b"bad password"

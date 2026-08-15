@@ -502,3 +502,82 @@ class TestObscureColorConfig:
         result = dmenu_pass("dmenu")
         # Default color is #222222
         assert result == ["-nb", "#222222", "-nf", "#222222"]
+
+
+class TestCliMode:
+    """In CLI mode nothing may shell out to a launcher."""
+
+    @patch("bwm.menu.dmenu_select")
+    @patch("bwm.menu.bwm")
+    def test_dmenu_err_writes_to_stderr(self, mock_bwm, mock_select, capsys):
+        """dmenu_err prints to stderr and never calls the launcher."""
+        mock_bwm.ENC = "utf-8"
+        mock_bwm.CLI = True
+
+        from bwm.menu import dmenu_err
+
+        assert dmenu_err("Some error") is None
+        mock_select.assert_not_called()
+        assert capsys.readouterr().err.strip() == "Some error"
+
+    @patch("bwm.menu.dmenu_select")
+    @patch("bwm.menu.bwm")
+    def test_dmenu_err_decodes_bytes_in_cli_mode(
+        self, mock_bwm, mock_select, capsys
+    ):
+        """Byte messages are decoded before printing, as in GUI mode."""
+        mock_bwm.ENC = "utf-8"
+        mock_bwm.CLI = True
+
+        from bwm.menu import dmenu_err
+
+        dmenu_err(b"Byte error")
+        mock_select.assert_not_called()
+        assert capsys.readouterr().err.strip() == "Byte error"
+
+    @patch("bwm.menu.run", side_effect=FileNotFoundError)
+    def test_dmenu_select_missing_launcher_exits(self, _mock_run, capsys):
+        """A missing launcher is an error, not a traceback."""
+        from bwm.menu import dmenu_select
+
+        with pytest.raises(SystemExit) as exc:
+            dmenu_select(1, "Entries", inp="")
+        assert exc.value.code == 1
+        assert "not found" in capsys.readouterr().err
+
+
+class TestLauncherFailure:
+    """A launcher that fails must not look like a user cancelling."""
+
+    @patch("bwm.menu.bwm")
+    @patch("bwm.menu.run")
+    def test_nonzero_exit_reported(self, mock_run, mock_bwm, capsys):
+        """Launcher stderr is surfaced (e.g. 'cannot open display')."""
+        mock_bwm.ENC = "utf-8"
+        mock_bwm.CONF = configparser.ConfigParser()
+        mock_run.return_value = CompletedProcess(
+            args=["dmenu"],
+            returncode=1,
+            stdout="",
+            stderr="dmenu: cannot open display",
+        )
+
+        from bwm.menu import dmenu_select
+
+        assert dmenu_select(0, "Enter vault URL") == ""
+        assert "cannot open display" in capsys.readouterr().err
+
+    @patch("bwm.menu.bwm")
+    @patch("bwm.menu.run")
+    def test_clean_cancel_is_quiet(self, mock_run, mock_bwm, capsys):
+        """A user pressing Escape exits 1 with no stderr and stays quiet."""
+        mock_bwm.ENC = "utf-8"
+        mock_bwm.CONF = configparser.ConfigParser()
+        mock_run.return_value = CompletedProcess(
+            args=["dmenu"], returncode=1, stdout="", stderr=""
+        )
+
+        from bwm.menu import dmenu_select
+
+        assert dmenu_select(0, "Entries") == ""
+        assert capsys.readouterr().err == ""

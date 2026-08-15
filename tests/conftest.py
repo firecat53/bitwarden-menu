@@ -185,3 +185,9 @@ def mock_config():
     conf.set("vault", "session_timeout_min", "360")
     conf.set("vault", "autotype_default", "{USERNAME}{TAB}{PASSWORD}{ENTER}")
     return conf
+
+
+@pytest.fixture
+def entries(sample_login_entry, sample_card_entry, sample_identity_entry):
+    """All three entry types in one vault."""
+    return [sample_login_entry, sample_card_entry, sample_identity_entry]

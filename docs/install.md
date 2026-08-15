@@ -6,11 +6,17 @@
 
 1. Python 3.10+
 2. [Bitwarden CLI][1]. Ensure the `bw` command is in `$PATH`
-3. [Pynput][2] and [xdg-base-dirs][6]
-4. Dmenu, [Rofi][3], [Wofi][7] or [Bemenu][4]
-5. (optional) Pinentry. Make sure to set which flavor of pinentry command to use
+3. [xdg-base-dirs][6]
+
+The rest is only needed for the interactive (launcher) mode:
+
+4. [Pynput][2], for auto-typing as the default `type_library`. Installed by
+   `pip install bitwarden-menu[autotype]`, or use one of the alternate type
+   libraries in item 7.
+5. Dmenu, [Rofi][3], [Wofi][7] or [Bemenu][4]
+6. (optional) Pinentry. Make sure to set which flavor of pinentry command to use
    in the config file.
-6. (optional) xdotool, ydotool(>= 1.0.0) or wtype (for Wayland). If you have a
+7. (optional) xdotool, ydotool(>= 1.0.0) or wtype (for Wayland). If you have a
    lot of Unicode characters or use a non-U.S. English keyboard layout,
    xdotool/ydotool/wtype are ecessary to handle typing those characters.
 
@@ -30,15 +36,21 @@ Ensure Universe repository is enabled.
 
 ## Install (recommended)
 
-`$ pip install --user bitwarden-menu`
+`$ pip install --user bitwarden-menu[autotype]`
 
 Add ~/.local/bin to $PATH
+
+Drop the `[autotype]` extra to install without pynput.
+
+**Note:** pynput used to be installed unconditionally. Upgrading an existing
+install with a plain `pip install -U bitwarden-menu` leaves it in place, but in
+a fresh virtualenv you need the `[autotype]` extra to keep auto-typing working.
 
 ### Install (virtualenv)
 
     $ python -m venv venv
     $ source venv/bin/activate
-    $ pip install bitwarden-menu
+    $ pip install bitwarden-menu[autotype]
 
 Link to the executable `/path/to/venv/bin/bwm` when assigning a keyboard shortcut.
 
@@ -54,8 +66,8 @@ Link to the executable `/path/to/venv/bin/bwm` when assigning a keyboard shortcu
     $ git clone https://github.com/firecat53/bitwarden-menu
     $ cd bitwarden-menu
     $ git checkout <branch> (if desired)
-    $ pip install --user . OR
-    $ pip install --user -e . (for editable install)
+    $ pip install --user '.[autotype]' OR
+    $ pip install --user -e '.[autotype]' (for editable install)
 
 ### Available in [Archlinux AUR][5] and Nix packages
 

@@ -3,7 +3,7 @@ title: Bitwarden-menu
 section: 1
 header: User Manual
 footer: Bitwarden-menu v0.5.4
-date: 2026-08-14
+date: 2026-08-15
 ---
 
 # NAME
@@ -13,7 +13,7 @@ managing of Bitwarden/Vaultwarden vaults.
 
 # SYNOPSIS
 
-**bitwarden-menu** [**--help**] [**--version**] [**--vault** URL] [**--login** email] [**--lock**] [**--autotype** pattern] [**--clipboard**] [**--config** PATH]
+**bitwarden-menu** [**--help**] [**--version**] [**--vault** URL] [**--login** email] [**--lock**] [**--autotype** pattern] [**--clipboard**] [**--config** PATH] [**--show** term] [**--field** name] [**--foreground**]
 
 # DESCRIPTION
 
@@ -35,6 +35,20 @@ from config.ini for current vault.
 
 **-C**, **--clipboard** Select to clipboard
 
+**-s**, **--show** Search term. Outputs the matched entry's password (default)
+or the fields selected by **--field** to stdout, or to the clipboard with
+**--clipboard**. Requires a single matching entry
+
+**-f**, **--field** Field to output with **--show**. Repeat for multiple fields,
+which are output one per line in the order given. Case and separator
+insensitive. One of the autotype placeholders *title*, *username*, *password*,
+*url*, *notes*, *totp*, *cardnum*; any card or identity field name such as
+*security code*, *expiration month* or *ssn*; `S:<name>` for a custom field; or
+*all* for every field that has a value, labeled. Defaults to *password*
+
+**-F**, **--foreground** Run the daemon in the foreground instead of detaching.
+For troubleshooting, and for service managers expecting Type=simple
+
 **-c**, **--config** _PATH_
 Path to config file. Supports absolute paths, relative paths, and tilde expansion.
 Default: ~/.config/bwm/config.ini
@@ -43,10 +57,25 @@ Default: ~/.config/bwm/config.ini
 
 **-h**, **--help**  Print help and exit
 
+# DAEMON
+
+**bwm** starts a background daemon on first use and returns immediately. The
+daemon holds the unlocked vault so later invocations do not pay the unlock cost
+again, and exits after *session_timeout_min* of inactivity or on **--lock**.
+
+With **DISPLAY** and **WAYLAND_DISPLAY** unset, credentials are prompted for on
+the terminal rather than through a launcher, so the full login - including 2FA
+and *client_secret* - works on a headless machine.
+
 # EXAMPLES
 
     bwm
     bwm -v https://vault.mydomain.net -l user@domain.com -a '{TOTP}{ENTER}'
+    bwm -s 'ssh github'
+    bwm -s 'ssh github' -f username -f password
+    bwm -s visa -f 'security code'
+    bwm -s 'ssh github' -f all
+    bwm --foreground
 
 # CONFIGURATION  
 
@@ -89,9 +118,23 @@ for additional options.
 |                           | `Digits`                     | `digits`                                |
 |                           | `Custom Name(s)`             | `Any combo of [password_chars] entries` |
 
+# ENVIRONMENT
+
+**BWM_LOG_LEVEL**
+Log level for _~/.cache/bwm.log_. Default *warning*; set to *debug* to record
+each vault's status check, unlock and entry load. A backgrounded daemon sends
+its output to /dev/null, so this and **--foreground** are how to see what it is
+doing.
+
+**DISPLAY**, **WAYLAND_DISPLAY**
+When neither is set, bwm prompts on the terminal instead of through a launcher,
+which is what makes the initial login, 2FA included, work on a headless machine.
+
 # FILES
 
 ~/.config/bwm/config.ini
+
+~/.cache/bwm.log
 
 # AUTHOR
 

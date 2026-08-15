@@ -113,7 +113,9 @@ def login(email, password, method=None, code=""):
     if not res.stdout:
         logging.error(res)
         return (False, res.stderr)
-    return res.stdout, None
+    # `--raw` still ends with a newline. Keeping it makes every later
+    # `bw --session <token>` reject the session as invalid.
+    return res.stdout.strip(), None
 
 
 def _pty_read(fd, timeout=10):
@@ -264,7 +266,9 @@ def unlock(password):
     if not res.stdout:
         logging.error(res)
         return (False, res.stderr)
-    return res.stdout, None
+    # `--raw` still ends with a newline. Keeping it makes every later
+    # `bw --session <token>` reject the session as invalid.
+    return res.stdout.strip(), None
 
 
 def lock():

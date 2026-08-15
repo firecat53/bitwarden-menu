@@ -3,13 +3,19 @@
 # flake8: noqa
 import re
 from shlex import split
-from subprocess import call, run
+from subprocess import call, run, CalledProcessError
 import time
 from threading import Timer
 
 from bwm.menu import dmenu_err
 from bwm.totp import gen_otp
 import bwm
+
+PYNPUT_MISSING = (
+    "pynput is not installed.\n"
+    "Install it with `pip install bitwarden-menu[autotype]` or set "
+    "`type_library` in config.ini to a supported type_library (see docs)."
+)
 
 
 def autotype_seq(entry):
@@ -157,6 +163,7 @@ def type_entry_pynput(entry, tokens):  # pylint: disable=too-many-branches
         from pynput import keyboard
         from .tokens_pynput import AUTOTYPE_TOKENS
     except ModuleNotFoundError:
+        dmenu_err(PYNPUT_MISSING)
         return
     kbd = keyboard.Controller()
     enter_idx = True
@@ -313,7 +320,8 @@ def type_entry(entry, atype=""):
         }
         if entry["type"] in (1, 3):
             if typs[entry["type"]]:
-                type_clipboard(typs[entry["type"]])
+                if not type_clipboard(typs[entry["type"]]):
+                    dmenu_err(bwm.clipboard_missing_msg())
         else:
             dmenu_err(
                 "Clipboard is active. 'View/Type Individual entries' and select field to copy"
@@ -346,7 +354,8 @@ def type_entry(entry, atype=""):
 def type_text(data):
     """Type the given text data"""
     if bwm.CLIPBOARD is True:
-        type_clipboard(data)
+        if not type_clipboard(data):
+            dmenu_err(bwm.clipboard_missing_msg())
         return
     library = "pynput"
     if bwm.CONF.has_option("vault", "type_library"):
@@ -361,6 +370,7 @@ def type_text(data):
         try:
             from pynput import keyboard
         except ModuleNotFoundError:
+            dmenu_err(PYNPUT_MISSING)
             return
         kbd = keyboard.Controller()
         try:
@@ -376,14 +386,22 @@ def type_clipboard(text):
     """Copy text to clipboard and clear clipboard after 30 seconds
 
     Args: text - str
+    Returns: bool - False if no clipboard command is available
 
     """
+    cmd = bwm.get_clipboard_cmd()
+    if cmd is None:
+        return False
     text = text or ""  # Handle None type
-    run(split(bwm.CLIPBOARD_CMD), check=True, input=text.encode(bwm.ENC))
-    clear = Timer(
-        30, lambda: run(split(bwm.CLIPBOARD_CMD), check=False, input="")
-    )
+    try:
+        run(split(cmd), check=True, input=text.encode(bwm.ENC))
+    except CalledProcessError:
+        return False
+    clear = Timer(30, lambda: run(split(cmd), check=False, input=""))
+    # Daemon thread so a one-shot invocation isn't held open for 30 seconds
+    clear.daemon = True
     clear.start()
+    return True
 
 
 # vim: set et ts=4 sw=4 :

@@ -955,3 +955,147 @@ class TestStatusViaServer:
                 patch("bwm.bwm.bwcli.unlock"):
             set_vault([self._vault(srv)])
         cli_status.assert_called_once_with(b"tok")
+
+
+class TestSyncAndLockPreferTheRunningServer:
+    """Every `bw` invocation costs ~1.5s of Node startup before it does work.
+
+    When a bw serve is already up, syncing and locking through it is an HTTP
+    round trip instead.
+
+    """
+
+    def _vault(self, server=None):
+        v = Vault("https://vault.example.com", "a@example.com", "pw", "")
+        v.session = b"session"
+        v.bwcliserver = server
+        return v
+
+    def test_sync_vault_uses_the_server_when_up(self):
+        from bwm.bwm import sync_vault
+
+        srv = MagicMock()
+        srv.sync.return_value = True
+        with patch("bwm.bwm.bwcli.sync") as cli_sync:
+            assert sync_vault(self._vault(srv)) is True
+        srv.sync.assert_called_once()
+        cli_sync.assert_not_called()
+
+    def test_sync_vault_falls_back_to_the_cli(self):
+        from bwm.bwm import sync_vault
+
+        with patch("bwm.bwm.bwcli.sync", return_value=True) as cli_sync:
+            assert sync_vault(self._vault(None)) is True
+        cli_sync.assert_called_once_with(b"session")
+
+    def test_dmenu_sync_goes_through_the_server(self):
+        srv = MagicMock()
+        srv.sync.return_value = True
+        with patch("bwm.bwm.check_online", return_value=True), \
+                patch("bwm.bwm.bwcli.sync") as cli_sync:
+            assert dmenu_sync(self._vault(srv)) is True
+        srv.sync.assert_called_once()
+        cli_sync.assert_not_called()
+
+    def test_lock_flag_uses_the_server(self):
+        """`bwm -k` sent to a running daemon must not spawn a `bw` process.
+
+        The menu's "Lock vault" option already went through lock_vault(); the
+        --lock flag called bwcli.lock() directly.
+
+        """
+        from bwm.bwm import lock_vault
+
+        srv = MagicMock()
+        srv.lock.return_value = True
+        with patch("bwm.bwm.bwcli.lock") as cli_lock:
+            assert lock_vault(self._vault(srv)) is True
+        srv.lock.assert_called_once()
+        cli_lock.assert_not_called()
+
+    @patch("bwm.bwm.bwcli.is_online", return_value=True)
+    @patch(
+        "bwm.bwm.bwcli.status",
+        return_value={"status": "unauthenticated", "serverUrl": None},
+    )
+    @patch("bwm.bwm.bwcli.set_server", return_value=True)
+    @patch("bwm.bwm.get_passphrase", return_value="pw")
+    @patch("bwm.bwm.bwcli.login", return_value=(b"session", ""))
+    @patch("bwm.bwm.bwcli.sync", return_value=True)
+    @patch("bwm.bwm.BWCLIServer")
+    def test_post_login_sync_goes_through_the_server(
+        self, mock_server, mock_cli_sync, mock_login, mock_passphrase,
+        mock_set_server, mock_status, mock_online, tmp_path, vault_a
+    ):
+        """After login, serve comes up first and the sync goes through it.
+
+        `bw serve` only needs an authenticated vault, not an unlocked one, so
+        it can start straight after login - which means the post-login sync
+        need not pay for another `bw` process.
+
+        """
+        srv = MagicMock()
+        srv.start.return_value = True
+        srv.unlock.return_value = (b"session2", "")
+        srv.sync.return_value = True
+        mock_server.return_value = srv
+
+        with patch("bwm.DATA_HOME", str(tmp_path)):
+            set_vault([vault_a])
+
+        srv.start.assert_called_once()
+        srv.sync.assert_called_once()
+        mock_cli_sync.assert_not_called()
+
+    @patch("bwm.bwm.bwcli.is_online", return_value=True)
+    @patch(
+        "bwm.bwm.bwcli.status",
+        return_value={"status": "unauthenticated", "serverUrl": None},
+    )
+    @patch("bwm.bwm.bwcli.set_server", return_value=True)
+    @patch("bwm.bwm.get_passphrase", return_value="pw")
+    @patch("bwm.bwm.bwcli.login", return_value=(b"session", ""))
+    @patch("bwm.bwm.bwcli.sync", return_value=True)
+    @patch("bwm.bwm.BWCLIServer")
+    def test_post_login_sync_falls_back_when_serve_fails(
+        self, mock_server, mock_cli_sync, mock_login, mock_passphrase,
+        mock_set_server, mock_status, mock_online, tmp_path, vault_a
+    ):
+        """If bw serve won't start, the sync still happens via the CLI."""
+        srv = MagicMock()
+        srv.start.return_value = False
+        mock_server.return_value = srv
+
+        with patch("bwm.DATA_HOME", str(tmp_path)):
+            set_vault([vault_a])
+
+        srv.sync.assert_not_called()
+        mock_cli_sync.assert_called_once()
+
+    def test_lock_flag_dispatches_through_lock_vault(self):
+        """Drive DmenuRunner.run() one iteration with --lock.
+
+        Asserting on lock_vault() alone would not have caught this: the bug
+        was that the --lock branch never called it.
+
+        """
+        from bwm.bwm import DmenuRunner
+
+        runner = DmenuRunner.__new__(DmenuRunner)
+        runner.background = False
+        runner.vaults = [self._vault(MagicMock())]
+        runner.vault = runner.vaults[0]
+        runner.server = MagicMock()
+        # top of loop False, end of loop True, so exactly one pass runs
+        runner.server.kill_flag.is_set.side_effect = [False, True]
+        runner.server.cache_time_expired.is_set.return_value = False
+        runner.server.args_flag.is_set.return_value = True
+        runner.server.get_args.return_value = {"lock": True}
+
+        with patch.object(DmenuRunner, "_set_timer"), \
+                patch("bwm.bwm.lock_vault") as lock_vault, \
+                patch("bwm.bwm.bwcli.lock") as cli_lock:
+            runner.run()
+
+        lock_vault.assert_called_once_with(runner.vault)
+        cli_lock.assert_not_called()

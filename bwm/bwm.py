@@ -334,13 +334,12 @@ def set_vault(vaults):
 
             del environ["BW_CLIENTSECRET"]
 
-            # Sync and start bw serve with session token
+            # Start bw serve, then sync through it
             if vault.session is not False:
-                logging.debug("set_vault: Syncing vault after login")
-                if not bwcli.sync(vault.session):
-                    logging.warning("set_vault: Vault sync via CLI failed")
-
-                # Step 2: Start bw serve with --session from login
+                # Serve first, sync second: `bw serve` only requires an
+                # authenticated vault, not an unlocked one, so it can come up
+                # right after login. Syncing through it then costs an HTTP
+                # round trip instead of another ~1.5s of Node startup.
                 if vault.use_serve and vault.bwcliserver is None:
                     logging.debug(
                         "set_vault: Starting bw serve with session from login"
@@ -373,6 +372,10 @@ def set_vault(vaults):
                             logging.debug(
                                 "set_vault: bw serve unlock API successful"
                             )
+
+                logging.debug("set_vault: Syncing vault after login")
+                if not sync_vault(vault):
+                    logging.warning("set_vault: Vault sync after login failed")
 
     elif status["status"] == "locked":
         vault.passw = vault.passw or password()
@@ -623,15 +626,25 @@ def dmenu_sync(vault):
     if not check_online(vault):
         return False
 
-    if vault.bwcliserver:
-        res = vault.bwcliserver.sync()
-    else:
-        res = bwcli.sync(vault.session)
-
-    if res is False:
+    if sync_vault(vault) is False:
         dmenu_err("Sync error. Check logs.")
         return False
     return True
+
+
+def sync_vault(vault):
+    """Sync the vault using the running bw serve, or the CLI
+
+    Going through bw serve when it is up saves spawning a `bw` process, which
+    costs ~1.5s of Node startup before it does any work.
+
+    Args: vault - Vault object
+    Returns: True on success, False on error
+
+    """
+    if vault.bwcliserver:
+        return vault.bwcliserver.sync()
+    return bwcli.sync(vault.session)
 
 
 def lock_vault(vault):
@@ -962,7 +975,10 @@ class DmenuRunner(multiprocessing.Process):
                 res = Run.SWITCH
                 at_saved = self.vault.autotype
             elif dargs.get("lock", False):
-                bwcli.lock()
+                # lock_vault, not bwcli.lock: the daemon usually has a bw serve
+                # running, and the menu's "Lock vault" option already goes
+                # through it.
+                lock_vault(self.vault)
                 res = Run.LOCK
             else:
                 self.vault.autotype = (

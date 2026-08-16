@@ -36,7 +36,7 @@ def _as_bytes(session):
     return session.encode() if isinstance(session, str) else session
 
 
-def get_passphrase(secret="Password"):
+def get_passphrase(secret="Password", obscure=True):
     """Get a vault password from the terminal, dmenu or pinentry
 
     Every credential prompt in the login/unlock flow goes through here - master
@@ -44,6 +44,9 @@ def get_passphrase(secret="Password"):
     what makes the whole flow usable without a launcher.
 
     Args: secret - string ('Password' or '2FA Code' or 'client_secret')
+          obscure - hide what the user types. Told to the launcher explicitly
+                    rather than left to dmenu_cmd's prompt matching, which
+                    never covered the client_secret prompt.
     Returns: string
 
     """
@@ -74,7 +77,7 @@ def get_passphrase(secret="Password"):
             if res.startswith("D "):
                 password = res.split("D ")[1]
     else:
-        password = dmenu_select(0, f"Enter {secret}")
+        password = dmenu_select(0, f"Enter {secret}", obscure=obscure)
     return password
 
 
@@ -314,10 +317,14 @@ def set_vault(vaults):
                     vault.session, err = result
                 else:
                     fd, pid = result
-                    code = get_passphrase("2FA Code")
+                    code = get_passphrase("2FA Code", obscure=False)
                     vault.session, err = bwcli.login_pty_finish(fd, pid, code)
             else:
-                code = get_passphrase("2FA Code") if vault.twofactor else ""
+                code = (
+                    get_passphrase("2FA Code", obscure=False)
+                    if vault.twofactor
+                    else ""
+                )
                 vault.session, err = bwcli.login(
                     vault.email, vault.passw, vault.twofactor, code
                 )

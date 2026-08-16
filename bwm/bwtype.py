@@ -442,7 +442,9 @@ def type_clipboard(text, detach=False):
     if detach:
         _clear_clipboard_later(cmd, CLIPBOARD_CLEAR_SEC)
         return True
-    clear = Timer(CLIPBOARD_CLEAR_SEC, lambda: run(split(cmd), check=False, input=b""))
+    clear = Timer(
+        CLIPBOARD_CLEAR_SEC, lambda: run(split(cmd), check=False, input=b"")
+    )
     # Daemon thread so the long-lived daemon isn't held open on shutdown
     clear.daemon = True
     clear.start()

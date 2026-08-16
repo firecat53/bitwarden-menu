@@ -98,6 +98,25 @@ def get_runtime_dir():
         runtime_dir = join(tempfile.gettempdir(), f"bwm-{os.getuid()}")
     if not exists(runtime_dir):
         os.makedirs(runtime_dir, mode=0o700)
+        return runtime_dir
+    # The directory already exists, which on the $TMPDIR fallback path says
+    # nothing about who made it. A local attacker who gets to create it first
+    # can read the authkey out of it, and that key is all that gates the socket
+    # carrying the master password. Refuse anything not ours and private.
+    info = os.stat(runtime_dir)
+    if info.st_uid != os.getuid():
+        raise RuntimeError(
+            f"{runtime_dir} is owned by uid {info.st_uid}, not {os.getuid()}. "
+            "Refusing to use it."
+        )
+    if info.st_mode & 0o077:
+        # Tighten rather than refuse: an over-permissive mode is more often an
+        # old bwm or a umask than an attack, and 0700 is what we need anyway.
+        logger.warning(
+            f"Tightening permissions on {runtime_dir} "
+            f"({oct(info.st_mode & 0o777)} -> 0o700)"
+        )
+        os.chmod(runtime_dir, 0o700)
     return runtime_dir
 
 

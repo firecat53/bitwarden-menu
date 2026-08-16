@@ -742,3 +742,87 @@ class TestClipboardIsClientSide:
                 deliver_show_result("hunter2", clipboard=False)
         clip.assert_not_called()
         assert capsys.readouterr().out == "hunter2\n"
+
+
+class TestAuthFileHardening:
+    """The authkey gates a socket carrying the master password.
+
+    Anyone who can read it can also ask the daemon for --show results, so the
+    key has to be unguessable and the file has to be ours.
+
+    """
+
+    def test_authkey_uses_a_csprng(self):
+        """Test that the authkey does not come from the `random` module."""
+        import inspect
+        from bwm import __main__ as main_mod
+
+        src = inspect.getsource(main_mod.random_str)
+        assert "secrets." in src
+        assert "random.choice" not in src
+
+    def test_authkey_is_not_predictable_across_seeds(self):
+        """Test that seeding `random` does not fix the authkey."""
+        import random as stdlib_random
+        from bwm.__main__ import random_str
+
+        stdlib_random.seed(1234)
+        first = random_str()
+        stdlib_random.seed(1234)
+        assert random_str() != first
+
+    def test_auth_file_created_exclusively(self, tmp_path, monkeypatch):
+        """Test that an existing auth file is never opened with O_CREAT alone.
+
+        Without O_EXCL a symlink planted between the exists() check and the
+        open() redirects the authkey into an attacker-chosen file.
+
+        """
+        import bwm
+        from bwm.__main__ import get_auth
+
+        auth_file = tmp_path / ".bwm-auth"
+        monkeypatch.setattr(bwm, "AUTH_FILE", str(auth_file))
+        opened = {}
+        real_open = os.open
+
+        def spy(path, flags, *args):
+            opened["flags"] = flags
+            return real_open(path, flags, *args)
+
+        monkeypatch.setattr(os, "open", spy)
+        port, key = get_auth()
+        assert port and key
+        assert opened["flags"] & os.O_EXCL
+
+    def test_runtime_dir_owned_by_someone_else_is_refused(
+        self, tmp_path, monkeypatch
+    ):
+        """Test that a pre-created directory owned by another uid is rejected."""
+        import bwm
+
+        monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+        (tmp_path / "bwm").mkdir(mode=0o700)
+        real_stat = os.stat
+
+        class Foreign:
+            st_uid = os.getuid() + 1
+            st_mode = 0o40700
+
+        monkeypatch.setattr(
+            os,
+            "stat",
+            lambda p, *a, **k: Foreign() if str(p).endswith("bwm") else real_stat(p, *a, **k),
+        )
+        with pytest.raises(RuntimeError, match="Refusing to use it"):
+            bwm.get_runtime_dir()
+
+    def test_loose_runtime_dir_is_tightened(self, tmp_path, monkeypatch):
+        """Test that a world-readable runtime dir is chmod'd back to 0700."""
+        import bwm
+
+        monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+        target = tmp_path / "bwm"
+        target.mkdir(mode=0o755)
+        assert bwm.get_runtime_dir() == str(target)
+        assert oct(target.stat().st_mode)[-3:] == "700"

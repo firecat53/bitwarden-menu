@@ -3,8 +3,7 @@
 from copy import deepcopy
 import os
 from os.path import basename, dirname, join
-import random
-from secrets import choice
+from secrets import SystemRandom, choice
 import shlex
 import string
 from subprocess import call
@@ -594,7 +593,10 @@ def gen_passwd(chars, length=20):
     password = "".join(choice(k) for k in sets)
     password += "".join(choice(alphabet) for i in range(length - len(sets)))
     tpw = list(password)
-    random.shuffle(tpw)
+    # SystemRandom, not random: the guaranteed one-per-set characters are
+    # placed by this shuffle, so a predictable PRNG would leak where they
+    # landed.
+    SystemRandom().shuffle(tpw)
     return "".join(tpw)
 
 
@@ -656,8 +658,8 @@ def edit_password(entry):  # pylint: disable=too-many-return-statements
         len(inputs), "Password Options", inp="\n".join(inputs)
     )
     if pw_choice == "Manually enter password":
-        sel = dmenu_select(1, "Password", inp=pw_orig)
-        sel_check = dmenu_select(1, "Verify password")
+        sel = dmenu_select(1, "Password", inp=pw_orig, obscure=True)
+        sel_check = dmenu_select(1, "Verify password", obscure=True)
         if sel_check is None or sel_check != sel:
             dmenu_err("Passwords do not match. No changes made.")
             return False

@@ -8,7 +8,7 @@ import multiprocessing
 from multiprocessing.managers import BaseManager, RemoteError
 import os
 from os.path import exists, expanduser
-import random
+import secrets
 import socket
 import string
 from subprocess import call
@@ -57,25 +57,20 @@ def random_str():
     Returns: string
 
     """
+    # secrets, not random: this key is the only thing gating a local socket
+    # that carries the master password and answers --show queries. Mersenne
+    # Twister is not meant to resist anyone reconstructing its state.
     letters = string.ascii_lowercase
-    return "".join(random.choice(letters) for i in range(15))
+    return "".join(secrets.choice(letters) for i in range(15))
 
 
-def get_auth():
-    """Generate and save port and authkey to auth file.
+def _read_auth(auth):
+    """Read the port and authkey back out of the auth file.
 
-    Uses $XDG_RUNTIME_DIR/bwm/ if available otherwise falls back to $TMPDIR/bwm-<uid>/.
-
-    Returns: int port, bytestring authkey
+    Args: auth - ConfigParser
+    Returns: int port, bytestring authkey, or (None, None) if it was corrupt
 
     """
-    auth = bwm.configparser.ConfigParser()
-    if not exists(bwm.AUTH_FILE):
-        fdr = os.open(bwm.AUTH_FILE, os.O_WRONLY | os.O_CREAT, 0o600)
-        with open(fdr, "w", encoding=bwm.ENC) as a_file:
-            auth.set("DEFAULT", "port", str(find_free_port()))
-            auth.set("DEFAULT", "authkey", random_str())
-            auth.write(a_file)
     try:
         auth.read(bwm.AUTH_FILE)
         port = auth.get("DEFAULT", "port")
@@ -93,6 +88,35 @@ def get_auth():
         call(["pkill", "bwm"])  # Kill all prior instances as well
         return None, None
     return int(port), authkey
+
+
+def get_auth():
+    """Generate and save port and authkey to auth file.
+
+    Uses $XDG_RUNTIME_DIR/bwm/ if available otherwise falls back to $TMPDIR/bwm-<uid>/.
+
+    Returns: int port, bytestring authkey
+
+    """
+    auth = bwm.configparser.ConfigParser()
+    if not exists(bwm.AUTH_FILE):
+        # O_EXCL so this can't be pointed at another file through a symlink
+        # planted between the exists() check and here, and so two bwm processes
+        # racing to start can't both think they wrote the authkey.
+        try:
+            fdr = os.open(
+                bwm.AUTH_FILE,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+        except FileExistsError:
+            # Another instance won the race; read what it wrote
+            return _read_auth(auth)
+        with open(fdr, "w", encoding=bwm.ENC) as a_file:
+            auth.set("DEFAULT", "port", str(find_free_port()))
+            auth.set("DEFAULT", "authkey", random_str())
+            auth.write(a_file)
+    return _read_auth(auth)
 
 
 def client(port, auth):

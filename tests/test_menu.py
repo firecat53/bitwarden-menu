@@ -581,3 +581,58 @@ class TestLauncherFailure:
 
         assert dmenu_select(0, "Entries") == ""
         assert capsys.readouterr().err == ""
+
+
+class TestObscureIsExplicit:
+    """Callers that know they're reading a secret say so.
+
+    dmenu_cmd's prompt matching never covered "Enter client_secret (if
+    required)", so that secret was typed in the clear. It cannot be loosened to
+    a substring match either: "Password Options" and "Password Length?" are
+    menus that would become unreadable.
+
+    """
+
+    def _conf(self, command="rofi", obscure="True"):
+        conf = configparser.ConfigParser()
+        conf.add_section("dmenu")
+        conf.set("dmenu", "dmenu_command", command)
+        conf.add_section("dmenu_passphrase")
+        conf.set("dmenu_passphrase", "obscure", obscure)
+        return conf
+
+    @patch("bwm.menu.bwm")
+    def test_explicit_obscure_beats_prompt_matching(self, mock_bwm):
+        """Test that obscure=True hides a prompt the list doesn't know."""
+        mock_bwm.CONF = self._conf()
+        from bwm.menu import dmenu_cmd
+
+        prompt = "Enter client_secret (if required)"
+        assert "-password" not in dmenu_cmd(0, prompt)
+        assert "-password" in dmenu_cmd(0, prompt, obscure=True)
+
+    @patch("bwm.menu.bwm")
+    def test_explicit_false_beats_prompt_matching(self, mock_bwm):
+        """Test that obscure=False shows a prompt the list would hide."""
+        mock_bwm.CONF = self._conf()
+        from bwm.menu import dmenu_cmd
+
+        assert "-password" in dmenu_cmd(0, "Enter Password")
+        assert "-password" not in dmenu_cmd(0, "Enter Password", obscure=False)
+
+    @patch("bwm.menu.bwm")
+    def test_config_can_still_disable_obscuring(self, mock_bwm):
+        """Test that obscure=False in config.ini overrides the caller."""
+        mock_bwm.CONF = self._conf(obscure="False")
+        from bwm.menu import dmenu_cmd
+
+        assert "-password" not in dmenu_cmd(0, "x", obscure=True)
+
+    @patch("bwm.menu.bwm")
+    def test_password_menus_stay_readable(self, mock_bwm):
+        """Test that menus merely mentioning 'Password' are not hidden."""
+        mock_bwm.CONF = self._conf()
+        from bwm.menu import dmenu_cmd
+
+        for prompt in ("Password Options", "Password Length?"):
+            assert "-password" not in dmenu_cmd(2, prompt), prompt

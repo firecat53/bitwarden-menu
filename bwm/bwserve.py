@@ -734,10 +734,12 @@ class BWCLIServer:
             response = conn.getresponse()
             response_body = response.read().decode("utf-8")
 
-            # Debug logging
-            logging.debug(f"Response status: {response.status}")
+            # Only the status and size are logged. The body of /unlock and
+            # /login is the session token, and of /list/object/items the entire
+            # decrypted vault - neither belongs in a file on disk.
             logging.debug(
-                f"Response body (first 200 chars): {response_body[:200]}"
+                f"Response status: {response.status}, "
+                f"body bytes={len(response_body)}"
             )
 
             # bw serve returns plain text (not JSON) for some errors, e.g. a

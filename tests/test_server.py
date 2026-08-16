@@ -708,7 +708,9 @@ class TestClipboardIsClientSide:
         with patch("bwm.__main__.type_clipboard", return_value=True) as clip:
             with pytest.raises(SystemExit) as exc:
                 deliver_show_result("hunter2", clipboard=True)
-        clip.assert_called_once_with("hunter2")
+        # detach=True or the 30 second clear dies with this process and the
+        # password stays on the clipboard forever
+        clip.assert_called_once_with("hunter2", detach=True)
         assert exc.value.code == 0
         assert capsys.readouterr().out == ""      # secret not echoed
 

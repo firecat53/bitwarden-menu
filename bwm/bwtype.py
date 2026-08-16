@@ -1,6 +1,8 @@
 """Module to handling typing using pynput, xdotool, ydotool or wtype"""
 
 # flake8: noqa
+import logging
+import os
 import re
 from shlex import split
 from subprocess import call, run, CalledProcessError
@@ -382,10 +384,50 @@ def type_text(data):
             )
 
 
-def type_clipboard(text):
+CLIPBOARD_CLEAR_SEC = 30
+
+
+def _clear_clipboard_later(cmd, delay=CLIPBOARD_CLEAR_SEC):
+    """Clear the clipboard after a delay, outliving a one-shot invocation.
+
+    A Timer thread only works in the daemon, which sticks around. `bwm --show
+    -C` copies and exits immediately, and the interpreter kills daemon threads
+    on the way out, so the timer never fires and the password stays on the
+    clipboard indefinitely. Fork instead: the child survives the exit, and it
+    keeps this process's environment, which is the one with the right
+    DISPLAY/WAYLAND_DISPLAY for the clipboard tool.
+
+    Args: cmd - clipboard command string
+          delay - seconds to wait before clearing
+
+    Returns: True if the clear was scheduled
+
+    """
+    try:
+        pid = os.fork()
+    except OSError as err:
+        logging.warning(f"Could not fork to clear the clipboard: {err}")
+        return False
+    if pid:
+        return True
+    # Child. Detach so it survives the parent and, importantly, stops holding
+    # the parent's stdout open - otherwise `bwm -s x -C | cmd` would not see
+    # EOF until the clear ran.
+    try:
+        bwm.detach_from_terminal(True)
+        time.sleep(delay)
+        run(split(cmd), check=False, input=b"")
+    finally:
+        os._exit(0)  # pylint: disable=protected-access
+    return True
+
+
+def type_clipboard(text, detach=False):
     """Copy text to clipboard and clear clipboard after 30 seconds
 
     Args: text - str
+          detach - True when the caller exits immediately after this returns,
+                   so the clear has to outlive the process
     Returns: bool - False if no clipboard command is available
 
     """
@@ -397,8 +439,11 @@ def type_clipboard(text):
         run(split(cmd), check=True, input=text.encode(bwm.ENC))
     except CalledProcessError:
         return False
-    clear = Timer(30, lambda: run(split(cmd), check=False, input=""))
-    # Daemon thread so a one-shot invocation isn't held open for 30 seconds
+    if detach:
+        _clear_clipboard_later(cmd, CLIPBOARD_CLEAR_SEC)
+        return True
+    clear = Timer(CLIPBOARD_CLEAR_SEC, lambda: run(split(cmd), check=False, input=b""))
+    # Daemon thread so the long-lived daemon isn't held open on shutdown
     clear.daemon = True
     clear.start()
     return True

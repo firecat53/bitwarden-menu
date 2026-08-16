@@ -1,6 +1,7 @@
 """Tests for configuration loading and defaults."""
 
 import configparser
+import logging
 import os
 import sys
 import tempfile
@@ -321,3 +322,81 @@ class TestLogLevel:
     def test_bogus_value_falls_back(self, tmp_path):
         """A typo must not crash bwm at import time."""
         assert self._level("nonsense", tmp_path) == "WARNING"
+
+
+class TestLogLevel:
+    """Tests for the $BWM_LOG_LEVEL environment variable."""
+
+    def test_default_is_warning(self):
+        """Test that an unset BWM_LOG_LEVEL gives WARNING."""
+        import bwm
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BWM_LOG_LEVEL", None)
+            level, warning = bwm.get_log_level()
+        assert level == logging.WARNING
+        assert warning == ""
+
+    @pytest.mark.parametrize(
+        "name,expected",
+        [
+            ("debug", logging.DEBUG),
+            ("DEBUG", logging.DEBUG),
+            ("Info", logging.INFO),
+            ("warning", logging.WARNING),
+            ("error", logging.ERROR),
+            ("critical", logging.CRITICAL),
+            ("  debug  ", logging.DEBUG),
+            ("", logging.WARNING),
+        ],
+    )
+    def test_valid_levels(self, name, expected):
+        """Test that level names are case- and whitespace-insensitive."""
+        import bwm
+
+        with patch.dict(os.environ, {"BWM_LOG_LEVEL": name}):
+            level, warning = bwm.get_log_level()
+        assert level == expected
+        assert warning == ""
+
+    @pytest.mark.parametrize("name", ["verbose", "basic_format", "raiseExceptions"])
+    def test_invalid_level_falls_back(self, name):
+        """Test that a non-level name warns instead of reaching basicConfig.
+
+        getattr(logging, name) resolves non-level attributes too, so
+        BWM_LOG_LEVEL=basic_format used to hand basicConfig a format string and
+        take bwm down with a ValueError on import.
+
+        """
+        import bwm
+
+        with patch.dict(os.environ, {"BWM_LOG_LEVEL": name}):
+            level, warning = bwm.get_log_level()
+        assert level == logging.WARNING
+        assert name.upper() in warning
+
+    def test_explicit_argument_overrides_env(self):
+        """Test that an explicit name is used instead of the environment."""
+        import bwm
+
+        with patch.dict(os.environ, {"BWM_LOG_LEVEL": "critical"}):
+            level, warning = bwm.get_log_level("debug")
+        assert level == logging.DEBUG
+        assert warning == ""
+
+
+class TestLogFilePermissions:
+    """The log can hold entry names, ids and server URLs. Owner only."""
+
+    def test_log_file_is_not_world_readable(self, tmp_path):
+        """Test that importing bwm leaves the log mode 0600."""
+        import subprocess
+
+        env = dict(os.environ, XDG_CACHE_HOME=str(tmp_path))
+        env["PYTHONPATH"] = os.getcwd()
+        subprocess.run(
+            [sys.executable, "-c", "import bwm"], check=True, env=env
+        )
+        log = tmp_path / "bwm.log"
+        assert log.exists()
+        assert oct(log.stat().st_mode)[-3:] == "600"

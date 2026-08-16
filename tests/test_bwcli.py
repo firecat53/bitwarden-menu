@@ -9,6 +9,7 @@ import pytest
 
 from bwm.bwcli import (
     Item,
+    _log_err,
     is_online,
     status,
     login,
@@ -16,6 +17,7 @@ from bwm.bwcli import (
     lock,
     logout,
     sync,
+    get_entries,
     get_folders,
     get_collections,
     get_orgs,
@@ -595,3 +597,84 @@ class TestSessionTokenIsClean:
             session, err = unlock("pw")
         assert session is False
         assert err == b"bad password"
+
+
+class TestLogErr:
+    """Tests that failed `bw` calls never write secrets to the log file.
+
+    The log lives on disk, so argv (which holds the master password for
+    `bw login`/`bw unlock` and the session token everywhere else) and stdout
+    (the decrypted vault for `bw list items`) must never reach it.
+
+    """
+
+    @pytest.mark.parametrize(
+        "args,secrets",
+        [
+            (["bw", "unlock", "--raw", "MasterPw123"], ["MasterPw123"]),
+            (
+                [
+                    "bw", "login", "--raw", "me@example.com", "MasterPw123",
+                    "--method", "1", "--code", "987654",
+                ],
+                ["me@example.com", "MasterPw123", "987654"],
+            ),
+            (
+                ["bw", "--session", b"SessionToken1234", "list", "items"],
+                ["SessionToken1234"],
+            ),
+            (
+                [
+                    "bw", "create", "--session", b"SessionToken1234", "item",
+                    b"eyJwYXNzd29yZCI6ICJzM2NyZXQifQ==",
+                ],
+                ["SessionToken1234", "eyJwYXNzd29yZCI"],
+            ),
+            (
+                [
+                    "bw", "delete", "--session", b"SessionToken1234",
+                    "--organizationid", b"org-id-1", "org-collection",
+                    "coll-id-1",
+                ],
+                ["SessionToken1234", "org-id-1", "coll-id-1"],
+            ),
+        ],
+    )
+    def test_log_err_redacts_secrets(self, args, secrets, caplog):
+        """Test that no secret-bearing argv element is logged."""
+        res = CompletedProcess(
+            args=args, returncode=1, stdout=b"", stderr=b"boom"
+        )
+        _log_err(res)
+        assert all(secret not in caplog.text for secret in secrets)
+        assert "<redacted>" in caplog.text
+        assert "boom" in caplog.text
+
+    def test_log_err_keeps_subcommand(self, caplog):
+        """Test that the safe part of the command survives redaction."""
+        res = CompletedProcess(
+            args=["bw", "--session", b"tok", "list", "items"],
+            returncode=1,
+            stdout=b"",
+            stderr=b"",
+        )
+        _log_err(res)
+        assert "bw --session <redacted> list items" in caplog.text
+
+    def test_get_entries_does_not_log_vault(self, caplog):
+        """Test that a failed `bw list items` never logs the vault contents."""
+        import logging
+
+        caplog.set_level(logging.DEBUG)
+        vault = json.dumps([{"login": {"password": "PlaintextPw"}}]).encode()
+        with patch("bwm.bwcli.run") as mock_run:
+            mock_run.return_value = CompletedProcess(
+                args=["bw", "--session", b"tok", "list", "items"],
+                returncode=1,
+                stdout=vault,
+                stderr=b"error",
+            )
+            result = get_entries(b"tok")
+        assert result is False
+        assert "PlaintextPw" not in caplog.text
+        assert "tok" not in caplog.text

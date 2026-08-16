@@ -56,7 +56,16 @@ troubleshooting, since a backgrounded daemon sends its output to `/dev/null`.
 **Troubleshooting:** a backgrounded daemon sends its output to `/dev/null`, so
 run it with `--foreground` to see errors. `BWM_LOG_LEVEL=debug` turns on debug
 logging in `~/.cache/bwm.log`, which records each vault's status check, unlock
-and entry load.
+and entry load. Valid levels are `critical`, `error`, `warning` (the default),
+`info` and `debug`; anything else falls back to the default and notes it in the
+log.
+
+The log records entry names, item ids and server URLs, but never passwords,
+TOTP seeds, session tokens or vault contents, and it is created mode 0600. It
+is still worth deleting once you are done troubleshooting - entry names alone
+say a good deal about a vault. Note that the level is read once at startup, so
+raising it on an invocation that just signals an already-running daemon has no
+effect: `bwm -k && BWM_LOG_LEVEL=debug bwm`.
 
 **Service managers:** a systemd unit with `Type=simple` expects the process to
 stay in the foreground. Either add `--foreground` to the `ExecStart` line or use

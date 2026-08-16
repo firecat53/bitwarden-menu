@@ -391,7 +391,8 @@ def delete_entry(entry, entries, vault):
         return
     logging.debug("Calling _delete_entry_backend")
     res = _delete_entry_backend(entry, vault)
-    logging.debug(f"_delete_entry_backend returned: {res}")
+    # On success this is the full entry dict, password and TOTP seed included
+    logging.debug(f"_delete_entry_backend succeeded: {res is not False}")
     if res is False:
         dmenu_err("Item not deleted. Check logs.")
         return
@@ -975,6 +976,9 @@ def create_collection(collections, vault):
         return
     name = join(pname, name)
     collection = _add_collection_backend(name, org_id["id"], vault)
+    if collection is False:
+        dmenu_err("Collection not added. Check logs.")
+        return
     collections[collection["id"]] = collection
 
 

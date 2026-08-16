@@ -18,20 +18,69 @@ from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_data_home
 __version__ = "0.5.4"
 
 logger = logging.getLogger("bwm")
-# $BWM_LOG_LEVEL=debug turns on the debug logging that's already scattered
-# through the vault code. Read from the environment rather than config.ini
-# because it has to take effect before the config is loaded.
+LOG_FILE = join(xdg_cache_home(), "bwm.log")
+
+# Levels accepted in $BWM_LOG_LEVEL. An explicit table rather than
+# getattr(logging, name): that also resolves non-level attributes, so
+# BWM_LOG_LEVEL=basic_format would hand basicConfig a format string and take
+# bwm down with a ValueError on import. logging.getLevelNamesMapping() would do
+# this too, but it needs Python 3.11 and 3.10 is still supported.
+LOG_LEVELS = {
+    "CRITICAL": logging.CRITICAL,
+    "ERROR": logging.ERROR,
+    "WARNING": logging.WARNING,
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+}
+LOG_LEVEL_DEFAULT = "WARNING"
+
+
+def get_log_level(requested=None):
+    """Resolve the logging level from $BWM_LOG_LEVEL.
+
+    $BWM_LOG_LEVEL=debug turns on the debug logging that's already scattered
+    through the vault code. Read from the environment rather than config.ini
+    because it has to take effect before the config is loaded.
+
+    Args: requested - level name, or None to read $BWM_LOG_LEVEL
+
+    Returns: tuple (level int, warning string). The warning is empty unless the
+             requested name was unrecognized, in which case the default level is
+             returned instead. It is returned rather than logged because logging
+             is not configured until after this runs.
+
+    """
+    if requested is None:
+        requested = os.environ.get("BWM_LOG_LEVEL", "")
+    requested = requested.strip().upper()
+    if not requested:
+        return LOG_LEVELS[LOG_LEVEL_DEFAULT], ""
+    if requested in LOG_LEVELS:
+        return LOG_LEVELS[requested], ""
+    return (
+        LOG_LEVELS[LOG_LEVEL_DEFAULT],
+        f"Unknown BWM_LOG_LEVEL '{requested}'. Valid levels are "
+        f"{', '.join(LOG_LEVELS)}. Falling back to {LOG_LEVEL_DEFAULT}.",
+    )
+
+
+_LEVEL, _LEVEL_WARNING = get_log_level()
 logging.basicConfig(
-    filename=join(xdg_cache_home(), "bwm.log"),
+    filename=LOG_FILE,
     # Timestamps and pid: the daemon is several processes, and most questions
     # about it are "which one, and what took so long?"
     format="%(asctime)s %(process)d %(levelname)s %(message)s",
-    level=getattr(
-        logging,
-        os.environ.get("BWM_LOG_LEVEL", "warning").upper(),
-        logging.WARNING,
-    ),
+    level=_LEVEL,
 )
+try:
+    # basicConfig creates the file at the default umask (usually 0644). Debug
+    # logging records vault entry names, ids and server URLs, so keep it
+    # readable only by its owner.
+    os.chmod(LOG_FILE, 0o600)
+except OSError as err:  # pragma: no cover - non-fatal
+    logger.warning(f"Could not set permissions on {LOG_FILE}: {err}")
+if _LEVEL_WARNING:
+    logger.warning(_LEVEL_WARNING)
 
 
 def get_runtime_dir():

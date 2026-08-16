@@ -292,7 +292,9 @@ def deliver_show_result(result, clipboard=False, detached=False):
         print(result[7:], file=sys.stderr)  # Strip "ERROR: " prefix
         leave(1, detached)
     if clipboard:
-        if not type_clipboard(result):
+        # detach: this process exits on the next line, so the 30 second clear
+        # has to outlive it
+        if not type_clipboard(result, detach=True):
             print(bwm.clipboard_missing_msg(), file=sys.stderr)
             leave(1, detached)
         leave(0, detached)

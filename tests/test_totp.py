@@ -143,3 +143,39 @@ class TestGenOTP:
         result = gen_otp(otp_url)
         assert len(result) == 6
         assert result.isdigit()
+
+
+class TestGenOTPAlgorithm:
+    """Tests that the algorithm in the otpauth URL is honored.
+
+    A typo ('algorihm') previously made every entry fall back to sha1,
+    producing codes the server rejects for SHA-256/SHA-512 entries.
+
+    """
+
+    @pytest.mark.parametrize("algorithm", ["SHA256", "SHA512"])
+    def test_gen_otp_honors_algorithm(self, algorithm):
+        """Test that a non-sha1 algorithm changes the generated code."""
+        secret = "JBSWY3DPEHPK3PXP"
+        base = (
+            f"otpauth://totp/Test:user@example.com?secret={secret}"
+            "&period=30&digits=6"
+        )
+        with patch("bwm.totp.time.time", return_value=1700000000):
+            result = gen_otp(f"{base}&algorithm={algorithm}")
+            expected = totp(secret, 30, 6, algorithm.lower())
+            sha1_result = gen_otp(base)
+        assert result == expected
+        assert result != sha1_result
+
+    def test_gen_otp_defaults_to_sha1(self):
+        """Test that a URL with no algorithm still uses sha1."""
+        secret = "JBSWY3DPEHPK3PXP"
+        otp_url = (
+            f"otpauth://totp/Test:user@example.com?secret={secret}"
+            "&period=30&digits=6"
+        )
+        with patch("bwm.totp.time.time", return_value=1700000000):
+            result = gen_otp(otp_url)
+            expected = totp(secret, 30, 6, "sha1")
+        assert result == expected

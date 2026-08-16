@@ -275,10 +275,17 @@ T}
 .TE
 .SH ENVIRONMENT
 \f[B]BWM_LOG_LEVEL\f[R] Log level for \f[I]\(ti/.cache/bwm.log\f[R].
+One of \f[I]critical\f[R], \f[I]error\f[R], \f[I]warning\f[R],
+\f[I]info\f[R] or \f[I]debug\f[R]; an unrecognized value falls back to
+the default and says so in the log.
 Default \f[I]warning\f[R]; set to \f[I]debug\f[R] to record each
 vault\(cqs status check, unlock and entry load.
 A backgrounded daemon sends its output to /dev/null, so this and
 \f[B]\(enforeground\f[R] are how to see what it is doing.
+.PP
+The log records vault entry names, item ids and server URLs, but never
+passwords, TOTP seeds, session tokens or vault contents.
+It is created mode 0600.
 .PP
 \f[B]DISPLAY\f[R], \f[B]WAYLAND_DISPLAY\f[R] When neither is set, bwm
 prompts on the terminal instead of through a launcher, which is what

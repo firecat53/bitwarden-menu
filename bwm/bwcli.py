@@ -13,6 +13,70 @@ from subprocess import DEVNULL, run
 from urllib.parse import urlsplit
 
 
+# Every argv token `bw` is invoked with in this module that is safe to log.
+# The sanitizer below is deliberately fail-closed: anything not listed here -
+# session tokens, passwords, item ids, base64 item payloads - is redacted.
+_LOGGABLE_ARGS = frozenset(
+    (
+        "bw",
+        "config",
+        "create",
+        "delete",
+        "edit",
+        "encode",
+        "folder",
+        "folders",
+        "item",
+        "items",
+        "list",
+        "lock",
+        "login",
+        "logout",
+        "org-collection",
+        "organizations",
+        "server",
+        "status",
+        "sync",
+        "unlock",
+        "--code",
+        "--method",
+        "--organizationid",
+        "--raw",
+        "--session",
+    )
+)
+
+
+def _decode(val):
+    """Decode bytes to str, leaving anything else alone"""
+    return val.decode("utf-8", "replace") if isinstance(val, bytes) else val
+
+
+def _log_err(res, note=""):
+    """Log a failed `bw` invocation without leaking secrets into the log file.
+
+    Never log a CompletedProcess directly. Its repr includes argv - which holds
+    the master password for `bw login`/`bw unlock` and the session token for
+    every other command - as well as stdout, which for `bw list items` is the
+    entire decrypted vault. Only the redacted command, exit status and stderr
+    are recorded here. The log is a plain file on disk, so it must never hold
+    vault contents or credentials.
+
+    Args: res - CompletedProcess
+          note - optional extra context string
+
+    """
+    cmd = " ".join(
+        str(_decode(i)) if _decode(i) in _LOGGABLE_ARGS else "<redacted>"
+        for i in res.args
+    )
+    stderr = _decode(res.stderr) or ""
+    logging.error(
+        f"`{cmd}` failed (exit {res.returncode}): {stderr.strip()}"
+        f"{f' [{note}]' if note else ''}"
+    )
+
+
 def is_online(url, timeout=2):
     """Check whether the vault server is reachable.
 
@@ -55,14 +119,14 @@ def status(session=b""):
         ["bw", "--session", session, "status"], capture_output=True, check=False
     )
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return {}
     # The CLI can print warnings before the returned JSON (e.g. when it fails
     # to fetch the server config while offline), so only parse the last line.
     try:
         return dict(json.loads(res.stdout.strip().split(b"\n")[-1]))
     except (ValueError, TypeError):
-        logging.error(res)
+        _log_err(res)
         return {}
 
 
@@ -74,7 +138,7 @@ def set_server(url="https://vault.bitwarden.com"):
     """
     res = run(["bw", "config", "server", url], capture_output=True, check=False)
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return True
 
@@ -111,7 +175,7 @@ def login(email, password, method=None, code=""):
     # can exit non-zero on a successful command when it cannot reach the server
     # (bitwarden/clients#18373), so neither is treated as an error here.
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return (False, res.stderr)
     # `--raw` still ends with a newline. Keeping it makes every later
     # `bw --session <token>` reject the session as invalid.
@@ -232,7 +296,9 @@ def login_pty_finish(fd, pid, code, timeout=60):
 
     exit_code = os.WEXITSTATUS(status) if os.WIFEXITED(status) else 1
     if exit_code != 0:
-        logging.error(f"Email OTP login failed (exit {exit_code}): {result}")
+        # The PTY output is returned to the caller for the error dialog but is
+        # not logged - on a partial success it can contain the session token.
+        logging.error(f"Email OTP login failed (exit {exit_code})")
         return (False, result or b"Email OTP login failed")
 
     # Extract session token: strip ANSI escapes and find the raw token
@@ -243,7 +309,9 @@ def login_pty_finish(fd, pid, code, timeout=60):
         if len(line) > 20 and b" " not in line:
             return (line, None)
 
-    logging.error(f"Could not extract session token from: {result}")
+    logging.error(
+        f"Could not extract session token from {len(result)} bytes of output"
+    )
     return (False, result or b"Could not extract session token")
 
 
@@ -264,7 +332,7 @@ def unlock(password):
     )
     # Deliberately not checking returncode - see the note in login()
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return (False, res.stderr)
     # `--raw` still ends with a newline. Keeping it makes every later
     # `bw --session <token>` reject the session as invalid.
@@ -279,7 +347,7 @@ def lock():
     """
     res = run(["bw", "lock"], capture_output=True, check=False)
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return True
 
@@ -292,7 +360,7 @@ def logout():
     """
     res = run(["bw", "logout"], capture_output=True, check=False)
     if not res.stderr:
-        logging.error(res)
+        _log_err(res)
         return False
     return True
 
@@ -310,7 +378,7 @@ def get_orgs(session):
         check=False,
     )
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return {i["id"]: i for i in json.loads(res.stdout)}
 
@@ -339,9 +407,9 @@ def get_entries(session, org_name=""):
                 False on error
 
     """
-    logging.debug(
-        f"get_entries: session type={type(session)}, value (first 20 chars)={str(session)[:20]}"
-    )
+    # Never log the session token or stdout here - stdout is the entire
+    # decrypted vault and the log is a plain file on disk.
+    logging.debug(f"get_entries: session present={bool(session)}")
 
     res = run(
         ["bw", "--session", session, "list", "items"],
@@ -349,22 +417,17 @@ def get_entries(session, org_name=""):
         check=False,
     )
 
-    logging.debug(f"get_entries: returncode={res.returncode}")
-    logging.debug(f"get_entries: stdout (first 200 chars)={res.stdout[:200]}")
     logging.debug(
-        f"get_entries: stderr={res.stderr.decode('utf-8') if res.stderr else 'None'}"
+        f"get_entries: returncode={res.returncode}, "
+        f"stdout bytes={len(res.stdout or b'')}"
     )
 
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
 
     if res.returncode != 0:
-        logging.error(f"get_entries failed with return code {res.returncode}")
-        logging.error(f"stdout: {res.stdout.decode('utf-8')}")
-        logging.error(
-            f"stderr: {res.stderr.decode('utf-8') if res.stderr else 'None'}"
-        )
+        _log_err(res)
         return False
 
     items = [Item(i) for i in json.loads(res.stdout)]
@@ -384,7 +447,7 @@ def sync(session):
         ["bw", "--session", session, "sync"], capture_output=True, check=False
     )
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return True
 
@@ -402,7 +465,7 @@ def get_folders(session):
         check=False,
     )
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return {i["id"]: i for i in json.loads(res.stdout)}
 
@@ -423,7 +486,7 @@ def get_collections(session, org_id=""):
         cmd.extend(["--organizationid", org_id])
     res = run(cmd, capture_output=True, check=False)
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return {i["id"]: i for i in json.loads(res.stdout)}
 
@@ -456,7 +519,7 @@ def add_entry(entry, session):
         check=False,
     )
     if not enc.stdout:
-        logging.error(enc)
+        _log_err(enc)
         return False
     res = run(
         ["bw", "create", "--session", session, "item", enc.stdout],
@@ -464,7 +527,7 @@ def add_entry(entry, session):
         check=False,
     )
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return json.loads(res.stdout)
 
@@ -524,7 +587,7 @@ def edit_entry(entry, session, update_coll="NO"):
         check=False,
     )
     if not enc.stdout:
-        logging.error(enc)
+        _log_err(enc)
         return False
     res = run(
         ["bw", "edit", "--session", session, "item", item["id"], enc.stdout],
@@ -532,7 +595,7 @@ def edit_entry(entry, session, update_coll="NO"):
         check=False,
     )
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return json.loads(res.stdout)
 
@@ -550,7 +613,7 @@ def delete_entry(entry, session):
         check=False,
     )
     if res.returncode != 0:
-        logging.error(res)
+        _log_err(res)
         return False
     return entry
 
@@ -572,7 +635,7 @@ def add_folder(folder, session):
         check=False,
     )
     if not enc.stdout:
-        logging.error(enc)
+        _log_err(enc)
         return False
     res = run(
         ["bw", "create", "--session", session, "folder", enc.stdout],
@@ -580,7 +643,7 @@ def add_folder(folder, session):
         check=False,
     )
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return json.loads(res.stdout)
 
@@ -600,7 +663,7 @@ def delete_folder(folder, session):
         check=False,
     )
     if res.returncode != 0:
-        logging.error(res)
+        _log_err(res)
         return False
     return folder
 
@@ -623,7 +686,7 @@ def move_folder(folder, newpath, session):
         check=False,
     )
     if not enc.stdout:
-        logging.error(enc)
+        _log_err(enc)
         return False
     res = run(
         ["bw", "edit", "--session", session, "folder", fold["id"], enc.stdout],
@@ -631,7 +694,7 @@ def move_folder(folder, newpath, session):
         check=False,
     )
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return json.loads(res.stdout)
 
@@ -654,7 +717,7 @@ def add_collection(collection, org_id, session):
         check=False,
     )
     if not enc.stdout:
-        logging.error(enc)
+        _log_err(enc)
         return False
     res = run(
         [
@@ -671,7 +734,7 @@ def add_collection(collection, org_id, session):
         check=False,
     )
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return json.loads(res.stdout)
 
@@ -699,7 +762,7 @@ def delete_collection(collection, session):
         check=False,
     )
     if res.returncode != 0:
-        logging.error(res)
+        _log_err(res)
         return False
     return collection
 
@@ -722,7 +785,7 @@ def move_collection(collection, newpath, session):
         check=False,
     )
     if not enc.stdout:
-        logging.error(enc)
+        _log_err(enc)
         return False
     res = run(
         [
@@ -740,7 +803,7 @@ def move_collection(collection, newpath, session):
         check=False,
     )
     if not res.stdout:
-        logging.error(res)
+        _log_err(res)
         return False
     return json.loads(res.stdout)
 

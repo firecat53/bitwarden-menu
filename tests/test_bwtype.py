@@ -1,5 +1,6 @@
 """Tests for autotype tokenization module."""
 
+import os
 import sys
 import time
 from subprocess import CalledProcessError
@@ -510,3 +511,79 @@ class TestTypeClipboard:
                 patch("bwm.bwtype.dmenu_err") as err:
             type_text("some text")
         assert "clipboard" in err.call_args[0][0].lower()
+
+
+class TestClipboardClearSurvivesExit:
+    """The 30 second clear must outlive a one-shot `bwm --show -C`.
+
+    A Timer thread is a daemon thread: the interpreter kills it on the way out,
+    so for a process that copies and immediately exits the clear never runs and
+    the password stays on the clipboard indefinitely.
+
+    """
+
+    def test_detach_forks_instead_of_using_a_timer(self):
+        """Test that detach=True schedules the clear out of process."""
+        from bwm.bwtype import type_clipboard
+
+        with patch("bwm.bwtype.bwm.get_clipboard_cmd", return_value="true"):
+            with patch("bwm.bwtype.run"):
+                with patch("bwm.bwtype._clear_clipboard_later") as later:
+                    with patch("bwm.bwtype.Timer") as timer:
+                        assert type_clipboard("secret", detach=True) is True
+        later.assert_called_once()
+        timer.assert_not_called()
+
+    def test_without_detach_uses_a_timer(self):
+        """Test that the long-lived daemon keeps the in-process timer."""
+        from bwm.bwtype import type_clipboard
+
+        with patch("bwm.bwtype.bwm.get_clipboard_cmd", return_value="true"):
+            with patch("bwm.bwtype.run"):
+                with patch("bwm.bwtype._clear_clipboard_later") as later:
+                    with patch("bwm.bwtype.Timer") as timer:
+                        assert type_clipboard("secret") is True
+        timer.assert_called_once()
+        later.assert_not_called()
+
+    def test_clear_runs_after_the_caller_exits(self, tmp_path):
+        """Test end to end that the clipboard is cleared post-exit.
+
+        Runs a real process that copies and exits immediately, with a stand-in
+        'clipboard command' that records what it was handed.
+
+        """
+        import subprocess
+
+        record = tmp_path / "clipboard"
+        sink = tmp_path / "sink.py"
+        sink.write_text(
+            "import sys\n"
+            f"open({str(record)!r}, 'a').write(repr(sys.stdin.read()) + '\\n')\n"
+        )
+        cmd = f"{sys.executable} {sink}"
+        driver = tmp_path / "driver.py"
+        driver.write_text(
+            "import os\n"
+            "from unittest.mock import patch\n"
+            "import bwm.bwtype as bt\n"
+            "with patch.object(bt.bwm, 'get_clipboard_cmd', return_value="
+            f"{cmd!r}):\n"
+            "    with patch.object(bt, 'CLIPBOARD_CLEAR_SEC', 1):\n"
+            "        bt.type_clipboard('hunter2', detach=True)\n"
+            "os._exit(0)\n"  # exactly what leave() does
+        )
+        env = dict(os.environ, PYTHONPATH=os.getcwd())
+        subprocess.run(
+            [sys.executable, str(driver)], check=True, env=env, timeout=30
+        )
+        # The copy happened before the exit
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            if record.exists() and len(record.read_text().splitlines()) >= 2:
+                break
+            time.sleep(0.2)
+        lines = record.read_text().splitlines()
+        assert lines[0] == repr("hunter2"), "the copy itself did not happen"
+        assert len(lines) == 2, f"clipboard was never cleared: {lines}"
+        assert lines[1] == repr(""), "clear did not blank the clipboard"

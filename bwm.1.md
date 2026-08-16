@@ -121,10 +121,15 @@ for additional options.
 # ENVIRONMENT
 
 **BWM_LOG_LEVEL**
-Log level for _~/.cache/bwm.log_. Default *warning*; set to *debug* to record
-each vault's status check, unlock and entry load. A backgrounded daemon sends
-its output to /dev/null, so this and **--foreground** are how to see what it is
-doing.
+Log level for _~/.cache/bwm.log_. One of *critical*, *error*, *warning*, *info*
+or *debug*; an unrecognized value falls back to the default and says so in the
+log. Default *warning*; set to *debug* to record each vault's status check,
+unlock and entry load. A backgrounded daemon sends its output to /dev/null, so
+this and **--foreground** are how to see what it is doing.
+
+The log records vault entry names, item ids and server URLs, but never
+passwords, TOTP seeds, session tokens or vault contents. It is created mode
+0600.
 
 **DISPLAY**, **WAYLAND_DISPLAY**
 When neither is set, bwm prompts on the terminal instead of through a launcher,

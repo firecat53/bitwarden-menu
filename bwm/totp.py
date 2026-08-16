@@ -77,7 +77,7 @@ def gen_otp(otp_url):
         int(query_string["period"][0]),
         int(query_string["digits"][0]),
         "sha1"
-        if "algorihm" not in query_string
+        if "algorithm" not in query_string
         else query_string["algorithm"][0].lower(),
         steam,
     )

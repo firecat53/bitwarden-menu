@@ -15,7 +15,7 @@ from subprocess import run, DEVNULL
 
 from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_data_home
 
-__version__ = "0.5.4"
+__version__ = "0.6.0"
 
 logger = logging.getLogger("bwm")
 LOG_FILE = join(xdg_cache_home(), "bwm.log")

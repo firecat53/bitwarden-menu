@@ -2,8 +2,8 @@
 title: Bitwarden-menu
 section: 1
 header: User Manual
-footer: Bitwarden-menu v0.5.4
-date: 2026-08-15
+footer: Bitwarden-menu v0.6.0
+date: 2026-08-16
 ---
 
 # NAME

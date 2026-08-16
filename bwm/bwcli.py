@@ -364,6 +364,7 @@ def unlock(password):
     res = run(
         ["bw", "unlock", "--raw", "--passwordenv", BW_PASSWORD_ENV],
         capture_output=True,
+        stdin=DEVNULL,
         check=False,
         env=_bw_env(password=password),
     )

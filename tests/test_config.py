@@ -400,3 +400,94 @@ class TestLogFilePermissions:
         log = tmp_path / "bwm.log"
         assert log.exists()
         assert oct(log.stat().st_mode)[-3:] == "600"
+
+
+class TestDetachFromTerminal:
+    """The daemon must not keep a hand on the terminal that started it.
+
+    Redirecting only stdout/stderr left stdin on the tty, and every `bw` the
+    daemon spawned inherited it - `bw serve` above all, which holds it for the
+    daemon's whole life and is then killed off on `bwm -k`.
+
+    """
+
+    def _child_fds(self, background):
+        """Run detach_from_terminal in a forked child on a real pty.
+
+        Returns: dict {fd: target} as seen from /proc
+
+        """
+        import pty
+        import time
+
+        master, slave = pty.openpty()
+        tty_name = os.ttyname(slave)
+        pid = os.fork()
+        if pid == 0:  # pragma: no cover - child never returns
+            os.dup2(slave, 0)
+            os.dup2(slave, 1)
+            os.dup2(slave, 2)
+            os.close(master)
+            os.close(slave)
+            import bwm
+
+            bwm.detach_from_terminal(background)
+            time.sleep(2)
+            os._exit(0)
+        time.sleep(0.7)
+        try:
+            fds = {
+                fd: os.readlink(f"/proc/{pid}/fd/{fd}") for fd in (0, 1, 2)
+            }
+        finally:
+            os.kill(pid, 9)
+            os.waitpid(pid, 0)
+            os.close(master)
+            os.close(slave)
+        return fds, tty_name
+
+    @pytest.mark.skipif(
+        not os.path.isdir("/proc"), reason="needs /proc to inspect fds"
+    )
+    def test_background_releases_the_tty(self):
+        """Test that a backgrounded daemon holds none of the terminal."""
+        fds, tty_name = self._child_fds(background=True)
+        assert fds[0] != tty_name, "stdin still on the terminal"
+        assert fds[1] != tty_name
+        assert fds[2] != tty_name
+        assert fds[0] == os.devnull
+
+    @pytest.mark.skipif(
+        not os.path.isdir("/proc"), reason="needs /proc to inspect fds"
+    )
+    def test_foreground_keeps_the_tty(self):
+        """--foreground means the output is the point; leave it attached."""
+        fds, tty_name = self._child_fds(background=False)
+        assert fds[0] == tty_name
+        assert fds[1] == tty_name
+
+
+class TestSpawnedProcessesGetNoTerminal:
+    """Children of the daemon must not inherit a terminal either."""
+
+    def test_bw_serve_stdin_is_devnull(self):
+        """`bw serve` outlives the invocation that starts it."""
+        from subprocess import DEVNULL
+
+        from bwm.bwserve import BWCLIServer
+
+        with patch("bwm.bwserve.Popen") as popen:
+            popen.return_value.poll.return_value = 0  # "died", so start bails
+            BWCLIServer().start(session="tok")
+        assert popen.call_args[1]["stdin"] is DEVNULL
+
+    def test_unlock_cannot_block_on_a_prompt(self):
+        """--passwordenv falls back to prompting if the variable is missing."""
+        from subprocess import CompletedProcess, DEVNULL
+
+        from bwm.bwcli import unlock
+
+        with patch("bwm.bwcli.run") as run:
+            run.return_value = CompletedProcess([], 0, stdout=b"tok\n", stderr=b"")
+            unlock("pw")
+        assert run.call_args[1]["stdin"] is DEVNULL

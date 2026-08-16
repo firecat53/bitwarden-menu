@@ -6,7 +6,7 @@ primarily via the `serve` command
 from http.client import HTTPConnection
 import json
 import logging
-from subprocess import Popen, PIPE
+from subprocess import DEVNULL, Popen, PIPE
 import socket
 import time
 from urllib.parse import urlencode
@@ -87,6 +87,10 @@ class BWCLIServer:
                     f"fd+connected://{server_sock.fileno()}",
                 ],
                 pass_fds=(server_sock.fileno(),),
+                # Never the terminal: this process outlives the invocation
+                # that started it, and a long-lived holder of the tty disturbs
+                # the shell it was launched from.
+                stdin=DEVNULL,
                 stdout=PIPE,
                 stderr=PIPE,
                 env=_bw_env(session_str),

@@ -158,9 +158,21 @@ def detach_from_terminal(background=True):
     except OSError:
         # Already a session leader, or not permitted; not fatal
         pass
+    # stdin as well as stdout/stderr. Redirecting only the output streams left
+    # the daemon holding the terminal it was started from, and every `bw` it
+    # spawns inherited that - `bw serve` most of all, which keeps the tty open
+    # for as long as the daemon lives and is then killed off on `bwm -k`.
+    # Nothing here reads stdin: CLI mode is turned off when backgrounded, and
+    # every prompt happens in the parent before the fork.
+    # Numeric fds rather than sys.std*.fileno(): 0/1/2 are what a spawned
+    # child inherits, and sys.stdin can be a wrapper with no real descriptor
+    # behind it (a test harness, or bwm imported as a library), in which case
+    # asking it for a fileno silently skips the redirect.
+    with open(os.devnull, "r", encoding=ENC) as devnull_in:
+        os.dup2(devnull_in.fileno(), 0)
     with open(os.devnull, "w", encoding=ENC) as devnull:
-        os.dup2(devnull.fileno(), sys.stdout.fileno())
-        os.dup2(devnull.fileno(), sys.stderr.fileno())
+        os.dup2(devnull.fileno(), 1)
+        os.dup2(devnull.fileno(), 2)
 
 
 def get_clipboard_cmd():

@@ -13,6 +13,11 @@ from subprocess import DEVNULL, run
 from urllib.parse import urlsplit
 
 
+# Name of the variable `bw --passwordenv` is pointed at. Only the name ever
+# reaches argv; the password itself stays in the child's environment.
+BW_PASSWORD_ENV = "BW_PASSWORD"
+
+
 # Every argv token `bw` is invoked with in this module that is safe to log.
 # The sanitizer below is deliberately fail-closed: anything not listed here -
 # session tokens, passwords, item ids, base64 item payloads - is redacted.
@@ -43,6 +48,8 @@ _LOGGABLE_ARGS = frozenset(
         "--organizationid",
         "--raw",
         "--session",
+        "--passwordenv",
+        BW_PASSWORD_ENV,
     )
 )
 
@@ -50,6 +57,33 @@ _LOGGABLE_ARGS = frozenset(
 def _decode(val):
     """Decode bytes to str, leaving anything else alone"""
     return val.decode("utf-8", "replace") if isinstance(val, bytes) else val
+
+
+def _bw_env(session=None, password=None):
+    """Environment for a `bw` child process, carrying secrets out of argv.
+
+    /proc/<pid>/cmdline is world readable, so a session token or master
+    password passed as an argument is visible to every other user on the
+    machine for as long as the process lives - and `bw serve` lives as long as
+    the daemon does. /proc/<pid>/environ is readable only by its owner.
+
+    `bw` treats the two as equivalent: its --session handler is literally
+    `process.env.BW_SESSION = key`, and --passwordenv reads process.env[name].
+
+    Args: session - session token, str or bytes. Falsy leaves any inherited
+                    BW_SESSION alone, which is how a vault unlocked outside
+                    bwm keeps working.
+          password - master password, or None
+
+    Returns: dict suitable for the env= argument of run()/Popen()
+
+    """
+    env = dict(os.environ)
+    if session:
+        env["BW_SESSION"] = _decode(session)
+    if password is not None:
+        env[BW_PASSWORD_ENV] = password
+    return env
 
 
 def _log_err(res, note=""):
@@ -116,7 +150,10 @@ def status(session=b""):
 
     """
     res = run(
-        ["bw", "--session", session, "status"], capture_output=True, check=False
+        ["bw", "status"],
+        capture_output=True,
+        check=False,
+        env=_bw_env(session),
     )
     if not res.stdout:
         _log_err(res)
@@ -157,20 +194,16 @@ def login(email, password, method=None, code=""):
     if not email or not password:
         logging.error("No email or password provided")
         return (False, b"No email or password provided")
-    cmd = ["bw", "login", "--raw", email, password]
+    cmd = ["bw", "login", "--raw", email, "--passwordenv", BW_PASSWORD_ENV]
     if method and code:
-        cmd = [
-            "bw",
-            "login",
-            "--raw",
-            email,
-            password,
-            "--method",
-            method,
-            "--code",
-            code,
-        ]
-    res = run(cmd, capture_output=True, stdin=DEVNULL, check=False)
+        cmd.extend(["--method", method, "--code", code])
+    res = run(
+        cmd,
+        capture_output=True,
+        stdin=DEVNULL,
+        check=False,
+        env=_bw_env(password=password),
+    )
     # Only an empty stdout means failure. The CLI writes warnings to stderr and
     # can exit non-zero on a successful command when it cannot reach the server
     # (bitwarden/clients#18373), so neither is treated as an error here.
@@ -226,11 +259,13 @@ def login_pty_start(email, password):
     if not email or not password:
         logging.error("No email or password provided")
         return (False, b"No email or password provided")
-    cmd = ["bw", "login", "--raw", email, password]
+    cmd = ["bw", "login", "--raw", email, "--passwordenv", BW_PASSWORD_ENV]
+    env = _bw_env(password=password)
     pid, fd = pty.fork()
     if pid == 0:
-        # Child process
-        os.execvp(cmd[0], cmd)
+        # Child process. execvpe, not execvp: the password rides in the
+        # environment rather than on the command line.
+        os.execvpe(cmd[0], cmd, env)
         os._exit(1)
     # Parent: read initial output (prompts) until CLI is waiting for input
     _pty_read(fd, timeout=15)
@@ -328,7 +363,10 @@ def unlock(password):
         logging.error("No password provided")
         return (False, "No password provided")
     res = run(
-        ["bw", "unlock", "--raw", password], capture_output=True, check=False
+        ["bw", "unlock", "--raw", "--passwordenv", BW_PASSWORD_ENV],
+        capture_output=True,
+        check=False,
+        env=_bw_env(password=password),
     )
     # Deliberately not checking returncode - see the note in login()
     if not res.stdout:
@@ -373,9 +411,10 @@ def get_orgs(session):
 
     """
     res = run(
-        ["bw", "--session", session, "list", "organizations"],
+        ["bw", "list", "organizations"],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if not res.stdout:
         _log_err(res)
@@ -412,9 +451,10 @@ def get_entries(session, org_name=""):
     logging.debug(f"get_entries: session present={bool(session)}")
 
     res = run(
-        ["bw", "--session", session, "list", "items"],
+        ["bw", "list", "items"],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
 
     logging.debug(
@@ -444,7 +484,10 @@ def sync(session):
 
     """
     res = run(
-        ["bw", "--session", session, "sync"], capture_output=True, check=False
+        ["bw", "sync"],
+        capture_output=True,
+        check=False,
+        env=_bw_env(session),
     )
     if not res.stdout:
         _log_err(res)
@@ -460,9 +503,10 @@ def get_folders(session):
 
     """
     res = run(
-        ["bw", "--session", session, "list", "folders"],
+        ["bw", "list", "folders"],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if not res.stdout:
         _log_err(res)
@@ -481,10 +525,10 @@ def get_collections(session, org_id=""):
              id>,'externalId':<ext id>,'name':<name>)}
 
     """
-    cmd = ["bw", "--session", session, "list", "collections"]
+    cmd = ["bw", "list", "collections"]
     if org_id:
         cmd.extend(["--organizationid", org_id])
-    res = run(cmd, capture_output=True, check=False)
+    res = run(cmd, capture_output=True, check=False, env=_bw_env(session))
     if not res.stdout:
         _log_err(res)
         return False
@@ -522,9 +566,10 @@ def add_entry(entry, session):
         _log_err(enc)
         return False
     res = run(
-        ["bw", "create", "--session", session, "item", enc.stdout],
+        ["bw", "create", "item", enc.stdout],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if not res.stdout:
         _log_err(res)
@@ -590,9 +635,10 @@ def edit_entry(entry, session, update_coll="NO"):
         _log_err(enc)
         return False
     res = run(
-        ["bw", "edit", "--session", session, "item", item["id"], enc.stdout],
+        ["bw", "edit", "item", item["id"], enc.stdout],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if not res.stdout:
         _log_err(res)
@@ -608,9 +654,10 @@ def delete_entry(entry, session):
 
     """
     res = run(
-        ["bw", "delete", "--session", session, "item", entry["id"]],
+        ["bw", "delete", "item", entry["id"]],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if res.returncode != 0:
         _log_err(res)
@@ -638,9 +685,10 @@ def add_folder(folder, session):
         _log_err(enc)
         return False
     res = run(
-        ["bw", "create", "--session", session, "folder", enc.stdout],
+        ["bw", "create", "folder", enc.stdout],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if not res.stdout:
         _log_err(res)
@@ -658,9 +706,10 @@ def delete_folder(folder, session):
 
     """
     res = run(
-        ["bw", "delete", "--session", session, "folder", folder["id"]],
+        ["bw", "delete", "folder", folder["id"]],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if res.returncode != 0:
         _log_err(res)
@@ -689,9 +738,10 @@ def move_folder(folder, newpath, session):
         _log_err(enc)
         return False
     res = run(
-        ["bw", "edit", "--session", session, "folder", fold["id"], enc.stdout],
+        ["bw", "edit", "folder", fold["id"], enc.stdout],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if not res.stdout:
         _log_err(res)
@@ -723,8 +773,6 @@ def add_collection(collection, org_id, session):
         [
             "bw",
             "create",
-            "--session",
-            session,
             "--organizationid",
             org_id.encode(),
             "org-collection".encode(),
@@ -732,6 +780,7 @@ def add_collection(collection, org_id, session):
         ],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if not res.stdout:
         _log_err(res)
@@ -751,8 +800,6 @@ def delete_collection(collection, session):
         [
             "bw",
             "delete",
-            "--session",
-            session,
             "--organizationid",
             collection["organizationId"].encode(),
             "org-collection",
@@ -760,6 +807,7 @@ def delete_collection(collection, session):
         ],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if res.returncode != 0:
         _log_err(res)
@@ -791,8 +839,6 @@ def move_collection(collection, newpath, session):
         [
             "bw",
             "edit",
-            "--session",
-            session,
             "--organizationid",
             coll["organizationId"].encode(),
             "org-collection",
@@ -801,6 +847,7 @@ def move_collection(collection, newpath, session):
         ],
         capture_output=True,
         check=False,
+        env=_bw_env(session),
     )
     if not res.stdout:
         _log_err(res)

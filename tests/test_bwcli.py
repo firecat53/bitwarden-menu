@@ -1,6 +1,7 @@
 """Tests for Bitwarden CLI wrapper module."""
 
 import json
+import os
 import socket
 from unittest.mock import patch, MagicMock
 from subprocess import CompletedProcess
@@ -584,7 +585,9 @@ class TestSessionTokenIsClean:
                 [], 0, stdout=b'{"status": "unlocked"}', stderr=b""
             )
             status(session)
-        assert mock_run.call_args[0][0] == ["bw", "--session", b"tok789==", "status"]
+        # The token travels in the environment, not on the command line
+        assert mock_run.call_args[0][0] == ["bw", "status"]
+        assert mock_run.call_args[1]["env"]["BW_SESSION"] == "tok789=="
 
     def test_empty_stdout_is_still_a_failure(self):
         """Stripping must not turn a failure into a success."""
@@ -678,3 +681,146 @@ class TestLogErr:
         assert result is False
         assert "PlaintextPw" not in caplog.text
         assert "tok" not in caplog.text
+
+
+class TestSecretsStayOutOfArgv:
+    """Session tokens and the master password must never reach the argv.
+
+    /proc/<pid>/cmdline is world readable; /proc/<pid>/environ is not. `bw`
+    treats the two as equivalent - its --session handler assigns
+    process.env.BW_SESSION, and --passwordenv reads process.env[name] - so
+    moving them costs nothing.
+
+    """
+
+    SESSION = b"S3ss10nT0ken=="
+    PASSWORD = "MasterPw123"
+
+    def _calls(self, fn, *args, stdout=b"[]", **kwargs):
+        """Run fn with bwcli.run patched, returning the (argv, kwargs) used."""
+        with patch("bwm.bwcli.run") as mock_run:
+            mock_run.return_value = CompletedProcess(
+                [], 0, stdout=stdout, stderr=b""
+            )
+            fn(*args, **kwargs)
+        return [(c[0][0], c[1]) for c in mock_run.call_args_list]
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "status",
+            "get_orgs",
+            "get_entries",
+            "sync",
+            "get_folders",
+            "get_collections",
+        ],
+    )
+    def test_session_commands_use_the_environment(self, name):
+        """Test that read commands pass the token via BW_SESSION."""
+        import bwm.bwcli as bwcli_mod
+
+        fn = getattr(bwcli_mod, name)
+        stdout = b'{"status": "locked"}' if name == "status" else b"[]"
+        for argv, kwargs in self._calls(fn, self.SESSION, stdout=stdout):
+            assert self.SESSION.decode() not in " ".join(str(i) for i in argv)
+            assert "--session" not in argv
+            assert kwargs["env"]["BW_SESSION"] == self.SESSION.decode()
+
+    @pytest.mark.parametrize(
+        "fn_name,args",
+        [
+            ("add_entry", ({"name": "x"},)),
+            ("delete_entry", ({"id": "abc"},)),
+            ("add_folder", ("f",)),
+            ("delete_folder", ({"id": "abc"},)),
+            ("move_folder", ({"id": "abc"}, "new")),
+            ("add_collection", ("c", "org1")),
+            ("delete_collection", ({"id": "a", "organizationId": "o"},)),
+            ("move_collection", ({"id": "a", "organizationId": "o"}, "new")),
+        ],
+    )
+    def test_write_commands_use_the_environment(self, fn_name, args):
+        """Test that write commands pass the token via BW_SESSION."""
+        import bwm.bwcli as bwcli_mod
+
+        fn = getattr(bwcli_mod, fn_name)
+        with patch("bwm.bwcli.run") as mock_run:
+            mock_run.return_value = CompletedProcess(
+                [], 0, stdout=b"{}", stderr=b""
+            )
+            fn(*args, self.SESSION)
+        for call in mock_run.call_args_list:
+            argv = call[0][0]
+            assert "--session" not in argv
+            assert self.SESSION.decode() not in " ".join(str(i) for i in argv)
+
+    def test_unlock_password_is_not_in_argv(self):
+        """Test that unlock points bw at an env var instead of the password."""
+        from bwm.bwcli import unlock, BW_PASSWORD_ENV
+
+        with patch("bwm.bwcli.run") as mock_run:
+            mock_run.return_value = CompletedProcess(
+                [], 0, stdout=b"tok\n", stderr=b""
+            )
+            unlock(self.PASSWORD)
+        argv, kwargs = mock_run.call_args[0][0], mock_run.call_args[1]
+        assert self.PASSWORD not in argv
+        assert "--passwordenv" in argv
+        assert kwargs["env"][BW_PASSWORD_ENV] == self.PASSWORD
+
+    def test_login_password_is_not_in_argv(self):
+        """Test the same for login, including the 2FA variant."""
+        from bwm.bwcli import login, BW_PASSWORD_ENV
+
+        for extra in ({}, {"method": "1", "code": "123456"}):
+            with patch("bwm.bwcli.run") as mock_run:
+                mock_run.return_value = CompletedProcess(
+                    [], 0, stdout=b"tok\n", stderr=b""
+                )
+                login("me@example.com", self.PASSWORD, **extra)
+            argv = mock_run.call_args[0][0]
+            kwargs = mock_run.call_args[1]
+            assert self.PASSWORD not in argv
+            assert "--passwordenv" in argv
+            assert kwargs["env"][BW_PASSWORD_ENV] == self.PASSWORD
+            if extra:
+                assert "--code" in argv and "123456" in argv
+
+    def test_pty_login_password_is_not_in_argv(self):
+        """Test that the interactive 2FA login also uses execvpe."""
+        from bwm.bwcli import login_pty_start, BW_PASSWORD_ENV
+
+        with patch("bwm.bwcli.pty.fork", return_value=(0, 5)):
+            with patch("bwm.bwcli.os.execvpe") as execvpe:
+                with patch("bwm.bwcli.os._exit", side_effect=RuntimeError):
+                    with pytest.raises(RuntimeError):
+                        login_pty_start("me@example.com", self.PASSWORD)
+        argv, env = execvpe.call_args[0][1], execvpe.call_args[0][2]
+        assert self.PASSWORD not in argv
+        assert "--passwordenv" in argv
+        assert env[BW_PASSWORD_ENV] == self.PASSWORD
+
+    def test_env_does_not_leak_into_the_parent(self):
+        """Test that the secrets go to the child only, never os.environ.
+
+        bwm spawns dmenu, $EDITOR, the clipboard tool and password_cmd; none of
+        them should inherit the master password.
+
+        """
+        from bwm.bwcli import unlock, BW_PASSWORD_ENV
+
+        with patch("bwm.bwcli.run") as mock_run:
+            mock_run.return_value = CompletedProcess(
+                [], 0, stdout=b"tok\n", stderr=b""
+            )
+            unlock(self.PASSWORD)
+        assert BW_PASSWORD_ENV not in os.environ
+
+    def test_falsy_session_leaves_inherited_one_alone(self):
+        """Test that no session means bw falls back to an inherited BW_SESSION."""
+        from bwm.bwcli import _bw_env
+
+        with patch.dict(os.environ, {"BW_SESSION": "inherited"}):
+            assert _bw_env(b"")["BW_SESSION"] == "inherited"
+            assert _bw_env(b"mine")["BW_SESSION"] == "mine"

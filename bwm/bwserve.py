@@ -10,7 +10,7 @@ from subprocess import Popen, PIPE
 import socket
 import time
 from urllib.parse import urlencode
-from bwm.bwcli import Item
+from bwm.bwcli import Item, _bw_env
 
 # Default `bw serve` port per their docs
 BW_SERVE_PORT = 8087
@@ -73,13 +73,15 @@ class BWCLIServer:
                 else session
             )
 
-            # Start bw serve with session as command-line argument
+            # Session via the environment, not --session: this process lives as
+            # long as the daemon does, and /proc/<pid>/cmdline is readable by
+            # every user on the machine while /proc/<pid>/environ is not. `bw`
+            # treats them identically - its --session handler just assigns
+            # process.env.BW_SESSION.
             self.process = Popen(
                 [
                     "bw",
                     "serve",
-                    "--session",
-                    session_str,
                     "--port",
                     str(BW_SERVE_PORT),
                     "--hostname",
@@ -88,9 +90,10 @@ class BWCLIServer:
                 pass_fds=(server_sock.fileno(),),
                 stdout=PIPE,
                 stderr=PIPE,
+                env=_bw_env(session_str),
             )
             logging.debug(
-                f"BWCLIServer.start: Started bw serve process with --session, pid={self.process.pid}"
+                f"BWCLIServer.start: Started bw serve process, pid={self.process.pid}"
             )
 
             # Close server socket in parent process

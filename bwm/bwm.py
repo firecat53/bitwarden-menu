@@ -188,31 +188,45 @@ def get_vault(vaults=None, **kwargs):
         dmenu_err("Multiple vaults configured. Specify one with -v.")
         return None
     if len(vaults) > 1 and not vault_cli:
-        inp = "\n".join(f"{i.url} - {i.email}" for i in vaults)
+        lines = [
+            (f"{'*' if i.session else ' '} {i.url} - {i.email}", i)
+            for i in switch_menu_order(vaults)
+        ]
+        # Keyed on the stripped line - launchers may not return the padding
+        by_line = {line.strip(): vault for line, vault in lines}
+        inp = "\n".join(line for line, _ in lines)
         sel = dmenu_select(len(vaults), "Select Vault", inp=inp)
-        if sel:
-            sel_parts = sel.rsplit(" - ", 1)
-            sel_url = sel_parts[0]
-            sel_email = sel_parts[1] if len(sel_parts) > 1 else ""
-        else:
-            sel_url = ""
-            sel_email = ""
-        if not sel or (
-            vaults[0].url == sel_url
-            and vaults[0].email == sel_email
-            and vaults[0].session
+        selected = by_line.get(sel.strip()) if sel else None
+        if selected is None or (
+            selected is vaults[0] and vaults[0].session
         ):
             # No changes if invalid selection or current active vault chosen
             if all(not i.session for i in vaults):
                 return None
             return vaults
         # First vault is the active one
-        matched = [
-            i for i in vaults if i.url == sel_url and i.email == sel_email
-        ]
-        if matched:
-            vaults.insert(0, vaults.pop(vaults.index(matched[0])))
+        idx = next(n for n, i in enumerate(vaults) if i is selected)
+        vaults.insert(0, vaults.pop(idx))
     return set_vault(vaults)
+
+
+def switch_menu_order(vaults):
+    """Order the vaults for display in the switch vault menu.
+
+    Unlocked vaults are the cheap ones to switch to, so they lead the list -
+    the topmost is preselected - followed by the currently active vault and
+    then the locked ones.
+
+    Args: vaults - list of Vault objects (1st one is currently active)
+    Returns: list of Vault objects in display order
+
+    """
+    active, rest = vaults[0], vaults[1:]
+    return (
+        [i for i in rest if i.session]
+        + [active]
+        + [i for i in rest if not i.session]
+    )
 
 
 def set_vault(vaults):

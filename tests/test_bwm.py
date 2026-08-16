@@ -778,6 +778,88 @@ class TestDaemonLeavesCliMode:
         assert result[0].email == "bob@example.com"
 
 
+class TestSwitchVaultMenu:
+    """The menu has to say which vaults are already unlocked.
+
+    Switching to an unlocked vault is instant, switching to a locked one costs
+    a master password prompt and an unlock, so the menu marks the unlocked ones
+    with a '*' and puts them on top where the launcher preselects them.
+
+    """
+
+    def _vaults(self, *specs):
+        return [
+            Vault("https://v.example.com", email, "", "",
+                  session=b"tok" if unlocked else b"")
+            for email, unlocked in specs
+        ]
+
+    def _menu(self, vaults, mock_config_vaults, sel_return=""):
+        import bwm
+        from bwm.bwm import get_vault
+
+        with patch.object(bwm, "CLI", False), \
+                patch.object(bwm, "CONF", mock_config_vaults), \
+                patch("bwm.bwm.set_vault", side_effect=lambda v: v), \
+                patch("bwm.bwm.dmenu_select", return_value=sel_return) as sel:
+            result = get_vault(vaults)
+        return result, sel.call_args[1]["inp"].split("\n")
+
+    def test_unlocked_vaults_are_starred(self, mock_config_vaults):
+        vaults = self._vaults(("a@x.com", True), ("b@x.com", False))
+        _, lines = self._menu(vaults, mock_config_vaults)
+        assert [i[0] for i in lines] == ["*", " "]
+
+    def test_other_unlocked_vaults_come_first(self, mock_config_vaults):
+        """Active is 'a', so 'c' - the other unlocked one - leads."""
+        vaults = self._vaults(
+            ("a@x.com", True), ("b@x.com", False), ("c@x.com", True)
+        )
+        _, lines = self._menu(vaults, mock_config_vaults)
+        assert [i.rsplit(" - ", 1)[1] for i in lines] == [
+            "c@x.com", "a@x.com", "b@x.com"
+        ]
+
+    def test_active_drops_below_every_other_unlocked_vault(
+        self, mock_config_vaults
+    ):
+        vaults = self._vaults(
+            ("a@x.com", True), ("b@x.com", True),
+            ("c@x.com", True), ("d@x.com", True),
+        )
+        _, lines = self._menu(vaults, mock_config_vaults)
+        assert lines[-1].rsplit(" - ", 1)[1] == "a@x.com"
+
+    def test_a_starred_selection_still_switches(self, mock_config_vaults):
+        """The marker is display only - it must not break the match."""
+        vaults = self._vaults(("a@x.com", True), ("b@x.com", True))
+        result, _ = self._menu(
+            vaults, mock_config_vaults,
+            sel_return="* https://v.example.com - b@x.com",
+        )
+        assert result[0].email == "b@x.com"
+
+    def test_a_launcher_that_eats_the_padding_still_matches(
+        self, mock_config_vaults
+    ):
+        vaults = self._vaults(("a@x.com", True), ("b@x.com", False))
+        result, _ = self._menu(
+            vaults, mock_config_vaults,
+            sel_return="https://v.example.com - b@x.com",
+        )
+        assert result[0].email == "b@x.com"
+
+    def test_reselecting_the_active_vault_changes_nothing(
+        self, mock_config_vaults
+    ):
+        vaults = self._vaults(("a@x.com", True), ("b@x.com", False))
+        result, _ = self._menu(
+            vaults, mock_config_vaults,
+            sel_return="* https://v.example.com - a@x.com",
+        )
+        assert result[0].email == "a@x.com"
+
+
 class TestSwitchToUnlockedVault:
     """Switching to an already unlocked vault must not unlock it again.
 

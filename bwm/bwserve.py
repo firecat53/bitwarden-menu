@@ -37,7 +37,6 @@ class BWCLIServer:
     def __init__(self):
         self.client_sock = None
         self.process = None
-        self.session = None
         self._initialized = False
 
     def start(self, session=None):
@@ -190,35 +189,10 @@ class BWCLIServer:
                 pass
 
         self._initialized = False
-        self.session = None
 
     def __del__(self):
         """Cleanup when object is destroyed"""
         self.stop()
-
-    def __enter__(self):
-        """Context manager entry"""
-        if not self.start():
-            raise RuntimeError("Failed to start bw serve")
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit"""
-        self.stop()
-        return False
-
-    def is_available(self, session=None):
-        """Check if bw serve is available and working
-
-        Args: session - session token required to start bw serve
-        """
-        if not self._initialized:
-            if not self.start(session=session):
-                return False
-
-        # Try a simple status check
-        successful, _ = self.request("GET", "/status")
-        return successful
 
     def get_status(self):
         """Check status of vault
@@ -239,59 +213,6 @@ class BWCLIServer:
             return {"status": "unauthenticated", "serverUrl": None}
 
         return data["template"]
-
-    def set_server(self, url="https://vault.bitwarden.com"):
-        """Set vault URL
-
-        Returns: True if successful or False on error
-        """
-        successful, data = self.request("POST", "/config/server", {"url": url})
-        if not successful:
-            logging.error(f"Failed to set server: {data}")
-            return False
-        return True
-
-    def login(self, email, password, method=None, code=""):
-        """Initial login to Bitwarden Vault
-
-        Args: email - string
-              password - string
-              method - int (0: Authenticator, 1: Email, 3: Yubikey)
-              code - OTP code
-
-        Returns: session (string) or False on error, Error message
-        """
-        logging.debug(f"BWCLIServer.login: Starting login for {email}")
-        logging.debug(
-            f"BWCLIServer.login: initialized={self._initialized}, process={self.process is not None}"
-        )
-
-        body = {"email": email, "password": password}
-        if method is not None and code:
-            body["method"] = method
-            body["code"] = code
-            logging.debug(f"BWCLIServer.login: Using 2FA method {method}")
-
-        logging.debug("BWCLIServer.login: Sending POST /login request")
-        successful, data = self.request("POST", "/login", body)
-        logging.debug(
-            f"BWCLIServer.login: Request completed, successful={successful}"
-        )
-
-        if not successful:
-            error_msg = data if isinstance(data, str) else "Login failed"
-            logging.error(f"Login error: {error_msg}")
-            return False, error_msg
-
-        if "raw" in data:
-            self.session = data["raw"]
-            logging.debug(
-                "BWCLIServer.login: Login successful, session token received"
-            )
-            return data["raw"], None
-
-        logging.error("BWCLIServer.login: No session token in response")
-        return False, "No session token received"
 
     def unlock(self, password: str) -> tuple[str | bool, str]:
         """Unlock vault
@@ -329,7 +250,6 @@ class BWCLIServer:
             return False, error_msg
 
         if "raw" in data:
-            self.session = data["raw"]
             logging.debug(
                 "BWCLIServer.unlock: Unlock successful, session token received"
             )
@@ -347,19 +267,6 @@ class BWCLIServer:
         if not successful:
             logging.error(f"Lock error: {data}")
             return False
-        self.session = None
-        return True
-
-    def logout(self):
-        """Logout of vault
-
-        Return: True on success, False with any errors
-        """
-        successful, data = self.request("POST", "/logout")
-        if not successful:
-            logging.error(f"Logout error: {data}")
-            return False
-        self.session = None
         return True
 
     def sync(self):

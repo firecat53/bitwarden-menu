@@ -36,7 +36,6 @@ _LOGGABLE_ARGS = frozenset(
         "list",
         "lock",
         "login",
-        "logout",
         "org-collection",
         "organizations",
         "server",
@@ -385,19 +384,6 @@ def lock():
     """
     res = run(["bw", "lock"], capture_output=True, check=False)
     if not res.stdout:
-        _log_err(res)
-        return False
-    return True
-
-
-def logout():
-    """Logout of vault
-
-    Return: True on success, False with any errors
-
-    """
-    res = run(["bw", "logout"], capture_output=True, check=False)
-    if not res.stderr:
         _log_err(res)
         return False
     return True

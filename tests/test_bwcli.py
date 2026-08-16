@@ -16,7 +16,6 @@ from bwm.bwcli import (
     login,
     unlock,
     lock,
-    logout,
     sync,
     get_entries,
     get_folders,
@@ -372,31 +371,6 @@ class TestLock:
             args=["bw", "lock"], returncode=1, stdout=b""
         )
         result = lock()
-        assert result is False
-
-
-class TestLogout:
-    """Tests for vault logout."""
-
-    @patch("bwm.bwcli.run")
-    def test_logout_success(self, mock_run):
-        """Test successful logout returns True."""
-        mock_run.return_value = CompletedProcess(
-            args=["bw", "logout"],
-            returncode=0,
-            stdout=b"",
-            stderr=b"Logged out",
-        )
-        result = logout()
-        assert result is True
-
-    @patch("bwm.bwcli.run")
-    def test_logout_not_logged_in(self, mock_run):
-        """Test logout when not logged in returns False."""
-        mock_run.return_value = CompletedProcess(
-            args=["bw", "logout"], returncode=1, stdout=b"", stderr=b""
-        )
-        result = logout()
         assert result is False
 
 

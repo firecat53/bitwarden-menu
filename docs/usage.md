@@ -84,6 +84,11 @@ config.ini) since the interactive first-run wizard needs a launcher.
 URL. If more than one entry matches, the matching entries are listed on stderr
 and bwm exits non-zero, so narrow the search.
 
+bwm also exits non-zero if every requested field is empty, rather than printing
+nothing and succeeding - otherwise `pw=$(bwm -s entry)` would quietly leave
+`pw` empty. When several fields are requested and only some are empty, the
+blank lines are kept, since the output is positional.
+
     $ bwm -s 'ssh github' -f username -f password
     gituser
     hunter2

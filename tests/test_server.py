@@ -3,6 +3,7 @@
 import configparser
 import json
 import multiprocessing
+import pathlib
 import socket
 import sys
 from unittest.mock import patch, MagicMock, mock_open
@@ -302,8 +303,8 @@ class TestShowResultChannel:
         from bwm.__main__ import Server
 
         server = Server()
-        server.send_result("hunter2")
-        assert server.receive_show_result(timeout=1) == "hunter2"
+        server.send_result("req-1", (True, "hunter2"))
+        assert server.receive_show_result("req-1", timeout=1) == (True, "hunter2")
 
     @patch("bwm.__main__.get_auth")
     def test_receive_times_out(self, mock_get_auth):
@@ -881,3 +882,74 @@ class TestAuthFileHardening:
         target.mkdir(mode=0o755)
         assert bwm.get_runtime_dir() == str(target)
         assert oct(target.stat().st_mode)[-3:] == "700"
+
+
+class TestConcurrentShowRequests:
+    """Two --show clients in flight must not take each other's secret.
+
+    There is a single pipe for all clients. Without a request id, whichever
+    thread called recv() first took whatever result was there.
+
+    """
+
+    def _server(self):
+        with patch("bwm.__main__.get_auth", return_value=(12345, b"key")):
+            from bwm.__main__ import Server
+
+            return Server()
+
+    def test_each_client_gets_its_own_result(self):
+        """Results arriving out of order still reach the right caller."""
+        import threading
+
+        server = self._server()
+        # B's answer is put on the pipe first, A's second
+        server.send_result("req-B", (True, "b-secret"))
+        server.send_result("req-A", (True, "a-secret"))
+
+        got = {}
+
+        def fetch(req_id):
+            got[req_id] = server.receive_show_result(req_id, timeout=5)
+
+        threads = [
+            threading.Thread(target=fetch, args=("req-A",)),
+            threading.Thread(target=fetch, args=("req-B",)),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(10)
+
+        assert got["req-A"] == (True, "a-secret")
+        assert got["req-B"] == (True, "b-secret")
+
+    def test_a_foreign_result_is_not_consumed(self):
+        """Reading someone else's result must leave it available to them."""
+        server = self._server()
+        server.send_result("req-other", (True, "not-yours"))
+
+        # We time out rather than taking it
+        assert server.receive_show_result("req-mine", timeout=0.5) is None
+        # ...and it is still there for its owner
+        assert server.receive_show_result("req-other", timeout=1) == (
+            True,
+            "not-yours",
+        )
+
+    def test_timeout_still_returns_none(self):
+        """An empty pipe means None, not a hang."""
+        server = self._server()
+        assert server.receive_show_result("req-x", timeout=0.3) is None
+
+    def test_main_tags_each_request_uniquely(self):
+        """The id must be per invocation, not a constant."""
+        import re
+
+        from bwm import __main__ as m
+
+        src = re.search(
+            r'args\["show_id"\] = (.+)', pathlib.Path(m.__file__).read_text()
+        ).group(1)
+        assert "secrets" in src
+        assert len({m.secrets.token_hex(8) for _ in range(50)}) == 50

@@ -266,6 +266,36 @@ class TestShowFields:
         assert ok is True
         assert out == "ERROR: not really"
 
+    def test_an_entirely_empty_result_is_an_error(
+        self, entries, sample_folders
+    ):
+        """`pw=$(bwm -s x -f y)` must not silently yield an empty string.
+
+        Exiting 0 with no output is indistinguishable from success, so a
+        request whose every field is empty is reported instead.
+
+        """
+        entries[0]["login"]["username"] = ""
+        ok, out = show_fields(
+            entries, sample_folders, "Test Login", fields=["username"]
+        )
+        assert ok is False
+        assert "no value for" in out and "username" in out
+
+    def test_a_partially_empty_result_still_succeeds(
+        self, entries, sample_folders
+    ):
+        """With several fields the blank lines carry position - keep them."""
+        entries[0]["login"]["username"] = ""
+        ok, out = show_fields(
+            entries,
+            sample_folders,
+            "Test Login",
+            fields=["password", "username"],
+        )
+        assert ok is True
+        assert out == "testpass123\n"
+
     def test_returns_text_for_the_caller_to_deliver(
         self, entries, sample_folders
     ):

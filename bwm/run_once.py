@@ -282,6 +282,17 @@ def show_fields(entries, folders, search_string, fields=None):
     else:
         output = "\n".join(get_field(entry, i) for i in fields)
 
+    if not output:
+        # Every requested field was empty. Exiting 0 with no output is
+        # indistinguishable from success in `pw=$(bwm -s entry)`, so say so.
+        # Only when *all* of them are empty: for several fields the blank
+        # lines carry position, and that is worth keeping.
+        name = entry.get("name") or search_string
+        return False, (
+            f"Entry '{name}' has no value for "
+            f"{', '.join(fields)}"
+        )
+
     return True, output
 
 

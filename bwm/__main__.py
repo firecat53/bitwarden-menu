@@ -13,6 +13,8 @@ import socket
 import string
 from subprocess import call
 import sys
+import threading
+import time
 
 import bwm
 from bwm import bwcli
@@ -151,6 +153,11 @@ class Server(multiprocessing.Process):  # pylint: disable=too-many-instance-attr
         # Duplex so --show results can travel back to the client, which is the
         # process with the user's stdout attached.
         self._parent_conn, self._child_conn = multiprocessing.Pipe(duplex=True)
+        # Results read off that pipe that belong to another concurrent --show
+        # client. Shared between the manager's per-client threads; see
+        # receive_show_result().
+        self._show_lock = threading.Lock()
+        self._show_results = {}
 
     def run(self):
         bwm.detach_from_terminal(self.background)
@@ -171,24 +178,48 @@ class Server(multiprocessing.Process):  # pylint: disable=too-many-instance-attr
         """Reads arguments sent by the client to the server"""
         return self._parent_conn.recv()
 
-    def send_result(self, result):
+    def send_result(self, req_id, result):
         """Send a --show result from the daemon back to the client
 
-        Args: result - (ok, text) tuple
+        Args: req_id - the id the client tagged its request with
+              result - (ok, text) tuple
 
         """
-        self._parent_conn.send(result)
+        self._parent_conn.send((req_id, result))
 
-    def receive_show_result(self, timeout=30):
-        """Read the --show result the daemon sent back.
+    def receive_show_result(self, req_id=None, timeout=30):
+        """Read this client's --show result, demultiplexed by request id.
 
-        Args: timeout - maximum seconds to wait
+        There is one pipe for every client. Two `bwm --show` invocations in
+        flight at once would otherwise race on it, and whichever called recv()
+        first would take the other's secret.
+
+        This runs inside the BaseManager's process, which serves each client on
+        its own thread, so the dict below is shared between those clients: a
+        thread that reads a result belonging to someone else parks it there
+        rather than consuming it. That sharing is also why it cannot live in
+        the daemon process - the manager only has a forked copy of it.
+
+        Args: req_id - the id the client tagged its request with
+              timeout - maximum seconds to wait
         Returns: the (ok, text) tuple, or None on timeout
 
         """
-        if self._child_conn.poll(timeout):
-            return self._child_conn.recv()
-        return None
+        deadline = time.monotonic() + timeout
+        while True:
+            with self._show_lock:
+                if req_id in self._show_results:
+                    return self._show_results.pop(req_id)
+                if time.monotonic() >= deadline:
+                    return None
+                # poll(0) so the lock is never held across a blocking read
+                if self._child_conn.poll(0):
+                    other_id, payload = self._child_conn.recv()
+                    if other_id == req_id:
+                        return payload
+                    self._show_results[other_id] = payload
+                    continue
+            time.sleep(0.02)
 
     def unlocked_vaults(self):
         """Vaults the daemon currently holds a session for
@@ -580,13 +611,17 @@ def main():
                 )
                 sys.exit(1)
             args["password"] = show_password_prompt(unlocked, args)
+            # Tag the request so a concurrent --show can't take our answer
+            args["show_id"] = secrets.token_hex(8)
         if args:
             conn.send(args)
             manager.read_args_from_pipe()  # pylint: disable=no-member
         manager.set_event()  # pylint: disable=no-member
         if args.get("show"):
             # The daemon has no terminal, so it sends the result back here
-            raw = manager.receive_show_result()  # pylint: disable=no-member
+            raw = manager.receive_show_result(  # pylint: disable=no-member
+                args["show_id"]
+            )
             ok, text = show_result(raw)
             deliver_show_result(
                 ok, text, clipboard=bool(args.get("clipboard"))

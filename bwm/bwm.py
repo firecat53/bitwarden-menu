@@ -915,18 +915,20 @@ class DmenuRunner(multiprocessing.Process):
                 vault = self.unlock_for_show(**kwargs)
                 if vault is None:
                     self.server.send_result(
-                        (False, f"Could not unlock vault {url}.")
+                        kwargs.get("show_id"),
+                        (False, f"Could not unlock vault {url}."),
                     )
                     return
             else:
                 vault = matched[0]
         self.server.send_result(
+            kwargs.get("show_id"),
             show_fields(
                 vault.entries,
                 vault.folders,
                 kwargs.get("show", ""),
                 fields=kwargs.get("field"),
-            )
+            ),
         )
 
     def _set_timer(self):

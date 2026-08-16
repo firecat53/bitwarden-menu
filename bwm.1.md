@@ -37,7 +37,8 @@ from config.ini for current vault.
 
 **-s**, **--show** Search term. Outputs the matched entry's password (default)
 or the fields selected by **--field** to stdout, or to the clipboard with
-**--clipboard**. Requires a single matching entry
+**--clipboard**. Requires a single matching entry, and exits non-zero if every
+requested field is empty
 
 **-f**, **--field** Field to output with **--show**. Repeat for multiple fields,
 which are output one per line in the order given. Case and separator

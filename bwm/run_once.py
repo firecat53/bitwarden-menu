@@ -6,7 +6,6 @@ and by DmenuRunner.show_entry() when a daemon is already running.
 """
 
 import re
-import sys
 from os.path import join
 
 import bwm
@@ -228,41 +227,23 @@ def search_entries(entries, folders, search_string):
     return matches
 
 
-def _error(lines, return_errors):
-    """Report an error either as a string or on stderr.
-
-    Args: lines - list of strings
-          return_errors - if True, return the message instead of printing it
-
-    Returns: error string prefixed with 'ERROR: ' or None
-
-    """
-    if return_errors:
-        return "ERROR: " + "\n".join(lines)
-    for line in lines:
-        print(line, file=sys.stderr)
-    return None
-
-
-def show_fields(
-    entries,
-    folders,
-    search_string,
-    fields=None,
-    return_errors=False,
-):
+def show_fields(entries, folders, search_string, fields=None):
     """Show the requested fields of the entry matching the search string.
 
-    If multiple entries match, return an error.
+    If multiple entries match, report an error.
 
     Args:
         entries - list of dicts
         folders - dict of folder objects
         search_string - string to search for
         fields - list of field names to output, defaults to ['password']
-        return_errors - if True, return error messages instead of printing them
 
-    Returns: the output string, an error string (if return_errors), or None
+    Returns: tuple (ok, text). On success ok is True and text is the field
+             value(s); on failure ok is False and text is the message.
+
+    Success and failure are told apart by the flag rather than by a marker in
+    the text. An entry whose password happens to start with "ERROR:" is a
+    perfectly ordinary password, and it used to be reported as a failure.
 
     The caller decides what to do with the text. Putting it on the clipboard
     happens in the client process: the clipboard belongs to the invoking
@@ -272,9 +253,7 @@ def show_fields(
     matches = search_entries(entries, folders, search_string)
 
     if not matches:
-        return _error(
-            [f"No entries found matching '{search_string}'"], return_errors
-        )
+        return False, f"No entries found matching '{search_string}'"
 
     if len(matches) > 1:
         error_lines = [
@@ -287,14 +266,14 @@ def show_fields(
             error_lines.append(
                 f"  - {join(folder, entry.get('name') or '')} ({username})"
             )
-        return _error(error_lines, return_errors)
+        return False, "\n".join(error_lines)
 
     entry = matches[0]
 
     try:
         fields = [normalize_field(i) for i in (fields or ["password"])]
     except ValueError as err:
-        return _error([str(err)], return_errors)
+        return False, str(err)
     if FIELD_ALL in fields:
         # Labeled, since the caller can't tell which value is which.
         output = "\n".join(
@@ -303,7 +282,7 @@ def show_fields(
     else:
         output = "\n".join(get_field(entry, i) for i in fields)
 
-    return output
+    return True, output
 
 
 # vim: set et ts=4 sw=4 :

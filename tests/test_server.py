@@ -338,7 +338,7 @@ class TestDeliverShowResult:
         from bwm.__main__ import deliver_show_result
 
         with pytest.raises(SystemExit) as exc:
-            deliver_show_result("hunter2")
+            deliver_show_result(True, "hunter2")
         assert exc.value.code == 0
         assert capsys.readouterr().out == "hunter2\n"
 
@@ -346,15 +346,31 @@ class TestDeliverShowResult:
         from bwm.__main__ import deliver_show_result
 
         with pytest.raises(SystemExit) as exc:
-            deliver_show_result("ERROR: nope")
+            deliver_show_result(False, "nope")
         assert exc.value.code == 1
         assert capsys.readouterr().err.strip() == "nope"
 
-    def test_none_exits_1(self):
+    def test_value_that_looks_like_an_error_is_printed(self, capsys):
+        """ok=True wins over what the text happens to say.
+
+        A password starting with 'ERROR:' used to be routed to stderr with a
+        non-zero exit, because the prefix was the failure signal.
+
+        """
         from bwm.__main__ import deliver_show_result
 
         with pytest.raises(SystemExit) as exc:
-            deliver_show_result(None)
+            deliver_show_result(True, "ERROR: not really")
+        assert exc.value.code == 0
+        captured = capsys.readouterr()
+        assert captured.out == "ERROR: not really\n"
+        assert captured.err == ""
+
+    def test_none_exits_1(self):
+        from bwm.__main__ import deliver_show_result, show_result
+
+        with pytest.raises(SystemExit) as exc:
+            deliver_show_result(*show_result(None))
         assert exc.value.code == 1
 
     def test_empty_is_silent_success(self, capsys):
@@ -362,9 +378,48 @@ class TestDeliverShowResult:
         from bwm.__main__ import deliver_show_result
 
         with pytest.raises(SystemExit) as exc:
-            deliver_show_result("")
+            deliver_show_result(True, "")
         assert exc.value.code == 0
         assert capsys.readouterr().out == ""
+
+
+class TestShowResultNormalizing:
+    """What comes back over the manager is turned into (ok, text) in one place."""
+
+    def test_tuple_passes_through(self):
+        from bwm.__main__ import show_result
+
+        assert show_result((True, "hunter2")) == (True, "hunter2")
+        assert show_result((False, "no match")) == (False, "no match")
+
+    def test_autoproxy_is_unwrapped(self):
+        from bwm.__main__ import show_result
+
+        class Proxy:
+            def _getvalue(self):
+                return (True, "hunter2")
+
+        assert show_result(Proxy()) == (True, "hunter2")
+
+    def test_none_is_a_timeout(self):
+        from bwm.__main__ import show_result
+
+        ok, text = show_result(None)
+        assert ok is False
+        assert "imed out" in text
+
+    def test_a_bare_string_means_a_mismatched_daemon(self):
+        """An older daemon sent bare strings. Say so instead of guessing.
+
+        Sniffing the string for an "ERROR:" prefix is exactly the ambiguity
+        this change removes, so it is not reintroduced for the legacy shape.
+
+        """
+        from bwm.__main__ import show_result
+
+        ok, text = show_result("hunter2")
+        assert ok is False
+        assert "different version" in text and "bwm -k" in text
 
 
 class TestShowPasswordPrompt:
@@ -529,10 +584,10 @@ class TestBackgrounding:
         dmenu = self._dmenu()
         srv, dm, mgr = self._patches(dmenu)
         with srv as mock_server, dm, mgr, \
-                patch("bwm.__main__.show_fields", return_value="hunter2"):
+                patch("bwm.__main__.show_fields", return_value=(True, "hunter2")):
             result = run(foreground=False, show="github")
         mock_server.return_value.start_flag.clear.assert_called_once()
-        assert result == "hunter2"
+        assert result == (True, "hunter2")
 
     def test_no_show_leaves_the_menu_armed(self):
         from bwm.__main__ import run
@@ -707,7 +762,7 @@ class TestClipboardIsClientSide:
 
         with patch("bwm.__main__.type_clipboard", return_value=True) as clip:
             with pytest.raises(SystemExit) as exc:
-                deliver_show_result("hunter2", clipboard=True)
+                deliver_show_result(True, "hunter2", clipboard=True)
         # detach=True or the 30 second clear dies with this process and the
         # password stays on the clipboard forever
         clip.assert_called_once_with("hunter2", detach=True)
@@ -719,17 +774,17 @@ class TestClipboardIsClientSide:
 
         with patch("bwm.__main__.type_clipboard", return_value=False):
             with pytest.raises(SystemExit) as exc:
-                deliver_show_result("hunter2", clipboard=True)
+                deliver_show_result(True, "hunter2", clipboard=True)
         assert exc.value.code == 1
         assert "needed for clipboard" in capsys.readouterr().err
 
     def test_errors_are_not_copied(self, capsys):
-        """An ERROR: string must reach stderr, not the clipboard."""
+        """A failure must reach stderr, not the clipboard."""
         from bwm.__main__ import deliver_show_result
 
         with patch("bwm.__main__.type_clipboard") as clip:
             with pytest.raises(SystemExit) as exc:
-                deliver_show_result("ERROR: no match", clipboard=True)
+                deliver_show_result(False, "no match", clipboard=True)
         clip.assert_not_called()
         assert exc.value.code == 1
         assert "no match" in capsys.readouterr().err
@@ -739,7 +794,7 @@ class TestClipboardIsClientSide:
 
         with patch("bwm.__main__.type_clipboard") as clip:
             with pytest.raises(SystemExit):
-                deliver_show_result("hunter2", clipboard=False)
+                deliver_show_result(True, "hunter2", clipboard=False)
         clip.assert_not_called()
         assert capsys.readouterr().out == "hunter2\n"
 

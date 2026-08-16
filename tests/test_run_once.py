@@ -193,53 +193,78 @@ class TestShowFields:
     """Output shape of --show/--field."""
 
     def test_defaults_to_password(self, entries, sample_folders):
-        assert (
-            show_fields(entries, sample_folders, "Test Login") == "testpass123"
+        assert show_fields(entries, sample_folders, "Test Login") == (
+            True,
+            "testpass123",
         )
 
     def test_ordered_bare_values(self, entries, sample_folders):
-        out = show_fields(
+        ok, out = show_fields(
             entries,
             sample_folders,
             "Test Login",
             fields=["password", "username"],
         )
+        assert ok is True
         assert out == "testpass123\ntestuser"
 
     def test_all_is_labeled(self, entries, sample_folders):
-        out = show_fields(
+        ok, out = show_fields(
             entries, sample_folders, "Test Card", fields=["all"]
         )
+        assert ok is True
         assert "security code: 123" in out
         assert "title: Test Card" in out
         assert out.startswith("title: ")
 
     def test_no_match_error(self, entries, sample_folders):
-        out = show_fields(
-            entries, sample_folders, "nonexistent", return_errors=True
-        )
-        assert out.startswith("ERROR: No entries found")
+        ok, out = show_fields(entries, sample_folders, "nonexistent")
+        assert ok is False
+        assert out.startswith("No entries found")
 
     def test_multiple_match_error_lists_them(self, entries, sample_folders):
-        out = show_fields(entries, sample_folders, "Test", return_errors=True)
-        assert out.startswith("ERROR: Multiple entries found")
+        ok, out = show_fields(entries, sample_folders, "Test")
+        assert ok is False
+        assert out.startswith("Multiple entries found")
         assert "Test Card" in out and "Test Login" in out
 
     def test_unknown_field_error(self, entries, sample_folders):
-        out = show_fields(
+        ok, out = show_fields(
             entries,
             sample_folders,
             "Test Login",
             fields=["bogus"],
-            return_errors=True,
         )
-        assert out.startswith("ERROR: Unknown field")
+        assert ok is False
+        assert out.startswith("Unknown field")
 
-    def test_errors_to_stderr_without_return_errors(
+    def test_errors_are_not_printed_here(
         self, entries, sample_folders, capsys
     ):
-        assert show_fields(entries, sample_folders, "nonexistent") is None
-        assert "No entries found" in capsys.readouterr().err
+        """show_fields reports; the caller decides where it goes.
+
+        It runs in the daemon as often as in the client, and the daemon's
+        stderr is /dev/null.
+
+        """
+        ok, _ = show_fields(entries, sample_folders, "nonexistent")
+        assert ok is False
+        captured = capsys.readouterr()
+        assert captured.err == "" and captured.out == ""
+
+    def test_a_value_that_looks_like_an_error_is_still_a_value(
+        self, entries, sample_folders
+    ):
+        """A password starting with 'ERROR:' must be delivered, not reported.
+
+        Errors used to be signalled by that prefix on the returned string, so
+        such a password was indistinguishable from a failure.
+
+        """
+        entries[0]["login"]["password"] = "ERROR: not really"
+        ok, out = show_fields(entries, sample_folders, "Test Login")
+        assert ok is True
+        assert out == "ERROR: not really"
 
     def test_returns_text_for_the_caller_to_deliver(
         self, entries, sample_folders
@@ -252,9 +277,9 @@ class TestShowFields:
         """
         import bwm.run_once
 
-        out = show_fields(
+        ok, out = show_fields(
             entries, sample_folders, "Test Login", fields=["username"]
         )
-        assert out == "testuser"
+        assert (ok, out) == (True, "testuser")
         # Not merely unused here - the module has no way to reach it
         assert not hasattr(bwm.run_once, "type_clipboard")

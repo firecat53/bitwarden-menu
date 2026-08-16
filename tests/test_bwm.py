@@ -561,7 +561,7 @@ class TestDmenuRunnerShow:
         runner = self._runner([self._vault(entries, sample_folders)])
         with patch("bwm.bwm.dmenu_select") as sel, patch("bwm.bwm.dmenu_err") as err:
             runner.show_entry(show="Test Login", field=["username"])
-        runner.server.send_result.assert_called_once_with("testuser")
+        runner.server.send_result.assert_called_once_with((True, "testuser"))
         sel.assert_not_called()
         err.assert_not_called()
 
@@ -585,7 +585,7 @@ class TestDmenuRunnerShow:
                 field=["password"],
             )
         assert gv.call_args.kwargs["password"] == "master"
-        runner.server.send_result.assert_called_once_with("testpass123")
+        runner.server.send_result.assert_called_once_with((True, "testpass123"))
 
     def test_failed_unlock_reports_without_a_gui_prompt(
         self, entries, sample_folders
@@ -596,8 +596,8 @@ class TestDmenuRunnerShow:
                 patch("bwm.bwm.dmenu_select") as sel:
             runner.show_entry(show="x", vault="https://other.example.com")
         sel.assert_not_called()
-        sent = runner.server.send_result.call_args[0][0]
-        assert sent.startswith("ERROR:") and "Could not unlock" in sent
+        ok, sent = runner.server.send_result.call_args[0][0]
+        assert ok is False and "Could not unlock" in sent
 
     def test_gui_focus_is_restored_after_unlock(
         self, entries, sample_folders
@@ -642,7 +642,7 @@ class TestDmenuRunnerShow:
             vault="https://other.example.com",
             field=["password"],
         )
-        runner.server.send_result.assert_called_once_with("testpass123")
+        runner.server.send_result.assert_called_once_with((True, "testpass123"))
 
     def test_publish_unlocked_only_lists_sessions(self, sample_folders):
         runner = self._runner(

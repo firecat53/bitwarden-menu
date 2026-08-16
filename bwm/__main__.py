@@ -174,7 +174,7 @@ class Server(multiprocessing.Process):  # pylint: disable=too-many-instance-attr
     def send_result(self, result):
         """Send a --show result from the daemon back to the client
 
-        Args: result - string
+        Args: result - (ok, text) tuple
 
         """
         self._parent_conn.send(result)
@@ -183,7 +183,7 @@ class Server(multiprocessing.Process):  # pylint: disable=too-many-instance-attr
         """Read the --show result the daemon sent back.
 
         Args: timeout - maximum seconds to wait
-        Returns: the result string, or None on timeout
+        Returns: the (ok, text) tuple, or None on timeout
 
         """
         if self._child_conn.poll(timeout):
@@ -229,9 +229,10 @@ def run(foreground=False, **kwargs):
     Args: foreground - bool, block until the daemon exits instead of detaching
           kwargs - parsed CLI args
 
-    Returns: the --show output when this invocation started the daemon to serve
-             one, otherwise None. The parent has the unlocked vault in hand, so
-             answering here avoids a round trip through the daemon.
+    Returns: the (ok, text) --show result when this invocation started the
+             daemon to serve one, otherwise None. The parent has the unlocked
+             vault in hand, so answering here avoids a round trip through the
+             daemon.
 
     """
     # The BaseManager callables run in the manager's own process, so state the
@@ -260,7 +261,6 @@ def run(foreground=False, **kwargs):
                 dmenu.vault.folders,
                 kwargs.get("show", ""),
                 fields=kwargs.get("field"),
-                return_errors=True,
             )
         dmenu.daemon = foreground
         server.start()
@@ -296,7 +296,30 @@ def leave(code=0, detached=False):
     os._exit(code)  # pylint: disable=protected-access
 
 
-def deliver_show_result(result, clipboard=False, detached=False):
+def show_result(raw):
+    """Normalize what came back over the manager into (ok, text).
+
+    Args: raw - an (ok, text) tuple, an AutoProxy wrapping one, or None on
+                timeout
+
+    Returns: tuple (ok, text)
+
+    """
+    if hasattr(raw, "_getvalue"):
+        # AutoProxy objects need _getvalue() for the actual object
+        raw = raw._getvalue()
+    if isinstance(raw, tuple) and len(raw) == 2:
+        return raw
+    if raw is None:
+        return False, "Timed out waiting for the bwm daemon to answer."
+    # A daemon started before --show results became structured
+    return False, (
+        "The running bwm daemon is from a different version of bwm. "
+        "Kill it (bwm -k) and try again."
+    )
+
+
+def deliver_show_result(ok, text, clipboard=False, detached=False):
     """Print a --show result, or put it on the clipboard, and exit.
 
     The copy happens here in the client, not in the daemon: the clipboard
@@ -304,26 +327,27 @@ def deliver_show_result(result, clipboard=False, detached=False):
     it was started with. A daemon started from a tty has no DISPLAY or
     WAYLAND_DISPLAY, so it would hunt for the wrong clipboard tool forever.
 
-    Args: result - string from the daemon or from run(). None on failure, an
-                   'ERROR: ' prefixed message on a reported error.
+    Args: ok - False if text is an error message rather than a field value.
+               A flag rather than a marker in the text, so that a password
+               starting with "ERROR:" is delivered instead of reported.
+          text - the field value(s), or the error message
           clipboard - copy instead of printing
           detached - True once the daemon children are running
 
     """
-    if result is None:
-        leave(1, detached)
-    if result.startswith("ERROR:"):
-        print(result[7:], file=sys.stderr)  # Strip "ERROR: " prefix
+    if not ok:
+        if text:
+            print(text, file=sys.stderr)
         leave(1, detached)
     if clipboard:
         # detach: this process exits on the next line, so the 30 second clear
         # has to outlive it
-        if not type_clipboard(result, detach=True):
+        if not type_clipboard(text, detach=True):
             print(bwm.clipboard_missing_msg(), file=sys.stderr)
             leave(1, detached)
         leave(0, detached)
-    if result:
-        print(result)
+    if text:
+        print(text)
     leave(0, detached)
 
 
@@ -533,8 +557,10 @@ def main():
         # prompted for here, before run() detaches.
         result = run(**args)
         if args.get("show"):
+            ok, text = show_result(result)
             deliver_show_result(
-                result,
+                ok,
+                text,
                 clipboard=bool(args.get("clipboard")),
                 detached=not foreground,
             )
@@ -560,12 +586,10 @@ def main():
         manager.set_event()  # pylint: disable=no-member
         if args.get("show"):
             # The daemon has no terminal, so it sends the result back here
-            result = manager.receive_show_result()  # pylint: disable=no-member
-            # AutoProxy objects need _getvalue() for the actual string
-            if hasattr(result, "_getvalue"):
-                result = result._getvalue()
+            raw = manager.receive_show_result()  # pylint: disable=no-member
+            ok, text = show_result(raw)
             deliver_show_result(
-                result, clipboard=bool(args.get("clipboard"))
+                ok, text, clipboard=bool(args.get("clipboard"))
             )
     except ConnectionRefusedError:
         # Don't print the ConnectionRefusedError if any other exceptions are raised.

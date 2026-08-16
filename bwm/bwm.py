@@ -881,7 +881,7 @@ class DmenuRunner(multiprocessing.Process):
         """Handle a --show request and send the result back to the client.
 
         Runs in the daemon, which has no terminal, so this must never call a
-        launcher or prompt. Errors travel back as 'ERROR: ' strings.
+        launcher or prompt. Results travel back as an (ok, text) tuple.
 
         Args: kwargs - the client's parsed args
 
@@ -902,19 +902,19 @@ class DmenuRunner(multiprocessing.Process):
                 vault = self.unlock_for_show(**kwargs)
                 if vault is None:
                     self.server.send_result(
-                        f"ERROR: Could not unlock vault {url}."
+                        (False, f"Could not unlock vault {url}.")
                     )
                     return
             else:
                 vault = matched[0]
-        result = show_fields(
-            vault.entries,
-            vault.folders,
-            kwargs.get("show", ""),
-            fields=kwargs.get("field"),
-            return_errors=True,
+        self.server.send_result(
+            show_fields(
+                vault.entries,
+                vault.folders,
+                kwargs.get("show", ""),
+                fields=kwargs.get("field"),
+            )
         )
-        self.server.send_result(result or "")
 
     def _set_timer(self):
         """Set inactivity timer"""

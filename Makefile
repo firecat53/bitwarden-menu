@@ -7,7 +7,7 @@ all: venv
 $(VENV)/bin/activate: pyproject.toml
 	python3 -m venv $(VENV)
 	$(PIP) install -U pip wheel
-	$(PIP) install '.[autotype,test]'
+	$(PIP) install -e '.[autotype,test]'
 
 venv: $(VENV)/bin/activate
 

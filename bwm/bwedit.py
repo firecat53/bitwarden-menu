@@ -8,12 +8,11 @@ import shlex
 import string
 from subprocess import call
 import tempfile
-from urllib import parse
 
 from bwm import bwcli
 from bwm.bwtype import autotype_index, autotype_seq, type_text
 from bwm.menu import dmenu_select, dmenu_err
-from bwm.totp import gen_otp
+from bwm.totp import gen_otp, otp_params
 import bwm
 
 
@@ -494,9 +493,8 @@ def edit_totp(entry):  # pylint: disable=too-many-statements,too-many-branches
     elif otp_choice == "Enter secret key":
         inputs = []
         if otp_url:
-            parsed_otp_url = parse.urlparse(otp_url)
-            query_string = parse.parse_qs(parsed_otp_url.query)
-            inputs = [query_string["secret"][0]]
+            # Empty for a value gen_otp() can't read, so it isn't prefilled
+            inputs = [otp_params(otp_url).get("key", "")]
         secret_key = dmenu_select(1, "Secret Key?", inp="\n".join(inputs))
 
         if secret_key is None:

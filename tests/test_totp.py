@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bwm.totp import hotp, totp, gen_otp
+from bwm.totp import hotp, totp, gen_otp, otp_params
 
 
 class TestHOTP:
@@ -104,22 +104,60 @@ class TestGenOTP:
         assert result.isdigit()
 
     def test_gen_otp_missing_secret(self):
-        """Test that missing secret returns empty string."""
+        """Test that a URL with no secret returns empty string."""
         otp_url = "otpauth://totp/Test:user@example.com?period=30&digits=6&issuer=Test"
         result = gen_otp(otp_url)
         assert result == ""
 
-    def test_gen_otp_missing_period(self):
-        """Test that missing period returns empty string."""
-        otp_url = "otpauth://totp/Test:user@example.com?secret=JBSWY3DPEHPK3PXP&digits=6&issuer=Test"
-        result = gen_otp(otp_url)
-        assert result == ""
+    def test_gen_otp_missing_period_defaults_to_30(self):
+        """Test that a URL with no period uses the RFC 6238 default."""
+        secret = "JBSWY3DPEHPK3PXP"
+        otp_url = (
+            f"otpauth://totp/Test:user@example.com?secret={secret}&digits=6"
+        )
+        with patch("bwm.totp.time.time", return_value=1700000000):
+            result = gen_otp(otp_url)
+            expected = totp(secret, 30, 6, "sha1")
+        assert result == expected
 
-    def test_gen_otp_missing_digits(self):
-        """Test that missing digits returns empty string."""
-        otp_url = "otpauth://totp/Test:user@example.com?secret=JBSWY3DPEHPK3PXP&period=30&issuer=Test"
-        result = gen_otp(otp_url)
-        assert result == ""
+    def test_gen_otp_missing_digits_defaults_to_6(self):
+        """Test that a URL with no digits uses the RFC 6238 default."""
+        secret = "JBSWY3DPEHPK3PXP"
+        otp_url = (
+            f"otpauth://totp/Test:user@example.com?secret={secret}&period=30"
+        )
+        with patch("bwm.totp.time.time", return_value=1700000000):
+            result = gen_otp(otp_url)
+            expected = totp(secret, 30, 6, "sha1")
+        assert result == expected
+
+    def test_gen_otp_secret_only(self):
+        """Test a URL carrying nothing but the secret.
+
+        The Bitwarden clients write this when the scanned QR code omits the
+        optional parameters.
+
+        """
+        secret = "JBSWY3DPEHPK3PXP"
+        otp_url = (
+            f"otpauth://totp/Test:user@example.com?secret={secret}&issuer=Test"
+        )
+        with patch("bwm.totp.time.time", return_value=1700000000):
+            result = gen_otp(otp_url)
+            expected = totp(secret, 30, 6, "sha1")
+        assert result == expected
+
+    def test_gen_otp_unparseable_period_and_digits(self):
+        """Test that junk in period/digits falls back to the defaults."""
+        secret = "JBSWY3DPEHPK3PXP"
+        otp_url = (
+            f"otpauth://totp/Test:user@example.com?secret={secret}"
+            "&period=soon&digits=lots"
+        )
+        with patch("bwm.totp.time.time", return_value=1700000000):
+            result = gen_otp(otp_url)
+            expected = totp(secret, 30, 6, "sha1")
+        assert result == expected
 
     def test_gen_otp_steam_encoder(self):
         """Test OTP generation with steam encoder."""
@@ -143,6 +181,79 @@ class TestGenOTP:
         result = gen_otp(otp_url)
         assert len(result) == 6
         assert result.isdigit()
+
+
+class TestGenOTPNonURL:
+    """Tests for the TOTP values that aren't otpauth:// URLs.
+
+    Bitwarden stores the TOTP field as it was entered, so it also holds a
+    bare base32 secret or a steam:// URL.
+
+    """
+
+    def test_gen_otp_bare_secret(self):
+        """Test a bare base32 secret, as stored by pasting a key."""
+        secret = "JBSWY3DPEHPK3PXP"
+        with patch("bwm.totp.time.time", return_value=1700000000):
+            result = gen_otp(secret)
+            expected = totp(secret, 30, 6, "sha1")
+        assert result == expected
+
+    def test_gen_otp_bare_secret_with_spaces(self):
+        """Test that the spacing Bitwarden preserves in a key is ignored."""
+        secret = "JBSWY3DPEHPK3PXP"
+        with patch("bwm.totp.time.time", return_value=1700000000):
+            result = gen_otp("JBSW Y3DP EHPK 3PXP")
+            expected = totp(secret, 30, 6, "sha1")
+        assert result == expected
+
+    def test_gen_otp_steam_url(self):
+        """Test a steam:// URL, which implies a 5 character steam token."""
+        secret = "JBSWY3DPEHPK3PXP"
+        with patch("bwm.totp.time.time", return_value=1700000000):
+            result = gen_otp(f"steam://{secret}")
+            expected = totp(secret, 30, 5, "sha1", steam=True)
+        assert result == expected
+        assert len(result) == 5
+        for char in result:
+            assert char in "23456789BCDFGHJKMNPQRTVWXY"
+
+    @pytest.mark.parametrize("value", ["", "   ", "not a secret!", "1"])
+    def test_gen_otp_unusable_value_returns_empty(self, value):
+        """Test that a value no code can be made from returns empty string.
+
+        A TOTP field holding something unreadable must not raise out of
+        gen_otp() and take down the caller.
+
+        """
+        assert gen_otp(value) == ""
+
+    def test_gen_otp_unknown_algorithm_returns_empty(self):
+        """Test that an algorithm hashlib doesn't know returns empty string."""
+        otp_url = (
+            "otpauth://totp/Test:user@example.com?secret=JBSWY3DPEHPK3PXP"
+            "&period=30&digits=6&algorithm=sha3"
+        )
+        assert gen_otp(otp_url) == ""
+
+
+class TestOTPParams:
+    """Tests for the parsed parameters used to prefill the edit menu."""
+
+    def test_otp_params_secret_from_each_form(self):
+        """Test that the secret is recovered from all three stored forms."""
+        secret = "JBSWY3DPEHPK3PXP"
+        for value in (
+            secret,
+            f"steam://{secret}",
+            f"otpauth://totp/Test:user?secret={secret}&period=30&digits=6",
+        ):
+            assert otp_params(value)["key"] == secret
+
+    def test_otp_params_empty_when_unusable(self):
+        """Test that a value with no secret parses to an empty dict."""
+        assert otp_params("otpauth://totp/Test:user?issuer=Test") == {}
+        assert otp_params("") == {}
 
 
 class TestGenOTPAlgorithm:

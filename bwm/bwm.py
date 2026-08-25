@@ -1,6 +1,7 @@
 """Bitwarden-menu main module"""
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum, auto
 from functools import partial
 from getpass import getpass
@@ -94,6 +95,7 @@ class Vault:  # pylint: disable=too-many-instance-attributes
     bwcliserver: BWCLIServer | None = field(default=None)
     use_serve: bool = field(default=True)  # Try to use bw serve by default
     prev_entry: list[bwcli.Item] = field(default=None)
+    last_sync: str = field(default=None)
     entries: list[bwcli.Item] = field(default_factory=bwcli.Item)
     folders: dict[dict] = field(default_factory=dict)
     collections: dict[dict] = field(default_factory=dict)
@@ -281,6 +283,11 @@ def set_vault(vaults):
     logging.debug(
         f"set_vault: Initial status check - {status.get('status') if status else 'error'}"
     )
+    # `bw status` is the only cheap source for this: it is already being called
+    # here, while asking again per menu open would cost an HTTP round trip (or
+    # a ~1.5s Node startup without `bw serve`). sync_vault() keeps it current.
+    if status:
+        vault.last_sync = status.get("lastSync") or None
 
     err = ""
     # Server availability is only ever tested for operations that have already failed or
@@ -657,8 +664,57 @@ def sync_vault(vault):
 
     """
     if vault.bwcliserver:
-        return vault.bwcliserver.sync()
-    return bwcli.sync(vault.session)
+        res = vault.bwcliserver.sync()
+    else:
+        res = bwcli.sync(vault.session)
+    if res is not False:
+        # Every successful sync goes through here, so stamping it keeps the
+        # menu label current without re-reading `bw status`.
+        vault.last_sync = datetime.now(timezone.utc).isoformat()
+    return res
+
+
+def format_last_sync(last_sync):
+    """Render a vault's lastSync timestamp as a relative age
+
+    Units are truncated, not rounded, so the age never reads fresher than the
+    vault actually is.
+
+    Args: last_sync - ISO 8601 timestamp string, or None if never synced
+    Returns: string, e.g. "3 hours ago", "just now" or "never"
+
+    """
+    if not last_sync:
+        return "never"
+    try:
+        # `bw` reports UTC as a trailing 'Z', which fromisoformat only accepts
+        # from Python 3.11.
+        stamp = datetime.fromisoformat(str(last_sync).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        logging.debug(f"format_last_sync: unparseable timestamp {last_sync!r}")
+        return "unknown"
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    seconds = (datetime.now(timezone.utc) - stamp).total_seconds()
+    if seconds < 0:
+        # Clock skew between this machine and the vault server
+        return "just now"
+    minutes = int(seconds // 60)
+    hours = int(seconds // 3600)
+    days = int(seconds // 86400)
+    if minutes < 1:
+        return "just now"
+    if minutes < 60:
+        count, unit = minutes, "minute"
+    elif hours < 24:
+        count, unit = hours, "hour"
+    elif days < 7:
+        count, unit = days, "day"
+    elif days < 30:
+        count, unit = days // 7, "week"
+    else:
+        count, unit = days // 30, "month"
+    return f"{count} {unit}{'' if count == 1 else 's'} ago"
 
 
 def lock_vault(vault):
@@ -720,6 +776,7 @@ def dmenu_run(vault):
 
         return wrapper
 
+    sync_label = f"Sync vault (last sync {format_last_sync(vault.last_sync)})"
     options = {
         "View/Type Individual entries": partial(
             dmenu_view, entries_hid, vault.folders
@@ -751,7 +808,7 @@ def dmenu_run(vault):
         "Manage collections": needs_server(
             partial(dmenu_collections, vault.collections, vault)
         ),
-        "Sync vault": partial(dmenu_sync, vault),
+        sync_label: partial(dmenu_sync, vault),
         "Switch vaults": None,
         "[Clipboard]/Type"
         if bwm.CLIPBOARD is True
@@ -764,7 +821,7 @@ def dmenu_run(vault):
     if sel == "Lock vault":  # Kill bwm daemon
         options[sel]()
         return Run.LOCK
-    if sel == "Sync vault":
+    if sel == sync_label:
         # Nothing to reload if the sync was skipped or failed
         return Run.RELOAD if options[sel]() else Run.CONTINUE
     if sel == "Switch vaults":

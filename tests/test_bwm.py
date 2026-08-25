@@ -1,6 +1,7 @@
 """Tests for bwm.bwm module - vault selection, data directories, and CLI args."""
 
 import configparser
+from datetime import datetime, timedelta, timezone
 import json
 import multiprocessing
 import os
@@ -9,7 +10,17 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from bwm.bwm import Vault, check_online, dmenu_sync, get_vault, set_vault
+from bwm.bwm import (
+    Run,
+    Vault,
+    check_online,
+    dmenu_run,
+    dmenu_sync,
+    format_last_sync,
+    get_vault,
+    set_vault,
+    sync_vault,
+)
 
 
 @pytest.fixture
@@ -1181,3 +1192,98 @@ class TestSyncAndLockPreferTheRunningServer:
 
         lock_vault.assert_called_once_with(runner.vault)
         cli_lock.assert_not_called()
+
+
+class TestLastSyncLabel:
+    """The main menu's sync option carries the vault's last sync age.
+
+    Nothing syncs on its own - the label just tells the user how stale the
+    vault is so they can decide whether to sync.
+
+    """
+
+    @staticmethod
+    def _ago(**kwargs):
+        stamp = datetime.now(timezone.utc) - timedelta(**kwargs)
+        # `bw` reports UTC with a trailing 'Z'
+        return stamp.isoformat().replace("+00:00", "Z")
+
+    @pytest.mark.parametrize(
+        "delta, expected",
+        [
+            ({"seconds": 0}, "just now"),
+            ({"seconds": 59}, "just now"),
+            ({"minutes": 1}, "1 minute ago"),
+            ({"minutes": 5}, "5 minutes ago"),
+            ({"minutes": 59}, "59 minutes ago"),
+            ({"hours": 1}, "1 hour ago"),
+            ({"hours": 23}, "23 hours ago"),
+            ({"days": 1}, "1 day ago"),
+            ({"days": 6}, "6 days ago"),
+            ({"days": 7}, "1 week ago"),
+            ({"days": 21}, "3 weeks ago"),
+            ({"days": 29}, "4 weeks ago"),
+            ({"days": 30}, "1 month ago"),
+            ({"days": 365}, "12 months ago"),
+        ],
+    )
+    def test_ages_render_with_the_right_unit(self, delta, expected):
+        assert format_last_sync(self._ago(**delta)) == expected
+
+    def test_units_truncate_rather_than_round(self):
+        """A vault 2h59m stale must not read as 3 hours - truncating keeps the
+        label from ever claiming the vault is fresher than it is."""
+        assert (
+            format_last_sync(self._ago(hours=2, minutes=59)) == "2 hours ago"
+        )
+
+    def test_never_synced(self):
+        assert format_last_sync(None) == "never"
+        assert format_last_sync("") == "never"
+
+    def test_unparseable_timestamp_does_not_raise(self):
+        assert format_last_sync("not-a-date") == "unknown"
+
+    def test_naive_timestamp_is_treated_as_utc(self):
+        naive = (datetime.now(timezone.utc) - timedelta(hours=3)).replace(
+            tzinfo=None
+        )
+        assert format_last_sync(naive.isoformat()) == "3 hours ago"
+
+    def test_clock_skew_does_not_produce_a_negative_age(self):
+        future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        assert format_last_sync(future) == "just now"
+
+    def test_successful_sync_stamps_the_vault(self, vault_a):
+        vault_a.session = b"session"
+        vault_a.last_sync = self._ago(days=9)
+        with patch("bwm.bwm.bwcli.sync", return_value=True):
+            assert sync_vault(vault_a) is True
+        assert format_last_sync(vault_a.last_sync) == "just now"
+
+    def test_failed_sync_leaves_the_stamp_alone(self, vault_a):
+        """A failed sync must not make the vault look freshly synced."""
+        vault_a.session = b"session"
+        stale = self._ago(days=9)
+        vault_a.last_sync = stale
+        with patch("bwm.bwm.bwcli.sync", return_value=False):
+            assert sync_vault(vault_a) is False
+        assert vault_a.last_sync == stale
+
+    def test_menu_option_is_labelled_and_still_dispatches(self, vault_a):
+        """The label is the dict key, so the dispatch in dmenu_run has to match
+        the same dynamic string it built."""
+        vault_a.last_sync = self._ago(hours=4)
+        label = "Sync vault (last sync 4 hours ago)"
+        with patch("bwm.bwm.view_all_entries", return_value=label) as view, \
+                patch("bwm.bwm.dmenu_sync", return_value=True) as sync:
+            assert dmenu_run(vault_a) is Run.RELOAD
+        sync.assert_called_once_with(vault_a)
+        assert label in view.call_args[0][0]
+
+    def test_failed_sync_from_the_menu_does_not_reload(self, vault_a):
+        vault_a.last_sync = None
+        label = "Sync vault (last sync never)"
+        with patch("bwm.bwm.view_all_entries", return_value=label), \
+                patch("bwm.bwm.dmenu_sync", return_value=False):
+            assert dmenu_run(vault_a) is Run.CONTINUE

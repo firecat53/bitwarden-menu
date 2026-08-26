@@ -83,6 +83,40 @@ class TestDmenuCmd:
         assert "-l" in cmd
 
     @patch("bwm.menu.bwm")
+    def test_wmenu_basic_command(self, mock_bwm):
+        """Test basic wmenu command building."""
+        mock_conf = configparser.ConfigParser()
+        mock_conf.add_section("dmenu")
+        mock_conf.set("dmenu", "dmenu_command", "wmenu")
+        mock_conf.add_section("dmenu_passphrase")
+        mock_conf.set("dmenu_passphrase", "obscure", "False")
+        mock_bwm.CONF = mock_conf
+
+        from bwm.menu import dmenu_cmd
+
+        cmd = dmenu_cmd(10, "Test Prompt")
+        assert "wmenu" in cmd
+        assert "-p" in cmd
+        assert "Test Prompt" in cmd
+        assert "-l" in cmd
+        assert "10" in cmd
+
+    @patch("bwm.menu.bwm")
+    def test_password_prompt_obscure_wmenu(self, mock_bwm):
+        """Test wmenu password prompt adds -P flag."""
+        mock_conf = configparser.ConfigParser()
+        mock_conf.add_section("dmenu")
+        mock_conf.set("dmenu", "dmenu_command", "wmenu")
+        mock_conf.add_section("dmenu_passphrase")
+        mock_conf.set("dmenu_passphrase", "obscure", "True")
+        mock_bwm.CONF = mock_conf
+
+        from bwm.menu import dmenu_cmd
+
+        cmd = dmenu_cmd(1, "Password")
+        assert "-P" in cmd
+
+    @patch("bwm.menu.bwm")
     def test_password_prompt_obscure_rofi(self, mock_bwm):
         """Test rofi password prompt adds -password flag."""
         mock_conf = configparser.ConfigParser()
@@ -213,6 +247,7 @@ class TestDmenuPass:
         assert dmenu_pass("rofi") is None
         assert dmenu_pass("wofi") is None
         assert dmenu_pass("bemenu") is None
+        assert dmenu_pass("wmenu") is None
 
     @patch("bwm.menu.run")
     @patch("bwm.menu.bwm")

@@ -22,6 +22,7 @@ def dmenu_cmd(num_lines, prompt, obscure=None):
         "bemenu": ["-p", str(prompt), "-l", str(num_lines)],
         "dmenu": ["-p", str(prompt), "-l", str(num_lines)],
         "rofi": ["-dmenu", "-p", str(prompt), "-l", str(num_lines)],
+        "wmenu": ["-p", str(prompt), "-l", str(num_lines)],
         "wofi": ["--dmenu", "-p", str(prompt), "-L", str(num_lines + 1)],
     }
     command = shlex.split(
@@ -49,6 +50,7 @@ def dmenu_cmd(num_lines, prompt, obscure=None):
             "dmenu": dmenu_pass(command[0]),
             "rofi": ["-password"],
             "bemenu": ["-x", "indicator", "*"],
+            "wmenu": ["-P"],
             "wofi": ["-P"],
         }
         command.extend(pass_prompts.get(command[0], []))

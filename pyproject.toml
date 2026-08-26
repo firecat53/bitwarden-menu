@@ -17,6 +17,7 @@ keywords = [
     "bwm",
     "dmenu",
     "rofi",
+    "wmenu",
     "wofi",
 ]
 classifiers = [

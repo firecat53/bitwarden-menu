@@ -13,7 +13,7 @@ The rest is only needed for the interactive (launcher) mode:
 4. [Pynput][2], for auto-typing as the default `type_library`. Installed by
    `pip install bitwarden-menu[autotype]`, or use one of the alternate type
    libraries in item 7.
-5. Dmenu, [Rofi][3], [Wofi][7] or [Bemenu][4]
+5. Dmenu, [Rofi][3], [Wofi][7], [Wmenu][8] or [Bemenu][4]
 6. (optional) Pinentry. Make sure to set which flavor of pinentry command to use
    in the config file.
 7. (optional) xdotool, ydotool(>= 1.0.0) or wtype (for Wayland). If you have a
@@ -107,3 +107,4 @@ Link to the executable `/path/to/venv/bin/bwm` when assigning a keyboard shortcu
 [5]: https://aur.archlinux.org/packages/bitwarden-menu-git "Archlinux AUR"
 [6]: https://pypi.org/project/xdg-base-dirs/ "Xdg"
 [7]: https://hg.sr.ht/~scoopta/wofi "Wofi"
+[8]: https://codeberg.org/adnano/wmenu "Wmenu"

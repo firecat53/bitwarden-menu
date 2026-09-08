@@ -40,7 +40,7 @@ The rest is only needed for the interactive (launcher) mode:
 
 4. [Pynput][1] (`pip install bitwarden-menu[autotype]`), or one of the alternate
    type libraries below
-5. Dmenu, [Rofi][3], [Wofi][7] or [Bemenu][4]
+5. Dmenu, [Rofi][3], [Wofi][7], [Wmenu][8] or [Bemenu][4]
 6. xsel or wl-copy
 7. (optional) Pinentry.
 8. (optional) xdotool, ydotool(>= 1.0.0)/wtype (for Wayland).
@@ -149,3 +149,4 @@ pytest
 [5]: https://github.com/dani-garcia/vaultwarden "Vaultwarden"
 [6]: https://pypi.org/project/xdg/ "Xdg"
 [7]: https://hg.sr.ht/~scoopta/wofi "Wofi"
+[8]: https://codeberg.org/adnano/wmenu "Wmenu"

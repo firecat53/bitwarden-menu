@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Bitwarden-menu (`bwm`) is a dmenu/rofi/bemenu/tofi/wofi frontend for Bitwarden and
+Bitwarden-menu (`bwm`) is a dmenu/rofi/bemenu/tofi/wmenu/wofi frontend for Bitwarden and
 Vaultwarden vaults, driving the Bitwarden CLI (`bw`) underneath. It also works
 headless as a CLI-only password lookup via `--show`.
 

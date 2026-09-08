@@ -494,13 +494,13 @@ def get_initial_vault(url=None, email=None):
     """
     if not url:
         url = dmenu_select(
-            0, "Enter server URL.", "https://vault.bitwarden.com"
+            0, "Server URL", "https://vault.bitwarden.com"
         )
         if not url:
             dmenu_err("No URL entered. Try again.")
             return False
     if not email:
-        email = dmenu_select(0, "Enter login email address.")
+        email = dmenu_select(0, "Login email")
         if not email:
             dmenu_err("No login email address entered. Try again.")
             return False

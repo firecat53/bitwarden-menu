@@ -1,5 +1,6 @@
 """Launcher functions"""
 
+from os.path import basename
 import shlex
 import sys
 from subprocess import run
@@ -21,14 +22,21 @@ def dmenu_cmd(num_lines, prompt, obscure=None):
     commands = {
         "bemenu": ["-p", str(prompt), "-l", str(num_lines)],
         "dmenu": ["-p", str(prompt), "-l", str(num_lines)],
-        "rofi": ["-dmenu", "-p", str(prompt), "-l", str(num_lines)],
         "wmenu": ["-p", str(prompt), "-l", str(num_lines)],
+        "rofi": ["-dmenu", "-p", str(prompt), "-l", str(num_lines)],
+        "tofi": ["--require-match=false",
+                 f"--prompt-text={str(prompt)}: ",
+                 f"--num-results={str(num_lines)}"],
         "wofi": ["--dmenu", "-p", str(prompt), "-L", str(num_lines + 1)],
+        "yofi": ["-p", str(prompt)],
+        "fuzzel": ["--dmenu", "-p", str(prompt) + " ", "-l", str(num_lines)],
     }
     command = shlex.split(
         bwm.CONF.get("dmenu", "dmenu_command", fallback="dmenu")
     )
-    command.extend(commands.get(command[0], []))
+    # basename so that an absolute dmenu_command (/usr/bin/rofi) still matches
+    launcher = basename(command[0])
+    command.extend(commands.get(launcher, []))
     # Matching on the prompt text is a fallback for callers that don't say.
     # It has to stay an exact match: "Password Options" and "Password Length?"
     # are menus that would become unreadable if they were hidden. Callers that
@@ -47,38 +55,49 @@ def dmenu_cmd(num_lines, prompt, obscure=None):
     )
     if obscure and conf_obscure is True:
         pass_prompts = {
-            "dmenu": dmenu_pass(command[0]),
             "rofi": ["-password"],
             "bemenu": ["-x", "indicator", "*"],
-            "wmenu": ["-P"],
+            "tofi": ["--hide-input=true", "--hidden-character=*"],
             "wofi": ["-P"],
+            "yofi": ["--password"],
+            "fuzzel": ["--password"],
         }
-        command.extend(pass_prompts.get(command[0], []))
+        # dmenu_pass runs the launcher to look for the password patch, so only
+        # call it for the launcher actually in use.
+        if launcher in ("dmenu", "wmenu"):
+            command.extend(dmenu_pass(launcher))
+        else:
+            command.extend(pass_prompts.get(launcher, []))
+    if launcher == "yofi":
+        # A subcommand, so it goes after every option, --password included
+        command.append("dialog")
     return command
 
 
 def dmenu_pass(command):
-    """Check if dmenu passphrase patch is applied and return the correct command
-    line arg list
+    """Check if the dmenu passphrase patch is applied and return the correct
+    command line arg list for dmenu or wmenu
 
     Args: command - string
     Returns: list or None
 
     """
-    if command != "dmenu":
+    if command not in ("dmenu", "wmenu"):
         return None
     try:
         # Check for dmenu password patch
         dm_patch = (
             b"P"
-            in run(["dmenu", "-h"], capture_output=True, check=False).stderr
+            in run([command, "-h"], capture_output=True, check=False).stderr
         )
     except FileNotFoundError:
         dm_patch = False
     color = bwm.CONF.get(
         "dmenu_passphrase", "obscure_color", fallback="#222222"
     )
-    return ["-P"] if dm_patch else ["-nb", color, "-nf", color]
+    dargs = {"dmenu": ["-nb", color, "-nf", color],
+             "wmenu": ["-n", color, "-N", color]}
+    return ["-P"] if dm_patch else dargs[command]
 
 
 def dmenu_select(num_lines, prompt="Entries", inp="", obscure=None):
@@ -93,7 +112,19 @@ def dmenu_select(num_lines, prompt="Entries", inp="", obscure=None):
     Returns: sel - string
 
     """
+    # With no lines, rofi and fuzzel show only the input box, hiding a
+    # suggested value like the default server URL.
+    if inp and num_lines < 1:
+        num_lines = 1
     cmd = dmenu_cmd(num_lines, prompt, obscure=obscure)
+    # wofi shows the prompt as GTK placeholder text, which disappears whenever
+    # the input box has focus - and it always does when there's no list. A
+    # blank row keeps focus on the list, and --exec-search makes enter return
+    # what was typed even when it matches that row.
+    wofi_filler = basename(cmd[0]) == "wofi" and not inp
+    if wofi_filler:
+        cmd.append("--exec-search")
+        inp = " \n"
     try:
         res = run(
             cmd,
@@ -110,7 +141,11 @@ def dmenu_select(num_lines, prompt="Entries", inp="", obscure=None):
         # Without this the launcher failing (no display, bad config) is
         # indistinguishable from the user cancelling, and bwm exits silently.
         print(f"dmenu command error: {res.stderr.strip()}", file=sys.stderr)
-    return res.stdout.rstrip("\n") if res.stdout is not None else None
+    if res.stdout is None:
+        return None
+    sel = res.stdout.rstrip("\n")
+    # Enter on an empty wofi input box selects the blank row
+    return "" if wofi_filler and sel == " " else sel
 
 
 def dmenu_err(prompt):

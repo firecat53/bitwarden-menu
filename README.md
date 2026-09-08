@@ -4,8 +4,9 @@
 ![PyPI](https://img.shields.io/pypi/v/bitwarden-menu)
 ![GitHub contributors](https://img.shields.io/github/contributors/firecat53/bitwarden-menu)
 
-Dmenu/Rofi frontend for managing Bitwarden vaults. Uses the [Bitwarden CLI][2]
-tool to interact with the Bitwarden database.
+[Bemenu][4]/Dmenu/[Wmenu][8]/[Fuzzel][9]/[Rofi][3]/[Tofi][10]/[Wofi][7]/[Yofi][11]
+frontend for managing Bitwarden vaults. Uses the [Bitwarden CLI][2] tool to
+interact with the Bitwarden database.
 
 This project is not associated with the Bitwarden project nor 8bit Solutions
 LLC.
@@ -40,7 +41,7 @@ The rest is only needed for the interactive (launcher) mode:
 
 4. [Pynput][1] (`pip install bitwarden-menu[autotype]`), or one of the alternate
    type libraries below
-5. Dmenu, [Rofi][3], [Wofi][7], [Wmenu][8] or [Bemenu][4]
+5. Bemenu, Dmenu, Wmenu, Fuzzel, Rofi, Tofi, Wofi, or Yofi
 6. xsel or wl-copy
 7. (optional) Pinentry.
 8. (optional) xdotool, ydotool(>= 1.0.0)/wtype (for Wayland).
@@ -86,6 +87,8 @@ The rest is only needed for the interactive (launcher) mode:
 `bwm [-h] [-V] [-v VAULT] [-l LOGIN] [-k] [-a AUTOTYPE] [-C] [-c CONFIGPATH] [-s SEARCH] [-f FIELD] [-F]`
 
 - Run `bwm` or bind to keystroke combination.
+- If run initially from the terminal, `bwm` will prompt for desired
+  launcher/terminal/type library and configure an initial config.ini.
 - Enter account URL on first run.
 - Start typing to match entries.
 - [Configure](docs/configure.md) ~/.config/bwm/config.ini as desired.
@@ -150,3 +153,6 @@ pytest
 [6]: https://pypi.org/project/xdg/ "Xdg"
 [7]: https://hg.sr.ht/~scoopta/wofi "Wofi"
 [8]: https://codeberg.org/adnano/wmenu "Wmenu"
+[9]: https://codeberg.org/dnkl/fuzzel "Fuzzel"
+[10]: https://github.com/philj56/tofi "Tofi"
+[11]: https://github.com/l4l/yofi "Yofi"

@@ -101,9 +101,11 @@ class TestDmenuCmd:
         assert "-l" in cmd
         assert "10" in cmd
 
+    @patch("bwm.menu.dmenu_pass", return_value=["-P"])
     @patch("bwm.menu.bwm")
-    def test_password_prompt_obscure_wmenu(self, mock_bwm):
-        """Test wmenu password prompt adds -P flag."""
+    def test_password_prompt_obscure_wmenu(self, mock_bwm, mock_pass):
+        """wmenu password prompts get dmenu_pass's flags. dmenu_pass runs the
+        real `wmenu -h`, so it's mocked: the patch may not be installed."""
         mock_conf = configparser.ConfigParser()
         mock_conf.add_section("dmenu")
         mock_conf.set("dmenu", "dmenu_command", "wmenu")
@@ -114,7 +116,8 @@ class TestDmenuCmd:
         from bwm.menu import dmenu_cmd
 
         cmd = dmenu_cmd(1, "Password")
-        assert "-P" in cmd
+        assert cmd[-1] == "-P"
+        mock_pass.assert_called_once_with("wmenu")
 
     @patch("bwm.menu.bwm")
     def test_password_prompt_obscure_rofi(self, mock_bwm):
@@ -247,7 +250,42 @@ class TestDmenuPass:
         assert dmenu_pass("rofi") is None
         assert dmenu_pass("wofi") is None
         assert dmenu_pass("bemenu") is None
-        assert dmenu_pass("wmenu") is None
+
+    @patch("bwm.menu.run")
+    @patch("bwm.menu.bwm")
+    def test_wmenu_with_P_patch(self, mock_bwm, mock_run):
+        """wmenu is probed for the password patch just like dmenu."""
+        mock_conf = configparser.ConfigParser()
+        mock_conf.add_section("dmenu_passphrase")
+        mock_bwm.CONF = mock_conf
+        mock_run.return_value = CompletedProcess(
+            args=["wmenu", "-h"], returncode=0, stdout=b"",
+            stderr=b"usage: wmenu [-biPv]",
+        )
+
+        from bwm.menu import dmenu_pass
+
+        assert dmenu_pass("wmenu") == ["-P"]
+        mock_run.assert_called_once_with(
+            ["wmenu", "-h"], capture_output=True, check=False
+        )
+
+    @patch("bwm.menu.run")
+    @patch("bwm.menu.bwm")
+    def test_wmenu_without_P_patch(self, mock_bwm, mock_run):
+        """Unpatched wmenu hides input with its own color flags, not dmenu's."""
+        mock_conf = configparser.ConfigParser()
+        mock_conf.add_section("dmenu_passphrase")
+        mock_conf.set("dmenu_passphrase", "obscure_color", "#333333")
+        mock_bwm.CONF = mock_conf
+        mock_run.return_value = CompletedProcess(
+            args=["wmenu", "-h"], returncode=0, stdout=b"",
+            stderr=b"usage: wmenu [-biv]",
+        )
+
+        from bwm.menu import dmenu_pass
+
+        assert dmenu_pass("wmenu") == ["-n", "#333333", "-N", "#333333"]
 
     @patch("bwm.menu.run")
     @patch("bwm.menu.bwm")
@@ -425,6 +463,98 @@ class TestDmenuSelect:
         assert result is None
 
 
+def _select_with(mock_bwm, mock_run, launcher, stdout, *args, **kwargs):
+    """Run dmenu_select against `launcher` with the real dmenu_cmd.
+
+    Returns: (result, argv the launcher was run with, stdin it was given)
+
+    """
+    mock_conf = configparser.ConfigParser()
+    mock_conf.add_section("dmenu")
+    mock_conf.set("dmenu", "dmenu_command", launcher)
+    mock_bwm.CONF = mock_conf
+    mock_bwm.ENC = "utf-8"
+    mock_bwm.ENV = {}
+    mock_run.return_value = MagicMock(stdout=stdout, returncode=0, stderr="")
+
+    from bwm.menu import dmenu_select
+
+    result = dmenu_select(*args, **kwargs)
+    return result, mock_run.call_args.args[0], mock_run.call_args.kwargs["input"]
+
+
+class TestDmenuSelectLines:
+    """A suggested value has to be visible, which takes at least one line."""
+
+    @pytest.mark.parametrize("launcher,flag", [("rofi", "-l"), ("fuzzel", "-l")])
+    @patch("bwm.menu.run")
+    @patch("bwm.menu.bwm")
+    def test_suggestion_gets_a_line(self, mock_bwm, mock_run, launcher, flag):
+        _, cmd, _ = _select_with(mock_bwm, mock_run, launcher, "",
+                                 0, "Server URL",
+                                 "https://vault.bitwarden.com")
+        assert cmd[cmd.index(flag) + 1] == "1"
+
+    @patch("bwm.menu.run")
+    @patch("bwm.menu.bwm")
+    def test_no_suggestion_keeps_zero_lines(self, mock_bwm, mock_run):
+        _, cmd, _ = _select_with(mock_bwm, mock_run, "rofi", "",
+                                 0, "Login email")
+        assert cmd[cmd.index("-l") + 1] == "0"
+
+    @patch("bwm.menu.run")
+    @patch("bwm.menu.bwm")
+    def test_explicit_line_count_untouched(self, mock_bwm, mock_run):
+        _, cmd, _ = _select_with(mock_bwm, mock_run, "rofi", "",
+                                 4, "Pick", "a\nb\nc\nd")
+        assert cmd[cmd.index("-l") + 1] == "4"
+
+
+class TestWofiFreeText:
+    """wofi hides its prompt while the input box has focus, which it always
+    has when there are no rows. A blank row keeps the prompt visible."""
+
+    @patch("bwm.menu.run")
+    @patch("bwm.menu.bwm")
+    def test_blank_row_and_exec_search(self, mock_bwm, mock_run):
+        _, cmd, stdin = _select_with(mock_bwm, mock_run, "wofi", "",
+                                     0, "Login email")
+        assert stdin == " \n"
+        assert "--exec-search" in cmd
+
+    @patch("bwm.menu.run")
+    @patch("bwm.menu.bwm")
+    def test_typed_text_returned(self, mock_bwm, mock_run):
+        result, _, _ = _select_with(mock_bwm, mock_run, "wofi",
+                                    "correct horse\n", 0, "Password")
+        assert result == "correct horse"
+
+    @patch("bwm.menu.run")
+    @patch("bwm.menu.bwm")
+    def test_enter_on_empty_box_is_empty(self, mock_bwm, mock_run):
+        """Enter with nothing typed selects the blank row itself."""
+        result, _, _ = _select_with(mock_bwm, mock_run, "wofi", " \n",
+                                    0, "Login email")
+        assert result == ""
+
+    @patch("bwm.menu.run")
+    @patch("bwm.menu.bwm")
+    def test_menus_with_rows_untouched(self, mock_bwm, mock_run):
+        result, cmd, stdin = _select_with(mock_bwm, mock_run, "wofi", " \n",
+                                          2, "Pick", "a\n \nb")
+        assert stdin == "a\n \nb"
+        assert "--exec-search" not in cmd
+        assert result == " "
+
+    @patch("bwm.menu.run")
+    @patch("bwm.menu.bwm")
+    def test_other_launchers_untouched(self, mock_bwm, mock_run):
+        _, cmd, stdin = _select_with(mock_bwm, mock_run, "rofi", "",
+                                     0, "Login email")
+        assert stdin == ""
+        assert "--exec-search" not in cmd
+
+
 class TestDmenuCmdEdgeCases:
     """Tests for edge cases in dmenu command building."""
 
@@ -490,6 +620,37 @@ class TestDmenuCmdEdgeCases:
         cmd = dmenu_cmd(5, "Test")
         assert "fuzzel" in cmd
         assert "--dmenu" in cmd
+
+    @patch("bwm.menu.bwm")
+    def test_bare_fuzzel_gets_dmenu_mode(self, mock_bwm):
+        """First run writes plain `fuzzel`, which without --dmenu is an app
+        launcher that ignores stdin."""
+        mock_conf = configparser.ConfigParser()
+        mock_conf.add_section("dmenu")
+        mock_conf.set("dmenu", "dmenu_command", "fuzzel")
+        mock_bwm.CONF = mock_conf
+
+        from bwm.menu import dmenu_cmd
+
+        assert dmenu_cmd(5, "Test")[:2] == ["fuzzel", "--dmenu"]
+
+
+class TestYofiCommand:
+    """yofi's `dialog` is a subcommand: options after it are rejected."""
+
+    @pytest.mark.parametrize("prompt", ["Entries", "Password"])
+    @patch("bwm.menu.bwm")
+    def test_dialog_comes_last(self, mock_bwm, prompt):
+        mock_conf = configparser.ConfigParser()
+        mock_conf.add_section("dmenu")
+        mock_conf.set("dmenu", "dmenu_command", "yofi")
+        mock_bwm.CONF = mock_conf
+
+        from bwm.menu import dmenu_cmd
+
+        cmd = dmenu_cmd(5, prompt)
+        assert cmd[-1] == "dialog"
+        assert ("--password" in cmd) == (prompt == "Password")
 
 
 class TestObscureColorConfig:

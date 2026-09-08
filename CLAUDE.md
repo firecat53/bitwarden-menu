@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Bitwarden-menu (`bwm`) is a dmenu/rofi/bemenu/tofi/wmenu/wofi frontend for Bitwarden and
-Vaultwarden vaults, driving the Bitwarden CLI (`bw`) underneath. It also works
-headless as a CLI-only password lookup via `--show`.
+Bitwarden-menu (`bwm`) is a dmenu/rofi/bemenu/wmenu/fuzzel/tofi/wofi/yofi
+frontend for Bitwarden and Vaultwarden vaults, driving the Bitwarden CLI (`bw`)
+underneath. It also works headless as a CLI-only password lookup via `--show`.
 
 ## Development Commands
 
@@ -111,6 +111,14 @@ config option.
 
 ## Configuration
 
+- `bwm/firstrun.py` decides what goes into a config file that doesn't exist yet:
+  which launcher, terminal and autotype library are actually installed, ranked
+  by session type. It imports nothing else from bwm, so it can run before the
+  config is loaded. `reload_config` calls `detect()` non-interactively;
+  `__main__.first_run_setup` calls it with `interactive=True` in the client, the
+  only process that may still have a terminal to ask on. Adding launcher support
+  means adding it here *and* to the `commands`/`pass_prompts` dicts in
+  `bwm/menu.py` — `tests/test_firstrun.py` asserts the two lists agree.
 - Loaded by `bwm.reload_config(conf_file=None)` in `bwm/__init__.py`, **not** at
   import time. It is called twice: once in `main()` (the client reads `[vault]`
   before forking) and once in `DmenuRunner.__init__()` (the daemon process).

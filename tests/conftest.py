@@ -5,6 +5,8 @@ import socket
 
 import pytest
 
+import bwm
+
 # Hostnames the guard below lets through. test_server.py binds real sockets.
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "", None}
 
@@ -31,6 +33,35 @@ def no_network(monkeypatch):
         return real_getaddrinfo(host, *args, **kwargs)
 
     monkeypatch.setattr(socket, "getaddrinfo", guard)
+
+
+@pytest.fixture(autouse=True)
+def no_first_run(monkeypatch):
+    """Keep main() out of the host's environment and the real config file.
+
+    main() exits when the `bw` binary is missing and writes a config file when
+    there is none. Neither belongs in a unit test: CI has no Bitwarden CLI
+    installed, and the default config path is the developer's own
+    ~/.config/bwm/config.ini. Pinning detect() on top of that stops a generated
+    config from naming whatever launcher the test machine happens to have.
+
+    tests/test_firstrun.py holds a reference to the real first_run_setup from
+    import time, so it still exercises the unpatched function.
+
+    """
+    from bwm import __main__ as bwm_main
+
+    monkeypatch.setattr(bwm_main, "bw_cli_missing_msg", lambda: None)
+    monkeypatch.setattr(bwm_main, "first_run_setup", lambda cfile=None: None)
+    monkeypatch.setattr(
+        bwm,
+        "detect",
+        lambda interactive=False: {
+            "launcher": None,
+            "terminal": None,
+            "type_library": None,
+        },
+    )
 
 
 @pytest.fixture

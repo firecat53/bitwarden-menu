@@ -2,12 +2,21 @@
 
 [Installation](install.md) - [Usage](usage.md)
 
-If you start bitwarden-menu for the first time without a config file, it will
-prompt you for vault URL, login and 2FA type and save them in the default config
-file `~/.config/bwm/config.ini`. Initial login to some servers, including
+### First run
+
+Started without a config file, bwm writes one at
+`~/.config/bwm/config.ini` (mode 0600), then prompts through the launcher for
+your vault URL, login and 2FA type. Initial login to some servers, including
 vault.bitwarden.com, will require the `client_secret` from your account settings
 page. Ensure this is in your clipboard and ready to paste prior to first run.
 Once logged in for the first time, you will not need this value again.
+
+If started from a terminal, `bwm` prompts for which launcher, type_library and
+terminal to use from a list of installed options. If started from a keybinding,
+it will select automatically. `config.ini` can then be edited as needed.
+
+bwm also checks for the [Bitwarden CLI](https://bitwarden.com/help/cli/) (`bw`)
+before doing anything else, and exits with an install hint if it isn't on `$PATH`.
 
 OR Copy config.ini.example to `~/.config/bwm/config.ini` and use it as a
 reference for additional options.

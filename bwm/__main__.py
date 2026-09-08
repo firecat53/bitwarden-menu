@@ -19,6 +19,7 @@ import time
 import bwm
 from bwm import bwcli
 from bwm.bwm import DmenuRunner
+from bwm.firstrun import bw_cli_missing_msg, detect, no_launcher_msg
 from bwm.menu import dmenu_err
 from bwm.bwtype import type_clipboard
 from bwm.run_once import show_fields
@@ -448,6 +449,31 @@ def show_password_prompt(unlocked, args):
         return None
 
 
+def first_run_setup(cfile=None):
+    """Create the config file, asking about anything ambiguous.
+
+    Runs in the client, which is the only process that may still have a
+    terminal: the daemon has none, and neither does an invocation started from
+    a keybinding. reload_config() writes the same file non-interactively if
+    this doesn't get there first.
+
+    Args: cfile - config file path from --config, or None for the default
+
+    """
+    conf_file = expanduser(cfile) if cfile else bwm.CONF_FILE
+    if exists(conf_file):
+        return
+    try:
+        choices = detect(interactive=True)
+    except KeyboardInterrupt:
+        print("\nSetup cancelled, no config written.", file=sys.stderr)
+        sys.exit(1)
+    bwm.write_config(conf_file, **choices)
+    print(f"Created {conf_file}", file=sys.stderr)
+    if choices["launcher"] is None:
+        print(no_launcher_msg(conf_file), file=sys.stderr)
+
+
 def main():
     """Main script entrypoint"""
     parser = argparse.ArgumentParser(
@@ -552,11 +578,21 @@ def main():
 
     args = args if any(args.values()) else {}
 
+    # Document bw utility missing here rather than failing later on a
+    # FileNotFoundError from somewhere inside an unlock.
+    missing = bw_cli_missing_msg()
+    if missing is not None:
+        print(missing, file=sys.stderr)
+        sys.exit(1)
+
     # Prompts have to reach the user before anything forks. With no display
     # there is no launcher to prompt with, so use the terminal.
     bwm.CLI = bool(args.get("show")) or not (
         os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
     )
+
+    # Before anything forks, while there may still be a terminal to ask on
+    first_run_setup(args.get("config"))
 
     # DmenuRunner loads the config too, but that runs in the daemon process.
     # Anything main() reads out of CONF has to be loaded here first.

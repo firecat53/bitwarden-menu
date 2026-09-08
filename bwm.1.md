@@ -80,9 +80,12 @@ and *client_secret* - works on a headless machine.
 
 # CONFIGURATION  
 
-If you start bitwarden-menu for the first time without a config file, it will prompt
-you for vault, login and 2FA type (if applicable) and save them in a default
-config file.
+If you start bitwarden-menu for the first time without a config file, one is
+written. The launcher, terminal and autotype library are detected from
+what is installed rather than guessed at. When more than one candidate is found
+and bwm was started from a terminal, it asks which to use. It then prompts you
+for vault, login and 2FA type (if applicable) and saves them in that config
+file.
 
 OR Copy config.ini.example to ~/.config/bwm/config.ini and use it as a reference
 for additional options.

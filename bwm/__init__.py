@@ -15,6 +15,8 @@ from subprocess import run, DEVNULL
 
 from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_data_home
 
+from bwm.firstrun import detect
+
 __version__ = "0.6.0"
 
 logger = logging.getLogger("bwm")
@@ -175,6 +177,68 @@ def detach_from_terminal(background=True):
         os.dup2(devnull.fileno(), 2)
 
 
+def default_conf(launcher=None, terminal=None, type_library=None):
+    """Contents of the config file generated on first run.
+
+    server_1/email_1 are written empty on purpose: get_initial_vault() fills
+    them in on the first unlock rather than adding a server_2. Written as text
+    because configparser can't emit comments.
+
+    Args: launcher - dmenu_command to write, or None for the dmenu default
+          terminal - terminal to open editors in, omitted when None
+          type_library - autotype backend, omitted when None to use pynput
+
+    Returns: str
+
+    """
+    lines = ["# Written by bwm on first run. The launcher, terminal and",
+             "# type_library below were picked from what is installed - edit",
+             "# them freely, bwm never rewrites this file.",
+             "# See https://github.com/firecat53/bitwarden-menu/blob/main/docs/configure.md",
+             "",
+             "[dmenu]",
+             f"dmenu_command = {launcher or 'dmenu'}",
+             "",
+             "[dmenu_passphrase]",
+             "obscure = True",
+             "obscure_color = #222222",
+             "",
+             "[vault]",
+             "server_1 = ",
+             "email_1 = ",
+             "twofactor_1 = ",
+             f"session_timeout_min = {SESSION_TIMEOUT_DEFAULT_MIN}",
+             f"autotype_default = {SEQUENCE}"]
+    if terminal:
+        lines.append(f"terminal = {terminal}")
+    if type_library:
+        lines.append(f"type_library = {type_library}")
+    return "\n".join(lines) + "\n"
+
+
+def write_config(conf_file, **choices):
+    """Write a fresh config file, creating its directory if needed.
+
+    Mode 0600 since the vault password may be stored here. The mode only 
+    applies to a file we create ourselves.
+
+    Args: conf_file - os.path
+          choices - launcher/terminal/type_library, as returned by
+                    firstrun.detect()
+
+    """
+    conf_dir = os.path.dirname(conf_file)
+    if conf_dir:
+        try:
+            os.makedirs(conf_dir, mode=0o700, exist_ok=True)
+        except OSError as err:
+            logger.error(f"Cannot create config directory {conf_dir}: {err}")
+            sys.exit(1)
+    fd_ = os.open(conf_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with open(fd_, "w", encoding=ENC) as cfile:
+        cfile.write(default_conf(**choices))
+
+
 def get_clipboard_cmd():
     """Find an available clipboard command.
 
@@ -239,27 +303,10 @@ def reload_config(conf_file=None):
     CONF = configparser.ConfigParser()
     conf_file = conf_file if conf_file is not None else CONF_FILE
     if not exists(conf_file):
-        conf_dir = os.path.dirname(conf_file)
-        try:
-            os.makedirs(conf_dir, exist_ok=True)
-        except OSError as err:
-            logger.error(f"Cannot create config directory {conf_dir}: {err}")
-            sys.exit(1)
-        with open(conf_file, "w", encoding=ENC) as cfile:
-            CONF.add_section("dmenu")
-            CONF.set("dmenu", "dmenu_command", "dmenu")
-            CONF.add_section("dmenu_passphrase")
-            CONF.set("dmenu_passphrase", "obscure", "True")
-            CONF.set("dmenu_passphrase", "obscure_color", "#222222")
-            CONF.add_section("vault")
-            CONF.set("vault", "server_1", "")
-            CONF.set("vault", "email_1", "")
-            CONF.set("vault", "twofactor_1", "")
-            CONF.set(
-                "vault", "session_timeout_min ", str(SESSION_TIMEOUT_DEFAULT_MIN)
-            )
-            CONF.set("vault", "autotype_default", SEQUENCE)
-            CONF.write(cfile)
+        # Non-interactive: this also runs in the daemon, which has no terminal
+        # to ask on. __main__.first_run_setup() has usually written the file
+        # already, having asked.
+        write_config(conf_file, **detect())
     try:
         CONF.read(conf_file)
     except configparser.Error as err:

@@ -33,7 +33,7 @@ For full installation documention see the [installation docs][docs/install.md].
 
 ## Requirements
 
-1. Python 3.10+
+1. Python 3.11+
 2. [Bitwarden CLI][2]. Ensure the `bw` command is in `$PATH`
 3. [Xdg][6]
 

@@ -4,7 +4,7 @@
 
 ## Requirements
 
-1. Python 3.10+
+1. Python 3.11+
 2. [Bitwarden CLI][1]. Ensure the `bw` command is in `$PATH`
 3. [xdg-base-dirs][6]
 

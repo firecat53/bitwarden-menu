@@ -25,8 +25,8 @@ LOG_FILE = join(xdg_cache_home(), "bwm.log")
 # Levels accepted in $BWM_LOG_LEVEL. An explicit table rather than
 # getattr(logging, name): that also resolves non-level attributes, so
 # BWM_LOG_LEVEL=basic_format would hand basicConfig a format string and take
-# bwm down with a ValueError on import. logging.getLevelNamesMapping() would do
-# this too, but it needs Python 3.11 and 3.10 is still supported.
+# bwm down with a ValueError on import. logging.getLevelNamesMapping() isn't
+# used because it also accepts NOTSET and the WARN/FATAL aliases.
 LOG_LEVELS = {
     "CRITICAL": logging.CRITICAL,
     "ERROR": logging.ERROR,

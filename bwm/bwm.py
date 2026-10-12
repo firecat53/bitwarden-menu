@@ -687,9 +687,7 @@ def format_last_sync(last_sync):
     if not last_sync:
         return "never"
     try:
-        # `bw` reports UTC as a trailing 'Z', which fromisoformat only accepts
-        # from Python 3.11.
-        stamp = datetime.fromisoformat(str(last_sync).replace("Z", "+00:00"))
+        stamp = datetime.fromisoformat(str(last_sync))
     except (TypeError, ValueError):
         logging.debug(f"format_last_sync: unparseable timestamp {last_sync!r}")
         return "unknown"

@@ -7,6 +7,7 @@ name = "bitwarden-menu"
 dynamic = ["version"]
 description = "Dmenu/Rofi frontend for Bitwarden CLI tool"
 readme = "README.md"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [
     { name = "Scott Hansen", email = "tech@firecat53.net" },
@@ -27,11 +28,11 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Topic :: Utilities",
 ]
 dependencies = [
